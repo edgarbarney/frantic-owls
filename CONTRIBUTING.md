@@ -1,4 +1,4 @@
-# Contributing to Frantic's Wizarding Communication
+# Contributing to Frantic's Owls
 
 Thanks for wanting to help! Bug reports, ideas, translations and code are all welcome, and none of them need to be big. For example, a typo fix is a perfectly good first pr.
 
