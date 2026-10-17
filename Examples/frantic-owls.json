@@ -1,0 +1,172 @@
+{
+	"command": "owl",
+	"openKey": "up",
+	"numbers": {
+		"visible": false
+	},
+	"contacts": {
+		"maxContacts": 250,
+		"maxNameLength": 40
+	},
+	"avatars": {
+		"maxUrlLength": 512,
+		"allowedHosts": [],
+		"allowInsecure": false
+	},
+	"messages": {
+		"maxLength": 500,
+		"pageSize": 40,
+		"maxChatsListed": 100,
+		"rateLimitCount": 8,
+		"rateLimitWindowMs": 5000,
+		"unsendSeconds": 120,
+		"maxPinnedChats": 5
+	},
+	"privacy": {
+		"readReceipts": true,
+		"typingIndicators": true
+	},
+	"groups": {
+		"maxMembers": 12,
+		"maxTitleLength": 40
+	},
+	"inform": {
+		"rangeMetres": 5,
+		"rangeToleranceMetres": 2,
+		"cooldownSeconds": 30,
+		"revealNames": true,
+		"requireConsent": true,
+		"allowExchange": true,
+		"requestSeconds": 60
+	},
+	"locations": {
+		"enabled": true,
+		"markerSeconds": 0,
+		"arrivalMetres": 10
+	},
+	"calls": {
+		"enabled": true,
+		"ringSeconds": 30,
+		"logSize": 50,
+		"rateLimitCount": 4,
+		"rateLimitWindowMs": 30000,
+		"ringtones": [
+			{
+				"id": "hoot",
+				"label": "Owl Hoot",
+				"file": "Sounds/OwlHoot.wav"
+			},
+			{
+				"id": "chime",
+				"label": "Bell Chime",
+				"file": "Sounds/BellChime.wav"
+			},
+			{
+				"id": "harp",
+				"label": "Enchanted Harp",
+				"file": "Sounds/EnchantedHarp.wav"
+			}
+		],
+		"defaultRingtone": "hoot",
+		"voiceEnabled": true,
+		"voiceBitrate": 24000
+	},
+	"notifications": {
+		"toastDurationMs": 3000,
+		"bannerDurationMs": 4000,
+		"soundMode": "file",
+		"sounds": [
+			{
+				"id": "hoot",
+				"label": "Owl Hoot",
+				"file": "Sounds/OwlHoot.wav"
+			},
+			{
+				"id": "chime",
+				"label": "Bell Chime",
+				"file": "Sounds/BellChime.wav"
+			},
+			{
+				"id": "sparkle",
+				"label": "Wand Sparkle",
+				"file": "Sounds/WandSparkle.wav"
+			},
+			{
+				"id": "tap",
+				"label": "Window Tap",
+				"file": "Sounds/WindowTap.wav"
+			},
+			{
+				"id": "quill",
+				"label": "Quill Scratch",
+				"file": "Sounds/QuillScratch.wav"
+			},
+			{
+				"id": "harp",
+				"label": "Enchanted Harp",
+				"file": "Sounds/EnchantedHarp.wav"
+			}
+		],
+		"defaultSound": "hoot",
+		"wwiseEvent": "UI_OwlMail_Envelope_Open",
+		"quietActivities": [
+			"duel:standard"
+		]
+	},
+	"storage": {
+		"disableSoftDelete": false,
+		"messageRetentionDays": 0
+	},
+	"flight": {
+		"enabled": false,
+		"minSeconds": 3,
+		"maxSeconds": 45,
+		"secondsPerHundredMetres": 3,
+		"groupSeconds": 5
+	},
+	"announcements": {
+		"enabled": true,
+		"command": "owl_announce",
+		"senderName": "Ministry of Magic",
+		"avatarUrl": "",
+		"capability": "admin.announce",
+		"fallbackGroup": "admin",
+		"fallbackMinimumGrade": 1,
+		"maxLength": 1000
+	},
+	"logging": {
+		"enabled": false,
+		"destination": "",
+		"url": "",
+		"urlEnv": "FRANTIC_OWLS_WEBHOOK_URL",
+		"username": "Owl Post",
+		"includeBodies": false,
+		"flushIntervalMs": 5000,
+		"events": {
+			"messages": true,
+			"groups": true,
+			"informs": true,
+			"calls": true,
+			"blocks": true,
+			"announcements": true,
+			"system": true
+		}
+	},
+	"network": {
+		"flushIntervalMs": 50,
+		"nearbyRefreshMs": 1000,
+		"requestTimeoutMs": 8000,
+		"requestRateLimitCount": 30,
+		"requestRateLimitWindowMs": 3000,
+		"maxBatchBytes": 24000
+	},
+	"ui": {
+		"scale": 1.0,
+		"widthPx": 360,
+		"heightPx": 700,
+		"rightMarginPx": 32,
+		"defaultTheme": "muggle",
+		"defaultLanguage": "en-GB",
+		"allowMove": true
+	}
+}

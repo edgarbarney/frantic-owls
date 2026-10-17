@@ -1,0 +1,3120 @@
+/* FranticDreamer 2026 */
+
+/* ======================== */
+/* Fonts                    */
+/* ======================== */
+
+@font-face
+{
+	font-family: "Cinzel";
+	src: url("../Fonts/Cinzel-Variable.ttf") format("truetype");
+	font-weight: 400 900;
+}
+
+@font-face
+{
+	font-family: "Spectral";
+	src: url("../Fonts/Spectral-Regular.ttf") format("truetype");
+}
+
+/* ======================== */
+/* Tokens                   */
+/* ======================== */
+
+/* Sizes are in rem; App.js sets the root font size from the UI scale, so 1rem is 16px at scale 1. */
+:root
+{
+	--phone-width: 22.5rem;
+	--phone-height: 43.75rem;
+	--phone-margin: 2rem;
+	--frame-pad: 1.5rem;
+
+	--ink: #12141c;
+	--ink-raised: #1b1e29;
+	--ink-sunken: #0d0f15;
+	--line: #2c3040;
+	--parchment: #ecdcb4;
+	--parchment-dim: #b9a97f;
+	--text: #ece6d6;
+	--text-dim: #9a968a;
+	--gold: #c9a45c;
+	--gold-bright: #e3c27a;
+	--accent-rgb: 201, 164, 92; /* --gold as numbers, for translucent tints */
+	--wood: #3a2618;
+	--wood-dark: #24170e;
+	--danger: #c96a5c;
+	--success: #7fb38a;
+	--screen-bg: radial-gradient(circle at 30% 0%, #222638 0%, #12141c 60%);
+	--bubble-mine-bg: linear-gradient(180deg, #ecdcb4, #dcc895);
+	--bubble-mine-text: #2a2116;
+	--on-accent: #12141c;
+	--overlay-bg: rgba(27, 30, 41, 0.97);
+	--knob: #ece6d6;
+	--avatar-text: #1b1e29;
+	--name-lightness: 72%;
+	--frame-shadow: 0 0 0 0.125rem var(--gold), 0 0.6rem 1.25rem rgba(0, 0, 0, 0.6);
+
+	--radius: 0.75rem;
+	--font-heading: "Cinzel", "Times New Roman", serif;
+	--font-body: "Spectral", Georgia, serif;
+}
+
+/* ======================== */
+/* Parchment Theme          */
+/* ======================== */
+
+/* Old paper, iron-gall ink and a wax-seal red in place of the Muggle Phone's night sky. Selected by data-theme on <html>. */
+:root[data-theme="parchment"]
+{
+	--ink: #efe2c0;
+	--ink-raised: #e5d3a6;
+	--ink-sunken: #f8efd8;
+	--line: #c8ae7a;
+	--parchment: #3a2814;
+	--parchment-dim: #8c7149;
+	--text: #2e2214;
+	--text-dim: #6e5a3c;
+	--gold: #8a5a1c;
+	--gold-bright: #a5712a;
+	--wood: #6b4524;
+	--wood-dark: #3e2713;
+	--danger: #9e2b25;
+	--success: #3f6f3a;
+	--screen-bg: radial-gradient(ellipse at 50% 40%, #f6ebcf 0%, #ead8ac 65%, #d8bd85 100%);
+	--bubble-mine-bg: linear-gradient(180deg, #e2c58a, #d3b06c);
+	--bubble-mine-text: #2a1c0c;
+	--on-accent: #fbf3df;
+	--overlay-bg: rgba(244, 233, 204, 0.98);
+	--knob: #fbf3df;
+	--name-lightness: 30%;
+	--frame-shadow: 0 0 0 0.125rem #a5712a, 0 0.6rem 1.25rem rgba(40, 24, 8, 0.5);
+}
+
+/* ======================== */
+/* House Colour Schemes     */
+/* ======================== */
+
+/* Muggle Phone only (data-scheme on <html>); Parchment keeps its paper and ink whatever scheme is stored.
+   --gold is each scheme's accent, so it is silver for Slytherin and bronze for Ravenclaw rather than gold. */
+:root:not([data-theme="parchment"])[data-scheme="gryffindor"]
+{
+	--ink: #1a0d0e;
+	--ink-raised: #271416;
+	--ink-sunken: #120809;
+	--line: #4a252b;
+	--parchment: #f2dfb0;
+	--parchment-dim: #c4a774;
+	--text: #f1e5d5;
+	--text-dim: #ab968b;
+	--gold: #d9a53a;
+	--gold-bright: #f0c35a;
+	--accent-rgb: 217, 165, 58;
+	--wood: #7c1f22;
+	--wood-dark: #4a1013;
+	--screen-bg: radial-gradient(circle at 30% 0%, #3d1a1d 0%, #1a0d0e 60%);
+	--bubble-mine-bg: linear-gradient(180deg, #b3262b, #8a1b20);
+	--bubble-mine-text: #fbeed6;
+	--on-accent: #1a0d0e;
+	--overlay-bg: rgba(39, 20, 22, 0.97);
+}
+
+:root:not([data-theme="parchment"])[data-scheme="slytherin"]
+{
+	--ink: #0b100d;
+	--ink-raised: #131c17;
+	--ink-sunken: #070a08;
+	--line: #24382c;
+	--parchment: #dfe6e2;
+	--parchment-dim: #9aa8a0;
+	--text: #e5eae7;
+	--text-dim: #8e9b94;
+	--gold: #b9c3c8;
+	--gold-bright: #e0e7eb;
+	--accent-rgb: 185, 195, 200;
+	--wood: #1a472a;
+	--wood-dark: #0c2416;
+	--screen-bg: radial-gradient(circle at 30% 0%, #173322 0%, #0b100d 60%);
+	--bubble-mine-bg: linear-gradient(180deg, #2a6b40, #1a472a);
+	--bubble-mine-text: #eef3ef;
+	--on-accent: #0b100d;
+	--overlay-bg: rgba(19, 28, 23, 0.97);
+}
+
+:root:not([data-theme="parchment"])[data-scheme="ravenclaw"]
+{
+	--ink: #0c1220;
+	--ink-raised: #151d31;
+	--ink-sunken: #080c16;
+	--line: #283453;
+	--parchment: #e9ddcb;
+	--parchment-dim: #aaa190;
+	--text: #e7e5dd;
+	--text-dim: #9198a7;
+	--gold: #cd8a4a;
+	--gold-bright: #e6a868;
+	--accent-rgb: 205, 138, 74;
+	--wood: #1e2f5c;
+	--wood-dark: #0e1a38;
+	--screen-bg: radial-gradient(circle at 30% 0%, #1d2b51 0%, #0c1220 60%);
+	--bubble-mine-bg: linear-gradient(180deg, #2c4a8c, #1e3468);
+	--bubble-mine-text: #eef1f8;
+	--on-accent: #0c1220;
+	--overlay-bg: rgba(21, 29, 49, 0.97);
+}
+
+:root:not([data-theme="parchment"])[data-scheme="hufflepuff"]
+{
+	--ink: #131210;
+	--ink-raised: #1e1c17;
+	--ink-sunken: #0c0b0a;
+	--line: #3a342a;
+	--parchment: #f4e3a8;
+	--parchment-dim: #b9a974;
+	--text: #f0eadb;
+	--text-dim: #9d978b;
+	--gold: #ecb939;
+	--gold-bright: #f7d46c;
+	--accent-rgb: 236, 185, 57;
+	--wood: #3c3227;
+	--wood-dark: #1c1813;
+	--screen-bg: radial-gradient(circle at 30% 0%, #2c2817 0%, #131210 60%);
+	--bubble-mine-bg: linear-gradient(180deg, #f0c24a, #d6a42a);
+	--bubble-mine-text: #1c1709;
+	--on-accent: #131210;
+	--overlay-bg: rgba(30, 28, 23, 0.97);
+}
+
+*
+{
+	box-sizing: border-box;
+}
+
+html,
+body
+{
+	margin: 0;
+	height: 100%;
+	overflow: hidden;
+	background: transparent;
+	font-family: var(--font-body);
+	color: var(--text);
+	user-select: none;
+}
+
+button,
+input,
+textarea
+{
+	font: inherit;
+	color: inherit;
+}
+
+button
+{
+	cursor: pointer;
+	border: none;
+	background: none;
+	padding: 0;
+}
+
+[hidden]
+{
+	display: none !important;
+}
+
+/* ======================== */
+/* Phone Frame              */
+/* ======================== */
+
+/* The view is sized to the phone plus --frame-pad on every side (see Client/Main.js), so the phone simply sits inside that border. */
+.phone
+{
+	position: absolute;
+	left: var(--frame-pad);
+	top: var(--frame-pad);
+	width: var(--phone-width);
+	height: var(--phone-height);
+	padding: 0.625rem;
+	border-radius: 2.25rem;
+	background: linear-gradient(160deg, var(--wood) 0%, var(--wood-dark) 100%);
+	box-shadow: var(--frame-shadow);
+	animation: phone-in 200ms ease-out;
+}
+
+.phone.is-closing
+{
+	animation: phone-out 200ms ease-in forwards;
+	pointer-events: none;
+}
+
+@keyframes phone-in
+{
+	from
+	{
+		opacity: 0;
+		transform: translateX(1.25rem) scale(0.97);
+	}
+	to
+	{
+		opacity: 1;
+		transform: translateX(0) scale(1);
+	}
+}
+
+@keyframes phone-out
+{
+	from
+	{
+		opacity: 1;
+		transform: translateX(0) scale(1);
+	}
+	to
+	{
+		opacity: 0;
+		transform: translateX(1.25rem) scale(0.97);
+	}
+}
+
+.phone-screen
+{
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	border-radius: 1.75rem;
+	background: var(--screen-bg);
+}
+
+/* The screen's thin border is drawn above everything on it, so an app opening over the whole width never covers it. */
+.phone-screen::after
+{
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	border-radius: inherit;
+	box-shadow: inset 0 0 0 0.0625rem rgba(var(--accent-rgb), 0.35);
+	pointer-events: none;
+}
+
+:root[data-theme="parchment"] .phone-screen::after
+{
+	content: none;
+}
+
+.status-bar
+{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 2rem;
+	padding: 0 1rem;
+	flex: none;
+	font-family: var(--font-heading);
+	font-size: 0.7rem;
+	letter-spacing: 0.12em;
+	color: var(--gold);
+}
+
+.status-close
+{
+	width: 1.5rem;
+	height: 1.5rem;
+}
+
+/* Moon beside the title while Do Not Disturb (or a quiet activity such as a duel) silences the phone. */
+.status-title
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.status-quiet
+{
+	font-size: 0.75rem;
+	opacity: 0.85;
+}
+
+.status-quiet[hidden]
+{
+	display: none;
+}
+
+.home-bar
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 1.5rem;
+	flex: none;
+}
+
+.home-bar span
+{
+	width: 7rem;
+	height: 0.25rem;
+	border-radius: 0.125rem;
+	background: var(--parchment-dim);
+	opacity: 0.6;
+}
+
+.home-bar:hover span
+{
+	opacity: 1;
+}
+
+/* ======================== */
+/* Shared Screen Pieces     */
+/* ======================== */
+
+.screen
+{
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
+.screen-header
+{
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 3rem;
+	padding: 0.25rem 0.75rem;
+	flex: none;
+	border-bottom: 0.0625rem solid var(--line);
+}
+
+.screen-title
+{
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-family: var(--font-heading);
+	font-size: 1.05rem;
+	font-weight: 600;
+	color: var(--parchment);
+}
+
+.screen-body
+{
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+/* Every scroll area in the phone (lists, chat history, a full message box, the emoji grid) shares one themed scrollbar. */
+.phone *::-webkit-scrollbar
+{
+	width: 0.375rem;
+	height: 0.375rem;
+}
+
+.phone *::-webkit-scrollbar-track,
+.phone *::-webkit-scrollbar-corner
+{
+	background: transparent;
+}
+
+.phone *::-webkit-scrollbar-thumb
+{
+	border-radius: 0.1875rem;
+	background: var(--line);
+}
+
+.phone *::-webkit-scrollbar-thumb:hover
+{
+	background: var(--gold);
+}
+
+.icon-button
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	flex: none;
+	border-radius: 50%;
+	color: var(--gold);
+}
+
+.icon-button:hover
+{
+	background: rgba(var(--accent-rgb), 0.12);
+}
+
+.icon-button svg
+{
+	width: 60%;
+	height: 60%;
+}
+
+.search-row
+{
+	padding: 0.5rem 0.75rem;
+	flex: none;
+	border-bottom: 0.0625rem solid var(--line);
+}
+
+.text-input,
+.text-area
+{
+	width: 100%;
+	padding: 0.55rem 0.75rem;
+	border: 0.0625rem solid var(--line);
+	border-radius: var(--radius);
+	outline: none;
+	background: var(--ink-sunken);
+	user-select: text;
+}
+
+.text-input:focus,
+.text-area:focus
+{
+	border-color: var(--gold);
+}
+
+.text-area
+{
+	resize: none;
+}
+
+.empty-state
+{
+	padding: 2.5rem 1.5rem;
+	text-align: center;
+	color: var(--text-dim);
+	font-style: italic;
+}
+
+.section-letter
+{
+	position: sticky;
+	top: 0;
+	padding: 0.25rem 1rem;
+	background: var(--ink-raised);
+	font-family: var(--font-heading);
+	font-size: 0.75rem;
+	color: var(--gold);
+}
+
+.list-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	width: 100%;
+	padding: 0.6rem 1rem;
+	text-align: left;
+}
+
+.list-row:hover
+{
+	background: rgba(236, 220, 180, 0.05);
+}
+
+.list-row.is-selected
+{
+	background: rgba(var(--accent-rgb), 0.14);
+}
+
+.row-text
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.row-title,
+.row-subtitle
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.row-title
+{
+	font-size: 0.98rem;
+}
+
+.row-subtitle
+{
+	font-size: 0.8rem;
+	color: var(--text-dim);
+}
+
+.row-meta
+{
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 0.25rem;
+	flex: none;
+	font-size: 0.7rem;
+	color: var(--text-dim);
+}
+
+.unread-badge
+{
+	min-width: 1.25rem;
+	padding: 0.05rem 0.4rem;
+	border-radius: 0.625rem;
+	background: var(--gold);
+	color: var(--on-accent);
+	font-size: 0.7rem;
+	font-weight: 700;
+	text-align: center;
+}
+
+.check
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.25rem;
+	height: 1.25rem;
+	flex: none;
+	border: 0.125rem solid var(--parchment-dim);
+	border-radius: 50%;
+	color: var(--on-accent);
+}
+
+.is-selected .check
+{
+	border-color: var(--gold);
+	background: var(--gold);
+}
+
+.check svg
+{
+	width: 0.8rem;
+	height: 0.8rem;
+}
+
+.primary-button,
+.secondary-button,
+.danger-button
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0.6rem 1rem;
+	border-radius: var(--radius);
+	font-family: var(--font-heading);
+	font-size: 0.85rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+}
+
+.primary-button
+{
+	background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+	color: var(--on-accent);
+}
+
+.primary-button:disabled
+{
+	opacity: 0.45;
+	cursor: default;
+}
+
+.secondary-button
+{
+	border: 0.0625rem solid var(--gold);
+	color: var(--gold);
+}
+
+.danger-button
+{
+	border: 0.0625rem solid var(--danger);
+	color: var(--danger);
+}
+
+.primary-button svg,
+.secondary-button svg
+{
+	width: 1.1rem;
+	height: 1.1rem;
+}
+
+.form-error
+{
+	min-height: 1.1rem;
+	font-size: 0.8rem;
+	color: var(--danger);
+}
+
+.fab
+{
+	position: absolute;
+	right: 1rem;
+	bottom: 1rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.75rem 1rem;
+	border-radius: 1.25rem;
+	background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+	box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.45);
+	color: var(--on-accent);
+	font-family: var(--font-heading);
+	font-size: 0.8rem;
+	font-weight: 700;
+}
+
+.fab svg
+{
+	width: 1.2rem;
+	height: 1.2rem;
+}
+
+/* ======================== */
+/* Avatars                  */
+/* ======================== */
+
+.avatar
+{
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.75rem;
+	height: 2.75rem;
+	flex: none;
+	overflow: hidden;
+	border-radius: 50%;
+	font-family: var(--font-heading);
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--avatar-text);
+}
+
+.avatar img
+{
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.avatar svg
+{
+	width: 55%;
+	height: 55%;
+}
+
+.avatar.is-small
+{
+	width: 2rem;
+	height: 2rem;
+	font-size: 0.75rem;
+}
+
+.avatar.is-large
+{
+	width: 6rem;
+	height: 6rem;
+	font-size: 2.2rem;
+	box-shadow: 0 0 0 0.1875rem var(--gold);
+}
+
+/* ======================== */
+/* Home                     */
+/* ======================== */
+
+/* Muggle Phone: small app icons in a grid at the top, like a phone's home screen. The crest lives in Settings. */
+.home
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	padding: 1.25rem 1rem 1rem;
+}
+
+.home .crest-title,
+.home .crest-subtitle,
+.home .crest-owner
+{
+	display: none;
+}
+
+.home-grid
+{
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 1.1rem 0.5rem;
+	align-content: start;
+}
+
+.home-tile
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.4rem;
+	min-width: 0;
+	font-size: 0.7rem;
+	color: var(--text);
+	text-shadow: 0 0.0625rem 0.2rem rgba(0, 0, 0, 0.85);
+}
+
+.home-tile-icon
+{
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 3.3rem;
+	height: 3.3rem;
+	border: 0.0625rem solid var(--line);
+	border-radius: 0.95rem;
+	background: linear-gradient(160deg, var(--ink-raised), var(--ink-sunken));
+	box-shadow: 0 0.25rem 0.6rem rgba(0, 0, 0, 0.35);
+	text-shadow: none;
+	transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.home-tile:hover .home-tile-icon
+{
+	border-color: var(--gold);
+	transform: translateY(-0.125rem);
+}
+
+.home-tile-icon i
+{
+	font-size: 1.45rem;
+	color: var(--gold);
+}
+
+.home-tile-icon svg
+{
+	width: 1.9rem;
+	height: 1.9rem;
+	color: var(--gold);
+}
+
+.home-tile-label
+{
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.home-tile .unread-badge
+{
+	position: absolute;
+	top: -0.4rem;
+	right: -0.4rem;
+}
+
+/* The crest's lines, used on the Parchment home screen and on top of Settings in both themes. */
+.crest-title
+{
+	text-align: center;
+	font-family: var(--font-heading);
+	font-size: 1.35rem;
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--parchment);
+}
+
+.crest-subtitle
+{
+	text-align: center;
+	font-family: var(--font-heading);
+	font-size: 0.68rem;
+	letter-spacing: 0.08em;
+	line-height: 1.4;
+	color: var(--gold);
+}
+
+.crest-owner
+{
+	text-align: center;
+	font-size: 0.85rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+/* Parchment: the crest on top and the apps as four large tiles. */
+:root[data-theme="parchment"] .home
+{
+	padding: 1.5rem 1.25rem 1rem;
+}
+
+:root[data-theme="parchment"] .home .crest-title,
+:root[data-theme="parchment"] .home .crest-subtitle,
+:root[data-theme="parchment"] .home .crest-owner
+{
+	display: block;
+}
+
+:root[data-theme="parchment"] .home .crest-title
+{
+	margin: 1rem 0 0.25rem;
+}
+
+:root[data-theme="parchment"] .home .crest-subtitle
+{
+	margin-bottom: 0.25rem;
+}
+
+:root[data-theme="parchment"] .home .crest-owner
+{
+	margin-bottom: 1.75rem;
+}
+
+:root[data-theme="parchment"] .home-grid
+{
+	grid-template-columns: 1fr 1fr;
+	gap: 1rem;
+}
+
+:root[data-theme="parchment"] .home-tile
+{
+	position: relative;
+	justify-content: center;
+	gap: 0.6rem;
+	aspect-ratio: 1;
+	border: 0.0625rem solid var(--line);
+	border-radius: 1.25rem;
+	background: linear-gradient(160deg, var(--ink-raised), var(--ink-sunken));
+	font-family: var(--font-heading);
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: var(--parchment);
+	text-shadow: none;
+	transition: border-color 120ms ease, transform 120ms ease;
+}
+
+:root[data-theme="parchment"] .home-tile:hover
+{
+	border-color: var(--gold);
+	transform: translateY(-0.125rem);
+}
+
+:root[data-theme="parchment"] .home-tile-icon,
+:root[data-theme="parchment"] .home-tile:hover .home-tile-icon
+{
+	position: static;
+	width: auto;
+	height: auto;
+	border: none;
+	background: none;
+	box-shadow: none;
+	transform: none;
+}
+
+:root[data-theme="parchment"] .home-tile-icon i
+{
+	font-size: 2.3rem;
+}
+
+:root[data-theme="parchment"] .home-tile-icon svg
+{
+	width: 2.6rem;
+	height: 2.6rem;
+}
+
+:root[data-theme="parchment"] .home-tile .unread-badge
+{
+	top: 0.6rem;
+	right: 0.6rem;
+}
+
+/* ======================== */
+/* Wallpaper                */
+/* ======================== */
+
+/* Behind the home screen only. The phone screen is its own stacking context, so z-index -1 sits above its background but below its content. */
+.phone-screen
+{
+	isolation: isolate;
+}
+
+.wallpaper
+{
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background-position: center;
+	background-size: cover;
+	pointer-events: none;
+}
+
+/* A soft shade at the top and bottom keeps the status bar and the app names readable on a bright picture. */
+.wallpaper::after
+{
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.1) 25%, rgba(0, 0, 0, 0.1) 75%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+/* Parchment: the picture is printed faintly onto the paper, like an old engraving, fading out towards the torn edges. */
+:root[data-theme="parchment"] .wallpaper
+{
+	inset: 6% 7%;
+	filter: grayscale(1) sepia(0.9) contrast(1.15);
+	opacity: 0.42;
+	mix-blend-mode: multiply;
+	-webkit-mask-image: radial-gradient(ellipse at center, #000 45%, transparent 75%);
+	mask-image: radial-gradient(ellipse at center, #000 45%, transparent 75%);
+}
+
+:root[data-theme="parchment"] .wallpaper::after
+{
+	content: none;
+}
+
+/* ======================== */
+/* Contact Details          */
+/* ======================== */
+
+.details
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 1.5rem 1.25rem;
+}
+
+.details-name
+{
+	font-family: var(--font-heading);
+	font-size: 1.2rem;
+	color: var(--parchment);
+	text-align: center;
+	word-break: break-word;
+}
+
+.field
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	width: 100%;
+}
+
+.field-label
+{
+	font-family: var(--font-heading);
+	font-size: 0.7rem;
+	letter-spacing: 0.08em;
+	color: var(--gold);
+}
+
+.field-hint
+{
+	font-size: 0.72rem;
+	color: var(--text-dim);
+}
+
+.button-row
+{
+	display: flex;
+	gap: 0.6rem;
+	width: 100%;
+}
+
+.button-row > *
+{
+	flex: 1;
+}
+
+/* ======================== */
+/* Chat                     */
+/* ======================== */
+
+.chat-header-button
+{
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex: 1;
+	min-width: 0;
+	text-align: left;
+}
+
+.chat-header-text
+{
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.chat-header-sub
+{
+	font-size: 0.72rem;
+	color: var(--text-dim);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.unknown-bar
+{
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.5rem 0.75rem;
+	flex: none;
+	border-bottom: 0.0625rem solid var(--line);
+	background: var(--ink-raised);
+	font-size: 0.8rem;
+}
+
+.unknown-bar .text-input
+{
+	flex: 1;
+	padding: 0.35rem 0.6rem;
+}
+
+.unknown-bar .secondary-button
+{
+	padding: 0.4rem 0.7rem;
+}
+
+.messages
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	padding: 0.75rem;
+}
+
+.load-older
+{
+	align-self: center;
+	margin-bottom: 0.5rem;
+	padding: 0.3rem 0.8rem;
+	border-radius: 0.75rem;
+	background: var(--ink-raised);
+	font-size: 0.75rem;
+	color: var(--gold);
+}
+
+.day-divider
+{
+	align-self: center;
+	margin: 0.5rem 0 0.25rem;
+	padding: 0.15rem 0.6rem;
+	border-radius: 0.6rem;
+	background: var(--ink-raised);
+	font-size: 0.7rem;
+	color: var(--text-dim);
+}
+
+.bubble
+{
+	position: relative;
+	max-width: 80%;
+	padding: 0.45rem 0.7rem 0.35rem;
+	border-radius: 0.9rem;
+	font-size: 0.92rem;
+	line-height: 1.3;
+	white-space: pre-wrap;
+	word-break: break-word;
+	user-select: text;
+}
+
+.bubble.is-theirs
+{
+	align-self: flex-start;
+	border-bottom-left-radius: 0.25rem;
+	background: var(--ink-raised);
+	border: 0.0625rem solid var(--line);
+}
+
+.bubble.is-mine
+{
+	align-self: flex-end;
+	border-bottom-right-radius: 0.25rem;
+	background: var(--bubble-mine-bg);
+	color: var(--bubble-mine-text);
+}
+
+.bubble-sender
+{
+	display: block;
+	margin-bottom: 0.1rem;
+	font-family: var(--font-heading);
+	font-size: 0.7rem;
+	font-weight: 700;
+}
+
+.bubble-time
+{
+	display: block;
+	margin-top: 0.15rem;
+	text-align: right;
+	font-size: 0.62rem;
+	opacity: 0.65;
+}
+
+.bubble.is-pending
+{
+	opacity: 0.6;
+}
+
+.bubble.is-failed
+{
+	border: 0.0625rem solid var(--danger);
+	cursor: pointer;
+}
+
+.bubble.is-failed .bubble-time
+{
+	color: var(--danger);
+	opacity: 1;
+}
+
+.composer
+{
+	display: flex;
+	align-items: flex-end;
+	gap: 0.5rem;
+	padding: 0.5rem 0.75rem;
+	flex: none;
+	border-top: 0.0625rem solid var(--line);
+}
+
+.composer .text-area
+{
+	overflow-y: hidden;
+	flex: 1;
+	max-height: 6rem;
+	border-radius: 1.1rem;
+}
+
+.composer-counter
+{
+	position: absolute;
+	right: 4rem;
+	bottom: 3.6rem;
+	font-size: 0.65rem;
+	color: var(--text-dim);
+}
+
+.send-button
+{
+	width: 2.4rem;
+	height: 2.4rem;
+	background: var(--gold);
+	color: var(--on-accent);
+}
+
+.send-button:hover
+{
+	background: var(--gold-bright);
+}
+
+.send-button:disabled
+{
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* ======================== */
+/* Picker, Inform, Settings */
+/* ======================== */
+
+.bulk-row
+{
+	border-bottom: 0.0625rem solid var(--line);
+	color: var(--gold);
+}
+
+.picker-footer
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.6rem 0.75rem;
+	flex: none;
+	border-top: 0.0625rem solid var(--line);
+}
+
+.inform-intro
+{
+	padding: 0.9rem 1rem 0.4rem;
+	font-size: 0.85rem;
+	color: var(--text-dim);
+}
+
+.inform-status
+{
+	min-height: 1.4rem;
+	padding: 0 1rem 0.5rem;
+	font-size: 0.82rem;
+}
+
+.inform-status.is-error
+{
+	color: var(--danger);
+}
+
+.inform-status.is-success
+{
+	color: var(--success);
+}
+
+.inform-button
+{
+	padding: 0.4rem 0.75rem;
+	font-size: 0.75rem;
+}
+
+.settings
+{
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	padding: 1rem 1.25rem;
+}
+
+.settings-card
+{
+	display: flex;
+	align-items: center;
+	gap: 0.9rem;
+	padding: 0.9rem;
+	border: 0.0625rem solid var(--line);
+	border-radius: var(--radius);
+	background: var(--ink-raised);
+}
+
+.setting-row
+{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.setting-text
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.setting-row .row-subtitle
+{
+	white-space: normal;
+}
+
+.toggle
+{
+	position: relative;
+	width: 2.75rem;
+	height: 1.5rem;
+	flex: none;
+	border-radius: 0.75rem;
+	background: var(--line);
+	transition: background 120ms ease;
+}
+
+.toggle::after
+{
+	content: "";
+	position: absolute;
+	top: 0.1875rem;
+	left: 0.1875rem;
+	width: 1.125rem;
+	height: 1.125rem;
+	border-radius: 50%;
+	background: var(--knob);
+	transition: transform 120ms ease;
+}
+
+.toggle.is-on
+{
+	background: var(--gold);
+}
+
+.toggle.is-on::after
+{
+	transform: translateX(1.25rem);
+}
+
+.slider
+{
+	width: 100%;
+	accent-color: var(--gold);
+}
+
+/* ======================== */
+/* Banner & Toast           */
+/* ======================== */
+
+.banner
+{
+	position: absolute;
+	top: 0.5rem;
+	left: 0.6rem;
+	right: 0.6rem;
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.6rem 0.75rem;
+	border: 0.0625rem solid rgba(var(--accent-rgb), 0.5);
+	border-radius: 1rem;
+	background: var(--overlay-bg);
+	box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.55);
+	text-align: left;
+	animation: banner-in 220ms ease-out;
+}
+
+.banner.is-leaving
+{
+	animation: banner-out 200ms ease-in forwards;
+}
+
+@keyframes banner-in
+{
+	from
+	{
+		opacity: 0;
+		transform: translateY(-120%);
+	}
+	to
+	{
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes banner-out
+{
+	to
+	{
+		opacity: 0;
+		transform: translateY(-120%);
+	}
+}
+
+.banner-text
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.banner-title
+{
+	font-family: var(--font-heading);
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: var(--parchment);
+}
+
+.banner-body
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: 0.82rem;
+	color: var(--text-dim);
+}
+
+.toast
+{
+	position: absolute;
+	top: var(--frame-pad);
+	right: var(--frame-pad);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.3rem;
+	width: 5.5rem;
+	height: 5.5rem;
+	padding: 0.4rem;
+	border: 0.125rem solid var(--gold);
+	border-radius: 1rem;
+	background: var(--overlay-bg);
+	box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.55);
+	animation: toast-in 200ms ease-out;
+}
+
+.toast.is-leaving
+{
+	animation: toast-out 220ms ease-in forwards;
+}
+
+@keyframes toast-in
+{
+	from
+	{
+		opacity: 0;
+		transform: scale(0.6);
+	}
+	to
+	{
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes toast-out
+{
+	to
+	{
+		opacity: 0;
+		transform: scale(0.8);
+	}
+}
+
+.toast-icon
+{
+	width: 2.4rem;
+	height: 2.4rem;
+	color: var(--gold);
+}
+
+.toast-icon svg
+{
+	width: 100%;
+	height: 100%;
+}
+
+.toast-label
+{
+	max-width: 100%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-family: var(--font-heading);
+	font-size: 0.62rem;
+	color: var(--parchment);
+}
+
+/* ======================== */
+/* Font Awesome Sizing      */
+/* ======================== */
+
+.icon-button i
+{
+	font-size: 1rem;
+}
+
+.status-close i
+{
+	font-size: 0.85rem;
+}
+
+.avatar i
+{
+	font-size: 1.05rem;
+}
+
+.avatar.is-large i
+{
+	font-size: 2.3rem;
+}
+
+.check i
+{
+	font-size: 0.65rem;
+}
+
+.fab i,
+.primary-button i,
+.secondary-button i
+{
+	font-size: 0.95rem;
+}
+
+/* ======================== */
+/* Settings Extras          */
+/* ======================== */
+
+.settings-section
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.profile-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.profile-row .text-input
+{
+	flex: 1;
+	min-width: 0;
+}
+
+.segmented
+{
+	display: flex;
+	padding: 0.2rem;
+	border: 0.0625rem solid var(--line);
+	border-radius: var(--radius);
+	background: var(--ink-sunken);
+}
+
+.segmented button
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	flex: 1;
+	padding: 0.45rem 0.5rem;
+	border-radius: 0.55rem;
+	font-family: var(--font-heading);
+	font-size: 0.78rem;
+	color: var(--text-dim);
+}
+
+.segmented button.is-active
+{
+	background: var(--gold);
+	color: var(--on-accent);
+}
+
+.credits
+{
+	margin-top: 0.75rem;
+	padding-bottom: 0.5rem;
+	text-align: center;
+	white-space: pre-line;
+	font-size: 0.68rem;
+	line-height: 1.5;
+	color: var(--text-dim);
+	opacity: 0.55;
+	user-select: text;
+}
+
+/* ======================== */
+/* Layout Editor            */
+/* ======================== */
+
+/* While editing, the view covers the whole screen and LayoutEditor.js places the phone at absolute pixel coordinates. */
+body.is-editing .phone
+{
+	animation: none;
+}
+
+.layout-editor
+{
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.45);
+}
+
+/* The backdrop paints under the phone (it comes first in the page); the toolbar is lifted above it so the phone can never cover it. */
+.layout-toolbar
+{
+	position: absolute;
+	z-index: 40;
+	top: 1rem;
+	left: 50%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.75rem 1rem;
+	transform: translateX(-50%);
+	border: 0.0625rem solid var(--gold);
+	border-radius: 1rem;
+	background: var(--overlay-bg);
+	box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.5);
+	white-space: nowrap;
+}
+
+.layout-hint
+{
+	font-size: 0.85rem;
+	color: var(--text-dim);
+}
+
+.layout-buttons
+{
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.layout-scale
+{
+	min-width: 3.25rem;
+	text-align: center;
+	font-family: var(--font-heading);
+	font-size: 0.8rem;
+	color: var(--parchment);
+}
+
+.phone-drag
+{
+	position: absolute;
+	inset: 0;
+	z-index: 30;
+	border-radius: 2.25rem;
+	outline: 0.125rem dashed var(--gold-bright);
+	outline-offset: 0.35rem;
+	cursor: move;
+}
+
+.phone-resize
+{
+	position: absolute;
+	left: -0.9rem;
+	bottom: -0.9rem;
+	width: 1.8rem;
+	height: 1.8rem;
+	border: 0.125rem solid var(--on-accent);
+	border-radius: 50%;
+	background: var(--gold);
+	cursor: nesw-resize;
+}
+
+/* ======================== */
+/* Leaving Bulk Owls        */
+/* ======================== */
+
+.leave-bar
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.6rem 0.75rem;
+	flex: none;
+	border-bottom: 0.0625rem solid var(--line);
+	background: var(--ink-raised);
+}
+
+.leave-text
+{
+	font-size: 0.82rem;
+}
+
+.leave-bar .form-error:empty
+{
+	display: none;
+}
+
+.leave-bar .danger-button,
+.leave-bar .secondary-button
+{
+	padding: 0.4rem 0.7rem;
+}
+
+.chat-note
+{
+	align-self: center;
+	margin: 0.35rem 0;
+	padding: 0.15rem 0.7rem;
+	border-radius: 0.6rem;
+	font-size: 0.72rem;
+	font-style: italic;
+	color: var(--text-dim);
+	text-align: center;
+}
+
+/* ======================== */
+/* Parchment Sheet          */
+/* ======================== */
+
+/* In the parchment theme the phone becomes a loose sheet of old paper with deckled edges all round.
+   clip-path removes box-shadow, so the sheet's shadow comes from a drop-shadow filter on the whole phone instead. */
+:root[data-theme="parchment"] .phone
+{
+	padding: 0;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	filter: drop-shadow(0 0.5rem 0.7rem rgba(40, 24, 8, 0.55));
+}
+
+/* The sheet: stained, grained paper, browned towards every edge. */
+:root[data-theme="parchment"] .phone-screen
+{
+	border-radius: 0;
+	box-shadow: none;
+	background:
+		radial-gradient(ellipse 120% 110% at 50% 50%, rgba(120, 80, 30, 0) 62%, rgba(110, 72, 26, 0.32) 100%),
+		radial-gradient(ellipse 40% 22% at 22% 18%, rgba(150, 100, 40, 0.16), transparent),
+		radial-gradient(ellipse 30% 18% at 80% 64%, rgba(140, 92, 36, 0.14), transparent),
+		radial-gradient(ellipse 22% 14% at 35% 86%, rgba(120, 78, 30, 0.12), transparent),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.36  0 0 0 0 0.25  0 0 0 0 0.11  0 0 0 0.16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url%28%23n%29'/%3E%3C/svg%3E"),
+		radial-gradient(ellipse at 50% 45%, #f7edd2 0%, #ecdaae 62%, #dcc08a 100%);
+	clip-path: polygon(1.20% 0.03%, 5.27% 0.70%, 9.33% 0.10%, 13.40% 0.16%, 17.47% 0.55%, 21.53% 0.43%, 25.60% 0.39%, 29.67% 0.62%, 33.73% 0.27%, 37.80% 0.31%, 41.87% 0.06%, 45.93% 0.49%, 50.00% 0.57%, 54.07% 0.17%, 58.13% 0.27%, 62.20% 0.14%, 66.27% 0.55%, 70.33% 0.13%, 74.40% 0.05%, 78.47% 0.16%, 82.53% 0.03%, 86.60% 0.62%, 90.67% 0.30%, 94.73% 0.17%, 98.80% 0.07%, 98.92% 4.17%, 98.93% 8.33%, 99.48% 12.50%, 99.33% 16.67%, 99.44% 20.83%, 98.92% 25.00%, 99.67% 29.17%, 99.33% 33.33%, 99.19% 37.50%, 99.44% 41.67%, 98.61% 45.83%, 99.60% 50.00%, 99.39% 54.17%, 99.62% 58.33%, 98.81% 62.50%, 98.77% 66.67%, 98.79% 70.83%, 99.77% 75.00%, 98.63% 79.17%, 99.55% 83.33%, 98.97% 87.50%, 99.67% 91.67%, 99.14% 95.83%, 98.80% 99.93%, 94.73% 99.78%, 90.67% 99.99%, 86.60% 99.58%, 82.53% 99.91%, 78.47% 99.58%, 74.40% 99.97%, 70.33% 99.70%, 66.27% 99.54%, 62.20% 99.98%, 58.13% 99.57%, 54.07% 99.99%, 50.00% 99.86%, 45.93% 99.49%, 41.87% 99.62%, 37.80% 99.44%, 33.73% 99.45%, 29.67% 99.60%, 25.60% 99.92%, 21.53% 99.48%, 17.47% 99.61%, 13.40% 99.51%, 9.33% 99.44%, 5.27% 99.89%, 1.20% 99.36%, 0.64% 95.83%, 0.92% 91.67%, 0.44% 87.50%, 1.25% 83.33%, 0.28% 79.17%, 0.66% 75.00%, 0.15% 70.83%, 0.59% 66.67%, 0.51% 62.50%, 0.56% 58.33%, 1.09% 54.17%, 0.40% 50.00%, 0.89% 45.83%, 0.33% 41.67%, 0.84% 37.50%, 0.58% 33.33%, 1.32% 29.17%, 0.65% 25.00%, 0.93% 20.83%, 0.90% 16.67%, 0.00% 12.50%, 0.00% 8.33%, 1.38% 4.17%);
+}
+
+/* Keep the status bar and home bar clear of the torn top and bottom edges. */
+:root[data-theme="parchment"] .status-bar
+{
+	margin-top: 0.3rem;
+}
+
+:root[data-theme="parchment"] .home-bar
+{
+	margin-bottom: 0.3rem;
+}
+
+/* The home bar: an inked flourish, a tapered rule with a diamond at its middle, instead of a phone's pill. */
+:root[data-theme="parchment"] .home-bar span
+{
+	position: relative;
+	width: 8rem;
+	height: 0.125rem;
+	border-radius: 0;
+	background: linear-gradient(90deg, transparent, var(--gold) 28%, var(--gold) 72%, transparent);
+	opacity: 0.7;
+}
+
+:root[data-theme="parchment"] .home-bar span::before,
+:root[data-theme="parchment"] .home-bar span::after
+{
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%) rotate(45deg);
+}
+
+:root[data-theme="parchment"] .home-bar span::before
+{
+	width: 0.5rem;
+	height: 0.5rem;
+	background: var(--gold);
+}
+
+:root[data-theme="parchment"] .home-bar span::after
+{
+	width: 0.2rem;
+	height: 0.2rem;
+	background: var(--ink);
+}
+
+:root[data-theme="parchment"] .home-bar:hover span
+{
+	opacity: 1;
+}
+
+/* Scrollbars: an ink-brown thumb running along a faint ruled line, like a margin drawn in iron-gall ink.
+   The wide transparent right border keeps the ink clear of the sheet's torn right edge, which would otherwise clip it. */
+:root[data-theme="parchment"] .phone *::-webkit-scrollbar
+{
+	width: 0.9rem;
+	height: 0.5rem;
+}
+
+:root[data-theme="parchment"] .phone *::-webkit-scrollbar-track
+{
+	background: linear-gradient(90deg, transparent 0.22rem, rgba(110, 72, 26, 0.22) 0.22rem, rgba(110, 72, 26, 0.22) 0.32rem, transparent 0.32rem);
+}
+
+:root[data-theme="parchment"] .phone *::-webkit-scrollbar-thumb
+{
+	border: 0.1rem solid transparent;
+	border-right-width: 0.45rem;
+	border-radius: 0.25rem;
+	background: rgba(78, 46, 16, 0.55) padding-box;
+}
+
+:root[data-theme="parchment"] .phone *::-webkit-scrollbar-thumb:hover
+{
+	background: rgba(78, 46, 16, 0.85) padding-box;
+}
+
+/* Switches and pick-marks become boxes inked by hand: a slightly crooked square with uneven corners, ticked with a quill stroke.
+   The tick overshoots the box the way a hurried hand would. */
+:root[data-theme="parchment"] .toggle,
+:root[data-theme="parchment"] .check
+{
+	position: relative;
+	width: 1.45rem;
+	height: 1.45rem;
+	border: 0.125rem solid var(--gold);
+	border-radius: 0.2rem 0.35rem 0.15rem 0.3rem / 0.3rem 0.15rem 0.35rem 0.2rem;
+	background: rgba(255, 248, 230, 0.35);
+	box-shadow: inset 0 0 0.25rem rgba(110, 72, 26, 0.25);
+	transform: rotate(-2deg);
+	transition: none;
+}
+
+:root[data-theme="parchment"] .check
+{
+	width: 1.3rem;
+	height: 1.3rem;
+	transform: rotate(1.5deg);
+}
+
+:root[data-theme="parchment"] .toggle::after,
+:root[data-theme="parchment"] .is-selected .check::after
+{
+	content: "";
+	position: absolute;
+	top: -0.45rem;
+	left: -0.05rem;
+	width: 1.75rem;
+	height: 1.65rem;
+	border-radius: 0;
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 26'%3E%3Cpath d='M3 15.5c2.2.6 4.3 2.6 6.3 6.6C12.6 13.4 17.8 6.4 26 1.5c-6.8 5.6-11.6 12.4-15.4 22.6-.4.9-1.6 1-2 .1C7.1 20.9 5.4 18.2 3 15.5z' fill='%234e2e10'/%3E%3C/svg%3E") center / contain no-repeat;
+	opacity: 0;
+	transform: none;
+	transition: none;
+}
+
+:root[data-theme="parchment"] .toggle.is-on,
+:root[data-theme="parchment"] .is-selected .check
+{
+	border-color: var(--gold);
+	background: rgba(255, 248, 230, 0.35);
+}
+
+:root[data-theme="parchment"] .toggle.is-on::after,
+:root[data-theme="parchment"] .is-selected .check::after
+{
+	opacity: 1;
+	transform: none;
+}
+
+/* The pick-mark draws its own inked tick, so the icon font's tick is hidden. */
+:root[data-theme="parchment"] .check i,
+:root[data-theme="parchment"] .check svg
+{
+	display: none;
+}
+
+:root[data-theme="parchment"] .phone-drag
+{
+	border-radius: 0.5rem;
+}
+
+/* ======================== */
+/* Mutes, Blocks & Flight   */
+/* ======================== */
+
+.chip-row
+{
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+.chip-row .secondary-button
+{
+	padding: 0.35rem 0.6rem;
+	font-size: 0.72rem;
+}
+
+.icon-button.is-muted
+{
+	color: var(--text-dim);
+}
+
+.row-badges
+{
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+}
+
+.row-muted
+{
+	font-size: 0.7rem;
+	color: var(--text-dim);
+}
+
+.read-only-bar
+{
+	padding: 0.7rem 0.75rem;
+	flex: none;
+	border-top: 0.0625rem solid var(--line);
+	text-align: center;
+	font-size: 0.8rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.bubble.is-flying
+{
+	opacity: 0.75;
+}
+
+.bubble.is-flying .bubble-time
+{
+	font-style: italic;
+}
+
+.blocked-list
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+/* ======================== */
+/* Composer Extras          */
+/* ======================== */
+
+.composer-button
+{
+	width: 2.1rem;
+	height: 2.4rem;
+	font-size: 1.05rem;
+}
+
+.composer-button.is-active
+{
+	background: rgba(var(--accent-rgb), 0.18);
+}
+
+.composer
+{
+	gap: 0.3rem;
+	padding-left: 0.5rem;
+}
+
+/* Emoji come from the system's colour emoji font; the page's serif fonts have none. */
+.emoji-picker
+{
+	display: flex;
+	flex-direction: column;
+	height: 12.5rem;
+	flex: none;
+	border-top: 0.0625rem solid var(--line);
+	background: var(--ink-sunken);
+	font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+}
+
+.emoji-picker[hidden]
+{
+	display: none;
+}
+
+.emoji-tabs
+{
+	display: flex;
+	gap: 0.15rem;
+	padding: 0.3rem 0.5rem 0;
+	flex: none;
+	border-bottom: 0.0625rem solid var(--line);
+}
+
+.emoji-tab
+{
+	padding: 0.25rem 0.55rem 0.3rem;
+	border-bottom: 0.125rem solid transparent;
+	font-size: 1.05rem;
+	opacity: 0.6;
+}
+
+.emoji-tab.is-active
+{
+	border-bottom-color: var(--gold);
+	opacity: 1;
+}
+
+.emoji-grid
+{
+	display: grid;
+	grid-template-columns: repeat(8, 1fr);
+	align-content: start;
+	gap: 0.1rem;
+	padding: 0.4rem 0.5rem;
+	overflow-y: auto;
+	flex: 1;
+}
+
+.emoji-option
+{
+	height: 2.1rem;
+	border-radius: 0.5rem;
+	font-size: 1.3rem;
+	line-height: 1;
+}
+
+.emoji-option:hover
+{
+	background: rgba(var(--accent-rgb), 0.18);
+}
+
+/* ======================== */
+/* Location Owls            */
+/* ======================== */
+
+.bubble.is-location
+{
+	min-width: 13rem;
+	white-space: normal;
+}
+
+.location-card
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+
+.location-head
+{
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+
+.location-icon
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.2rem;
+	height: 2.2rem;
+	flex: none;
+	border-radius: 50%;
+	background: rgba(var(--accent-rgb), 0.2);
+	color: var(--gold);
+	font-size: 1rem;
+}
+
+.bubble.is-mine .location-icon
+{
+	background: rgba(42, 33, 22, 0.12);
+	color: var(--bubble-mine-text);
+}
+
+.location-text
+{
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.location-title
+{
+	font-family: var(--font-heading);
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+
+.location-place
+{
+	font-size: 0.85rem;
+	opacity: 0.85;
+}
+
+.location-button
+{
+	padding: 0.35rem 0.75rem;
+	font-size: 0.75rem;
+}
+
+.bubble.is-mine .location-button
+{
+	border-color: var(--bubble-mine-text);
+	color: var(--bubble-mine-text);
+}
+
+.location-note
+{
+	font-size: 0.75rem;
+	font-style: italic;
+	opacity: 0.85;
+}
+
+.location-note.is-error
+{
+	color: var(--danger);
+	opacity: 1;
+}
+
+/* ======================== */
+/* Inform Requests          */
+/* ======================== */
+
+.inform-requests
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0 0.75rem;
+}
+
+.inform-requests:not(:empty)
+{
+	padding-bottom: 0.75rem;
+	border-bottom: 0.0625rem solid var(--line);
+	margin-bottom: 0.25rem;
+}
+
+.inform-request
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	padding: 0.75rem;
+	border: 0.0625rem solid var(--gold);
+	border-radius: var(--radius);
+	background: var(--ink-raised);
+}
+
+.inform-request-head
+{
+	display: flex;
+	align-items: center;
+	gap: 0.7rem;
+}
+
+.inform-request .button-row .primary-button,
+.inform-request .button-row .secondary-button
+{
+	padding: 0.45rem 0.5rem;
+	font-size: 0.75rem;
+}
+
+/* ======================== */
+/* Pins, Replies & Receipts */
+/* ======================== */
+
+.icon-button.is-active
+{
+	background: rgba(var(--accent-rgb), 0.18);
+	color: var(--gold-bright);
+}
+
+.chat-error
+{
+	padding: 0 0.75rem;
+	flex: none;
+}
+
+.chat-error:empty
+{
+	display: none;
+}
+
+.pinned-bar
+{
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.2rem 0.4rem 0.2rem 0.75rem;
+	flex: none;
+	border-bottom: 0.0625rem solid var(--line);
+	background: var(--ink-raised);
+}
+
+.pinned-bar[hidden]
+{
+	display: none;
+}
+
+.pinned-jump
+{
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex: 1;
+	min-width: 0;
+	padding: 0.3rem 0;
+	text-align: left;
+	font-size: 0.78rem;
+}
+
+.pinned-icon
+{
+	flex: none;
+	color: var(--gold);
+	transform: rotate(35deg);
+}
+
+.pinned-text
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.pinned-bar .icon-button
+{
+	width: 1.8rem;
+	height: 1.8rem;
+}
+
+.action-bar .chip-row .secondary-button
+{
+	gap: 0.35rem;
+}
+
+.action-bar .leave-text
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--text-dim);
+}
+
+.reply-bar
+{
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.35rem 0.4rem 0.35rem 0.75rem;
+	flex: none;
+	border-top: 0.0625rem solid var(--line);
+	background: var(--ink-raised);
+}
+
+.reply-bar[hidden]
+{
+	display: none;
+}
+
+.reply-icon
+{
+	color: var(--gold);
+}
+
+.reply-text
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	padding-left: 0.5rem;
+	border-left: 0.15rem solid var(--gold);
+}
+
+.reply-name
+{
+	font-family: var(--font-heading);
+	font-size: 0.7rem;
+	font-weight: 700;
+	color: var(--gold);
+}
+
+.reply-snippet
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: 0.78rem;
+	color: var(--text-dim);
+}
+
+.reply-bar .icon-button
+{
+	width: 1.8rem;
+	height: 1.8rem;
+}
+
+.bubble-quote
+{
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	margin: 0.1rem 0 0.3rem;
+	padding: 0.25rem 0.5rem;
+	border-left: 0.15rem solid currentColor;
+	border-radius: 0.35rem;
+	background: rgba(0, 0, 0, 0.12);
+	text-align: left;
+	white-space: normal;
+}
+
+.quote-name
+{
+	font-family: var(--font-heading);
+	font-size: 0.68rem;
+	font-weight: 700;
+}
+
+.quote-text
+{
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	font-size: 0.8rem;
+	opacity: 0.8;
+}
+
+.bubble:not(.is-pending):not(.is-failed)
+{
+	cursor: pointer;
+}
+
+.bubble.is-selected
+{
+	box-shadow: 0 0 0 0.125rem var(--gold-bright);
+}
+
+.bubble.is-flashing
+{
+	animation: owl-flash 1.4s ease;
+}
+
+@keyframes owl-flash
+{
+	0%, 60% { box-shadow: 0 0 0 0.2rem var(--gold-bright); }
+	100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.bubble.is-unsent
+{
+	opacity: 0.7;
+}
+
+.unsent-text
+{
+	font-style: italic;
+}
+
+.bubble-time
+{
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.3rem;
+}
+
+.bubble-ticks
+{
+	font-size: 0.6rem;
+}
+
+.bubble-ticks.is-read
+{
+	color: #3f8fd6;
+	opacity: 1;
+}
+
+.bubble-group
+{
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	align-self: flex-end;
+	max-width: 80%;
+}
+
+.bubble-group > .bubble
+{
+	max-width: 100%;
+}
+
+.read-line
+{
+	margin: 0.15rem 0.3rem 0;
+	font-size: 0.66rem;
+	color: var(--text-dim);
+}
+
+/* ======================== */
+/* Typing                   */
+/* ======================== */
+
+.chat-header-sub.is-typing,
+.row-subtitle.is-typing
+{
+	font-style: italic;
+	color: var(--gold);
+}
+
+.typing-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0 0.9rem 0.6rem;
+	font-size: 0.75rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.typing-row[hidden]
+{
+	display: none;
+}
+
+.typing-dots
+{
+	display: inline-flex;
+	gap: 0.2rem;
+	padding: 0.45rem 0.6rem;
+	border-radius: 0.8rem;
+	background: var(--ink-raised);
+	border: 0.0625rem solid var(--line);
+}
+
+.typing-dots i
+{
+	width: 0.35rem;
+	height: 0.35rem;
+	border-radius: 50%;
+	background: var(--gold);
+	animation: typing-dot 1.2s infinite ease-in-out;
+}
+
+.typing-dots i:nth-child(2)
+{
+	animation-delay: 0.15s;
+}
+
+.typing-dots i:nth-child(3)
+{
+	animation-delay: 0.3s;
+}
+
+@keyframes typing-dot
+{
+	0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+	40% { opacity: 1; transform: translateY(-0.15rem); }
+}
+
+/* ======================== */
+/* Lists, Groups & Sounds   */
+/* ======================== */
+
+.row-pinned
+{
+	transform: rotate(35deg);
+}
+
+.section-letter.is-favourites
+{
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.details-section
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	width: 100%;
+}
+
+.details-section[hidden]
+{
+	display: none;
+}
+
+.member-list
+{
+	display: flex;
+	flex-direction: column;
+	margin: 0 -1.25rem;
+}
+
+.member-row
+{
+	cursor: default;
+}
+
+.member-row.is-link
+{
+	cursor: pointer;
+}
+
+.member-role
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: 0.7rem;
+	color: var(--gold);
+}
+
+.member-actions
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	flex: none;
+}
+
+.member-action
+{
+	padding: 0.25rem 0.55rem;
+	font-size: 0.68rem;
+}
+
+:root[data-theme="parchment"] .bubble-ticks.is-read
+{
+	color: #1f5d8f;
+}
+
+:root[data-theme="parchment"] .bubble-quote
+{
+	background: rgba(110, 72, 26, 0.12);
+}
+
+/* ======================== */
+/* Dropdowns                */
+/* ======================== */
+
+/* Built from buttons, not a select element: see Widgets.Dropdown. */
+.dropdown
+{
+	position: relative;
+}
+
+.dropdown-button
+{
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	width: 100%;
+	padding: 0.55rem 0.75rem;
+	border: 0.0625rem solid var(--line);
+	border-radius: var(--radius);
+	background: var(--ink-sunken);
+	font-size: 0.85rem;
+	text-align: left;
+}
+
+.dropdown-button:hover,
+.dropdown.is-open .dropdown-button
+{
+	border-color: var(--gold);
+}
+
+.dropdown-icon i,
+.dropdown-chevron i
+{
+	font-size: 0.85rem;
+	color: var(--gold);
+}
+
+.dropdown-label
+{
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.dropdown-chevron
+{
+	transition: transform 120ms ease;
+}
+
+.dropdown.is-open .dropdown-chevron
+{
+	transform: rotate(180deg);
+}
+
+.dropdown-list
+{
+	position: absolute;
+	top: calc(100% + 0.25rem);
+	left: 0;
+	right: 0;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	max-height: 12rem;
+	overflow-y: auto;
+	padding: 0.25rem;
+	border: 0.0625rem solid var(--gold);
+	border-radius: var(--radius);
+	background: var(--overlay-bg);
+	box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.35);
+}
+
+.dropdown-option
+{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding: 0.45rem 0.6rem;
+	border-radius: 0.5rem;
+	font-size: 0.85rem;
+	text-align: left;
+	color: var(--text);
+}
+
+.dropdown-option:hover
+{
+	background: rgba(var(--accent-rgb), 0.15);
+}
+
+.dropdown-option.is-active
+{
+	color: var(--gold-bright);
+}
+
+.dropdown-option i
+{
+	font-size: 0.75rem;
+	color: var(--gold);
+}
+
+/* ======================== */
+/* Settings Crest           */
+/* ======================== */
+
+.settings-crest
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	padding: 0.25rem 0 0.5rem;
+	border-bottom: 0.0625rem solid var(--line);
+}
+
+/* ======================== */
+/* Settings Categories      */
+/* ======================== */
+
+button.settings-card
+{
+	width: 100%;
+	text-align: left;
+	transition: border-color 120ms ease;
+}
+
+button.settings-card:hover
+{
+	border-color: var(--gold);
+}
+
+.settings-card .setting-text
+{
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-nav
+{
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 0.0625rem solid var(--line);
+	border-radius: var(--radius);
+	background: var(--ink-raised);
+}
+
+.settings-nav-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.6rem 0.75rem;
+	text-align: left;
+	transition: background 120ms ease;
+}
+
+.settings-nav-row + .settings-nav-row
+{
+	border-top: 0.0625rem solid var(--line);
+}
+
+.settings-nav-row:hover
+{
+	background: rgba(var(--accent-rgb), 0.1);
+}
+
+.settings-nav-row .setting-text
+{
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-nav-icon
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 1.9rem;
+	height: 1.9rem;
+	border-radius: 0.5rem;
+	background: var(--gold);
+	color: var(--on-accent);
+}
+
+.settings-nav-icon i
+{
+	font-size: 0.9rem;
+}
+
+.settings-nav-chevron i
+{
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
+/* ======================== */
+/* App Motion               */
+/* ======================== */
+
+/* An app growing out of its icon or shrinking back into it lies over the home screen, with the screen's own background so the icons do not show through.
+   The background is sized and shifted to the whole phone screen (status bar 2rem above, home bar 1.5rem below), so its gradient lines up with the one behind it and nothing jumps when the app lands. */
+.screen.is-moving
+{
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	background: var(--screen-bg);
+	background-position: 0 -2rem;
+	background-size: 100% calc(100% + 3.5rem);
+	pointer-events: none;
+	will-change: clip-path, transform, opacity;
+}
+
+/* When the phone comes up, the icons drop into place one after another with a little bounce. */
+.home-grid.is-falling .home-tile
+{
+	animation: app-fall 460ms cubic-bezier(0.3, 1.45, 0.55, 1) both;
+}
+
+.home-grid.is-falling .home-tile:nth-child(2)
+{
+	animation-delay: 60ms;
+}
+
+.home-grid.is-falling .home-tile:nth-child(3)
+{
+	animation-delay: 120ms;
+}
+
+.home-grid.is-falling .home-tile:nth-child(4)
+{
+	animation-delay: 180ms;
+}
+
+.home-grid.is-falling .home-tile:nth-child(5)
+{
+	animation-delay: 240ms;
+}
+
+@keyframes app-fall
+{
+	from
+	{
+		opacity: 0;
+		transform: translateY(-2.25rem) scale(1.12);
+	}
+	55%
+	{
+		opacity: 1;
+	}
+	to
+	{
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+:root[data-theme="parchment"] .home-grid.is-falling .home-tile
+{
+	animation: none;
+}
+
+/* ======================== */
+/* Floo-Calls               */
+/* ======================== */
+
+/* Five apps on Parchment: shorter tiles so three rows fit under the crest, and the odd one out spans the bottom row. */
+:root[data-theme="parchment"] .home-grid[data-count="5"] .home-tile
+{
+	aspect-ratio: 1.35;
+}
+
+:root[data-theme="parchment"] .home-grid[data-count="5"] .home-tile:last-child
+{
+	grid-column: span 2;
+	aspect-ratio: auto;
+	min-height: 5.5rem;
+}
+
+/* The call the player is in, in the status bar while its own screen is not on top. */
+.status-call
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.15rem 0.6rem;
+	border-radius: 0.75rem;
+	background: var(--success);
+	color: var(--on-accent);
+	font-family: var(--font-body);
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	font-variant-numeric: tabular-nums;
+}
+
+.status-call-icon i
+{
+	font-size: 0.65rem;
+}
+
+.call
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-between;
+	padding: 2.5rem 1.25rem 2rem;
+}
+
+.call-who
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.6rem;
+	text-align: center;
+}
+
+.call-avatar
+{
+	margin-bottom: 0.75rem;
+	border-radius: 50%;
+}
+
+/* Rings of gold spread from the picture while a call rings for the player. */
+.screen.is-ringing .call-avatar
+{
+	animation: call-pulse 1.4s ease-out infinite;
+}
+
+@keyframes call-pulse
+{
+	from
+	{
+		box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.55);
+	}
+	to
+	{
+		box-shadow: 0 0 0 1.5rem rgba(var(--accent-rgb), 0);
+	}
+}
+
+.call-name
+{
+	font-family: var(--font-heading);
+	font-size: 1.35rem;
+	font-weight: 600;
+	color: var(--parchment);
+	word-break: break-word;
+}
+
+.call-status
+{
+	font-size: 1rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.screen.is-over .call-status
+{
+	color: var(--parchment);
+}
+
+.call-hint
+{
+	max-width: 16rem;
+	font-size: 0.78rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.call-error
+{
+	text-align: center;
+}
+
+.call-buttons
+{
+	display: flex;
+	justify-content: center;
+	gap: 3.5rem;
+	width: 100%;
+}
+
+.call-button
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.45rem;
+	font-family: var(--font-heading);
+	font-size: 0.75rem;
+	color: var(--text);
+}
+
+.call-button-circle
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 4rem;
+	height: 4rem;
+	border-radius: 50%;
+	box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.4);
+	color: #fff;
+	transition: transform 120ms ease, filter 120ms ease;
+}
+
+.call-button-circle i
+{
+	font-size: 1.5rem;
+}
+
+.call-button.is-answer .call-button-circle
+{
+	background: var(--success);
+}
+
+.call-button.is-hangup .call-button-circle
+{
+	background: var(--danger);
+}
+
+.call-button.is-mute .call-button-circle
+{
+	border: 0.0625rem solid var(--line);
+	background: var(--ink-raised);
+	color: var(--parchment);
+}
+
+.call-button.is-mute.is-active .call-button-circle
+{
+	border-color: var(--parchment);
+	background: var(--parchment);
+	color: var(--ink);
+}
+
+/* The picture glows in Floo green while the other owl's voice comes through. */
+.screen.is-speaking .call-avatar
+{
+	box-shadow: 0 0 0 0.3rem rgba(127, 179, 138, 0.55), 0 0 1.4rem rgba(127, 179, 138, 0.6);
+	transition: box-shadow 120ms ease;
+}
+
+.call-button:hover .call-button-circle
+{
+	filter: brightness(1.1);
+	transform: translateY(-0.125rem);
+}
+
+.call-button:disabled
+{
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* The call log. */
+.calls-error
+{
+	padding: 0 1rem;
+	text-align: center;
+}
+
+.calls-error:empty
+{
+	min-height: 0;
+}
+
+.call-row .row-subtitle
+{
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.call-row.is-missed .row-title,
+.call-row.is-missed .row-subtitle
+{
+	color: var(--danger);
+}
+
+/* The arrows lean like a phone's: down-left for calls in, up-right for calls out. */
+.call-direction i
+{
+	font-size: 0.65rem;
+	transform: rotate(45deg);
+}
+
+.call-row-flame
+{
+	color: var(--gold);
+}
+
+.call-row-flame i
+{
+	font-size: 0.85rem;
+}
+
+/* The clear button turns red while it waits for its second tap. */
+.icon-button.is-armed
+{
+	background: rgba(201, 106, 92, 0.18);
+	color: var(--danger);
+}
+
+/* The closed-phone pop-up of a ringing call: a Floo flame that keeps flickering until the call is answered or ends. */
+.toast.is-ringing .toast-icon
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transform-origin: 50% 90%;
+	animation: call-flicker 0.9s ease-in-out infinite;
+}
+
+.toast.is-ringing .toast-icon i
+{
+	font-size: 1.9rem;
+	color: var(--success);
+}
+
+@keyframes call-flicker
+{
+	0%, 100%
+	{
+		transform: scale(1, 1) rotate(0deg);
+		opacity: 1;
+	}
+	25%
+	{
+		transform: scale(0.94, 1.1) rotate(-4deg);
+		opacity: 0.85;
+	}
+	50%
+	{
+		transform: scale(1.04, 0.95) rotate(3deg);
+		opacity: 1;
+	}
+	75%
+	{
+		transform: scale(0.97, 1.07) rotate(-2deg);
+		opacity: 0.9;
+	}
+}

@@ -1,0 +1,9 @@
+# FranticDreamer 2026
+
+# Don't diff binary stuff
+*.ttf binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.png binary
+*.gif binary

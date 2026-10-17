@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!-- FranticDreamer 2026 -->
+<html lang="en-GB">
+<head>
+	<meta charset="utf-8">
+	<title>Frantic's Wizarding Communication</title>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
+	<link rel="stylesheet" href="Styles/Phone.css">
+</head>
+<body>
+	<!-- Pop-up shown while the phone is closed. Placeholder square; to be replaced with an animation. -->
+	<div id="toast" class="toast" hidden>
+		<div class="toast-icon" aria-hidden="true"></div>
+		<div class="toast-label" id="toast-label"></div>
+	</div>
+
+	<!-- Shown only while the player moves and scales the phone; the view then covers the whole screen. -->
+	<div id="layout-editor" class="layout-editor" hidden>
+		<div class="layout-toolbar">
+			<span class="layout-hint" data-lang="layout.hint"></span>
+			<span class="layout-buttons">
+				<button class="icon-button" id="layout-smaller" data-lang-title="layout.smaller"></button>
+				<span class="layout-scale" id="layout-scale"></span>
+				<button class="icon-button" id="layout-larger" data-lang-title="layout.larger"></button>
+				<button class="secondary-button" id="layout-reset" data-lang="layout.reset"></button>
+				<button class="secondary-button" id="layout-cancel" data-lang="common.cancel"></button>
+				<button class="primary-button" id="layout-done" data-lang="layout.done"></button>
+			</span>
+		</div>
+	</div>
+
+	<div id="phone" class="phone" hidden>
+		<div class="phone-drag" id="phone-drag" hidden>
+			<span class="phone-resize" id="phone-resize" data-lang-title="layout.resizeHandle"></span>
+		</div>
+		<div class="phone-screen">
+			<!-- The player's own picture behind the home screen; App.js shows it only while Home is on top. -->
+			<div class="wallpaper" id="wallpaper" hidden></div>
+			<div class="status-bar">
+				<span class="status-title"><span class="status-quiet" id="status-quiet" hidden></span><span data-lang="app.name"></span></span>
+				<!-- The call the player is in, while its own screen is not on top; App.js keeps it up to date. -->
+				<button class="status-call" id="status-call" data-lang-title="call.back" hidden><span class="status-call-icon" id="status-call-icon"></span><span id="status-call-text"></span></button>
+				<button class="icon-button status-close" id="phone-close" data-lang-title="common.close"></button>
+			</div>
+
+			<!-- Notification banner that drops in from the top while the phone is open. -->
+			<button id="banner" class="banner" hidden>
+				<span class="banner-avatar" id="banner-avatar"></span>
+				<span class="banner-text">
+					<span class="banner-title" id="banner-title"></span>
+					<span class="banner-body" id="banner-body"></span>
+				</span>
+			</button>
+
+			<div id="screen" class="screen"></div>
+
+			<button class="home-bar" id="home-bar" data-lang-title="common.home"><span></span></button>
+		</div>
+	</div>
+
+	<audio id="owl-sound" preload="auto"></audio>
+	<audio id="ring-sound" preload="none"></audio>
+
+	<script src="Scripts/Lang.js"></script>
+	<script src="Scripts/Util.js"></script>
+	<script src="Scripts/Icons.js"></script>
+	<script src="Scripts/Bridge.js"></script>
+	<script src="Scripts/Store.js"></script>
+	<script src="Scripts/Notifications.js"></script>
+	<script src="Scripts/Voice.js"></script>
+	<script src="Scripts/EmojiPicker.js"></script>
+	<script src="Scripts/Screens/Common.js"></script>
+	<script src="Scripts/Screens/Home.js"></script>
+	<script src="Scripts/Screens/Contacts.js"></script>
+	<script src="Scripts/Screens/ContactDetails.js"></script>
+	<script src="Scripts/Screens/Owls.js"></script>
+	<script src="Scripts/Screens/ContactPicker.js"></script>
+	<script src="Scripts/Screens/Chat.js"></script>
+	<script src="Scripts/Screens/GroupInfo.js"></script>
+	<script src="Scripts/Screens/Inform.js"></script>
+	<script src="Scripts/Screens/Calls.js"></script>
+	<script src="Scripts/Screens/Call.js"></script>
+	<script src="Scripts/Screens/Settings.js"></script>
+	<script src="Scripts/LayoutEditor.js"></script>
+	<script src="Scripts/App.js"></script>
+</body>
+</html>

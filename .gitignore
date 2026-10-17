@@ -1,0 +1,35 @@
+# FranticDreamer 2026
+
+# ========================
+# Dependencies & Tooling
+# ========================
+node_modules/
+.npm/
+.pnpm-store/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+
+# ========================
+# Server Runtime
+# ========================
+# Server configuration and credentials live in the server's data/ folder, never in this repository.
+data/
+*.env
+.env.*
+logs/
+*.log
+
+# ========================
+# Editors & Operating Systems
+# ========================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
