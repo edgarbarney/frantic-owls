@@ -4,7 +4,7 @@
 
 Based on my private phone resource for FiveM Roleplay Servers. Replaced QB-Core calls with hmp ones and replaced some terminology.
 
-IMPORTANT: For now, calls are NOT working since HogwartsMP doesn't expose a direct API for voice manipulation. Check the reasource for updates every now and then so that you can update when the fix comes.
+IMPORTANT: For now, calls are disabled by default in the config because they are NOT working since HogwartsMP doesn't expose a direct API for voice manipulation. Check the reasource for updates every now and then so that you can update when the fix comes.
 
 Summary of current capabilities:
 
@@ -88,6 +88,16 @@ The Muggle Phone's house colour schemes.
 - Optional: `hmp-admin` (announcement permissions), `hmp-webhooks` (Discord logging through its queue), `hmp-blips` (location markers that survive its map resyncs and wait for readers in another area) and `hmp-activities` (Quiet during duels).
 - A working `hmp-mysql` connection. The tables are created automatically on first start through `hmp-mysql`'s migration ledger.
 - A loaded `hmp-core` character: Owls belong to characters, not accounts.
+
+## Installation
+
+1. Make sure the required resources above are installed and `hmp-mysql` can reach your database.
+2. Put this folder in the server's `resources` folder as `resources/frantic-owls`. It must sit directly inside `resources`, not in a sub-folder such as `resources/[phone]/frantic-owls`.
+3. Optional: Copy `Examples/frantic-owls.json` to the server's `data` folder as `data/frantic-owls.json` and change what you like (see [Configuration](#configuration)). Without it, every setting uses its default.
+4. Start the server and join it.
+5. Load a character and type `/owl` or use up arrow key.
+
+The console shows `Started JS resource: frantic-owls` when it is running. The database migrations are created on the first start.
 
 ## Features
 

@@ -45,7 +45,7 @@
 		"arrivalMetres": 10
 	},
 	"calls": {
-		"enabled": true,
+		"enabled": false,
 		"ringSeconds": 30,
 		"logSize": 50,
 		"rateLimitCount": 4,
