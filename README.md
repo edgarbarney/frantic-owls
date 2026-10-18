@@ -143,7 +143,9 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Optional pruning of old owls (off unless the server sets it) | ✅ |
 | Floo-Calls: Ringing, answer, decline, hang up, busy and missed calls, a call log, selectable ringtones | ✅ |
 | Voice calls: Opus through the server, mute, call volume | ⚙️ |
+| Taking photos | ⬜ |
 | Video calls | ⬜ |
+| Playing music to other players (via youtube, soundcloud etc.) | ⬜ |
 | Colour schemes for Parchment | ⬜ |
 | Adding a contact by typing in their owl number | ⬜ |
 | Privacy policy every character accepts before their first owl | ⬜ |
@@ -159,6 +161,7 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | A draft kept per chat | ⬜ |
 | Announcements for one hmp-core group or house | ⬜ |
 | Grigotts Banking app | ⬜ |
+| Social Media apps | ⬜ |
 | Dark Owling: Anonymous chat rooms (see below) | ⬜ |
 
 ### Dark Owling (planned)
