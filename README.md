@@ -106,12 +106,13 @@ Most of the future items were present in the FiveM version but are not yet porte
 
 Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-✅ = Done
-⏳ = In Progress (Probably on the `dev` branch)
-⚙️ = Testing (Probably on the `test` branch)
-⬜ = Not Started
+✅ = Done  
+⏳ = In Progress (Probably on the `dev` branch)  
+⚙️ = Testing (Probably on the `test` branch)  
+🚧 = Parked/Paused - Requires work on HogwartsMP itself  
+⬜ = Not Started  
 
-(I hate emojis but github doesn't support [/] for checkboxes)
+(I hate emojis but github doesn't support [/] for checkboxes)  
 
 | | Feature |
 | --- | --- |
@@ -142,9 +143,9 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Soft deletion: Deleted owls stay in the database unless the server opts out | ✅ |
 | Optional pruning of old owls (off unless the server sets it) | ✅ |
 | Floo-Calls: Ringing, answer, decline, hang up, busy and missed calls, a call log, selectable ringtones | ✅ |
-| Voice calls: Opus through the server, mute, call volume | ⚙️ |
-| Taking photos | ⬜ |
-| Video calls | ⬜ |
+| Voice calls: Opus through the server, mute, call volume | 🚧 |
+| Taking photos | 🚧 |
+| Video calls | 🚧 |
 | Playing music to other players (via youtube, soundcloud etc.) | ⬜ |
 | Colour schemes for Parchment | ⬜ |
 | Adding a contact by typing in their owl number | ⬜ |
