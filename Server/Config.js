@@ -112,6 +112,30 @@ const defaultConfig = Object.freeze
 		wwiseEvent: "UI_OwlMail_Envelope_Open",
 		quietActivities: ["duel:standard"],
 	},
+	effects:
+	{
+		enabled: true,
+		muggle:
+		{
+			keyTap: "Sounds/Phone/KeyTap.wav",
+			keyEraseTap: "Sounds/Phone/KeyEraseTap.wav",
+			appTap: "Sounds/Phone/AppTap.wav",
+			lock: "Sounds/Phone/Lock.wav",
+			unlock: "Sounds/Phone/Unlock.wav",
+			messageSent: "Sounds/Phone/MessageSent.wav",
+			messageReceived: "Sounds/Phone/MessageReceived.wav",
+		},
+		parchment:
+		{
+			keyTap: "Sounds/Parchment/KeyTap.wav",
+			keyEraseTap: "Sounds/Parchment/KeyEraseTap.wav",
+			appTap: "Sounds/Parchment/AppTap.wav",
+			lock: "Sounds/Parchment/Lock.wav",
+			unlock: "Sounds/Parchment/Unlock.wav",
+			messageSent: "Sounds/Parchment/MessageSent.wav",
+			messageReceived: "Sounds/Parchment/MessageReceived.wav",
+		},
+	},
 	storage:
 	{
 		disableSoftDelete: false,
@@ -174,6 +198,7 @@ const defaultConfig = Object.freeze
 		defaultTheme: "muggle",
 		defaultLanguage: "en-GB",
 		allowMove: false,
+		lockScreen: true,
 	},
 });
 
@@ -185,6 +210,11 @@ const soundModes = ["file", "wwise", "none"];
 /// </summary>
 const maxSounds = 16;
 const soundIdPattern = /^[a-z0-9_-]{1,24}$/;
+
+/// <summary>
+/// The phone's sound effects, as named in the "effects" section and by Owls.Effects in the page.
+/// </summary>
+const effectNames = Object.freeze(["keyTap", "keyEraseTap", "appTap", "lock", "unlock", "messageSent", "messageReceived"]);
 
 /// <summary>
 /// Read a sound file path. It becomes an audio element's source inside the page, so it must stay a plain relative path within UI/.
@@ -387,6 +417,17 @@ function Sanitise(config)
 	notifications.quietActivities = Array.isArray(notifications.quietActivities) ? [...new Set(notifications.quietActivities.map((id) => String(id).trim()).filter((id) => id.length > 0 && id.length <= 64))].slice(0, 32) : [];
 	delete notifications.soundFile;
 
+	// Each theme has its own set: a Muggle Phone clicks like a phone, a sheet of parchment should not.
+	// Each effect is a file inside UI/ like the notification sounds; "" (or a path that is not acceptable) turns that one effect off.
+	const effects = config.effects;
+	effects.enabled = effects.enabled !== false;
+
+	for (const theme of themes)
+	{
+		const set = effects[theme] && typeof effects[theme] === "object" && !Array.isArray(effects[theme]) ? effects[theme] : JSON.parse(JSON.stringify(fallback.effects[theme]));
+		effects[theme] = Object.fromEntries(effectNames.map((name) => [name, CleanSoundFile(set[name] ?? fallback.effects[theme][name])]));
+	}
+
 	const storage = config.storage;
 	storage.disableSoftDelete = storage.disableSoftDelete === true;
 	storage.messageRetentionDays = ClampInteger(storage.messageRetentionDays, 0, 36500, fallback.storage.messageRetentionDays);
@@ -439,6 +480,7 @@ function Sanitise(config)
 	ui.defaultTheme = NormaliseTheme(ui.defaultTheme) || fallback.ui.defaultTheme;
 	ui.defaultLanguage = String(ui.defaultLanguage || fallback.ui.defaultLanguage).trim();
 	ui.allowMove = ui.allowMove === true;
+	ui.lockScreen = ui.lockScreen !== false;
 
 	return config;
 }
@@ -509,6 +551,7 @@ function GetClientConfig(config, languages)
 		soundMode: config.notifications.soundMode,
 		sounds: config.notifications.sounds.map((sound) => ({ ...sound })),
 		defaultSound: config.notifications.defaultSound,
+		effects: config.effects.enabled ? Object.fromEntries(themes.map((theme) => [theme, Object.fromEntries(effectNames.filter((name) => config.effects[theme][name]).map((name) => [name, config.effects[theme][name]]))])) : {},
 		readReceipts: config.privacy.readReceipts,
 		typingIndicators: config.privacy.typingIndicators,
 		unsendSeconds: config.messages.unsendSeconds,

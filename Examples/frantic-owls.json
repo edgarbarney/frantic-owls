@@ -123,6 +123,27 @@
 			"duel:standard"
 		]
 	},
+	"effects": {
+		"enabled": true,
+		"muggle": {
+			"keyTap": "Sounds/Phone/KeyTap.wav",
+			"keyEraseTap": "Sounds/Phone/KeyEraseTap.wav",
+			"appTap": "Sounds/Phone/AppTap.wav",
+			"lock": "Sounds/Phone/Lock.wav",
+			"unlock": "Sounds/Phone/Unlock.wav",
+			"messageSent": "Sounds/Phone/MessageSent.wav",
+			"messageReceived": "Sounds/Phone/MessageReceived.wav"
+		},
+		"parchment": {
+			"keyTap": "Sounds/Parchment/KeyTap.wav",
+			"keyEraseTap": "Sounds/Parchment/KeyEraseTap.wav",
+			"appTap": "Sounds/Parchment/AppTap.wav",
+			"lock": "Sounds/Parchment/Lock.wav",
+			"unlock": "Sounds/Parchment/Unlock.wav",
+			"messageSent": "Sounds/Parchment/MessageSent.wav",
+			"messageReceived": "Sounds/Parchment/MessageReceived.wav"
+		}
+	},
 	"storage": {
 		"disableSoftDelete": false,
 		"messageRetentionDays": 0
@@ -177,6 +198,7 @@
 		"rightMarginPx": 32,
 		"defaultTheme": "muggle",
 		"defaultLanguage": "en-GB",
-		"allowMove": true
+		"allowMove": true,
+		"lockScreen": true
 	}
 }

@@ -14,9 +14,9 @@ Summary of current capabilities:
 - **Inform**: Offer your owl to a player standing nearby. They are asked first and can **Accept** it, **Exchange** (accept it and give you theirs back) or **Decline**; once accepted, you are in their contacts under your character's name. Offers they have not answered wait on their Inform screen (with a count on its tile) for a minute. You can inform the same person once every 30 seconds (configurable); different people have no limit. Servers can turn the asking off, and then informs land straight in the contacts as before.
 - **Settings**: Grouped like a phone's Settings app. The first page shows the crest, your card and one row per category, each with what is set:
   - **Profile**: Your own profile picture.
-  - **Appearance**: The theme (Muggle Phone, or Parchment, which turns the phone into a sheet of old paper with torn edges), the Muggle Phone's **colour scheme** (Default, or the colours of Gryffindor, Slytherin, Ravenclaw or Hufflepuff) and its **animations** on/off, a **wallpaper** for the home screen (any direct image link; only you see it, and on Parchment it is printed faintly onto the paper like an old engraving), and **Move & Resize Owl** (when the server allows it).
+  - **Appearance**: The theme (Muggle Phone, or Parchment, which turns the phone into a sheet of old paper with torn edges), the Muggle Phone's **colour scheme** (Default, or the colours of Gryffindor, Slytherin, Ravenclaw or Hufflepuff) and its **animations** on/off, the **lock screen** on/off, a **wallpaper** for the home screen (any direct image link; only you see it, and on Parchment it is printed faintly onto the paper like an old engraving), and **Move & Resize Owl** (when the server allows it).
   - **Language**: A dropdown, when the server has more than one.
-  - **Notifications**: Sound on/off, which sound (a dropdown of Owl Hoot, Bell Chime, Wand Sparkle, Window Tap, Quill Scratch or Enchanted Harp; each plays when picked), its volume and pop-ups on/off.
+  - **Notifications**: Sound on/off, which sound (a dropdown of Owl Hoot, Bell Chime, Wand Sparkle, Window Tap, Quill Scratch or Enchanted Harp; each plays when picked), its volume and pop-ups on/off, and **Phone sounds** on/off with their own volume.
   - **Floo-Calls**: The ringtone (a dropdown of the server's `calls.ringtones`; each plays when picked), its own volume and **Test Ringtone**, and the **call volume** of the other player's voice. The ringtone part shows when the server plays sound files, the call volume when voice is on.
   - **Do Not Disturb**: Do Not Disturb and Quiet during duels.
   - **Privacy & Blocking**: Read receipts and typing indicators on/off, and everyone you blocked.
@@ -25,7 +25,11 @@ Summary of current capabilities:
 
 `/owl_resetpos` puts a moved or resized phone back in its default place and size.
 
-When an owl arrives while the phone is closed, a small square pops up at the side of the screen for a few seconds and the notification sound plays. While the phone is open, a notification banner drops in from the top instead (tap it to open the chat). Nothing pops up for the chat you are reading.
+Taking the phone out shows its **lock screen** first: On Muggle Phone a large clock and the date over your wallpaper, with a fingerprint to touch; on Parchment a letter addressed to your character, closed with a wax seal that cracks when you break it, before the flap opens and the letter rises out. Both list your unread owls, missed Floo-Calls and informs waiting for you. Nothing behind the lock counts as seen until it is opened, so a chat left open stays unread. A ringing call takes over the lock, and tapping a banner on it opens the lock too. Players can turn it off in Settings and servers with `ui.lockScreen`; passwords are planned.
+
+When an owl arrives while the phone is closed, a small square pops up at the side of the screen for a few seconds and the notification sound plays. While the phone is open, a notification banner drops in from the top instead (tap it to open the chat). Nothing pops up for the chat you are reading; an owl landing there plays a soft **phone sound** instead.
+
+The phone makes small sounds of its own as well, as the Frantic_Phone resource for FiveM did: A tap for each key typed and another for each one erased, a tap when an app opens from the home screen, a click when the phone locks as it is put away and another when it is unlocked, and a sound when an owl you sent takes off or one lands in the chat you are reading. Players turn them off or set their volume in Settings (Notifications); an owl landing keeps quiet under Do Not Disturb, the rest do not, since they answer what the player does. Each theme has its own set: Muggle Phone clicks and chimes like a phone, while Parchment, which should not, is silent for now (its files in `UI/Sounds/Parchment/` are valid but empty, waiting for sounds of its own). Servers pick the files of each theme in `effects`.
 
 ## Screenshots
 
@@ -132,11 +136,14 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Own profile pictures | ✅ |
 | Muggle Phone and Parchment themes, with a phone-style app grid on Muggle Phone | ✅ |
 | Home screen wallpaper | ✅ |
+| Lock screens: A clock and fingerprint on Muggle Phone, a wax-sealed letter that opens on Parchment | ✅ |
+| Lock screen passwords | ⬜ |
 | Colour schemes for Muggle Phone: Default and the four houses | ✅ |
 | Phone-like motion on Muggle Phone: Icons fall in, apps open from and close into their icons (switchable) | ✅ |
 | Settings grouped into categories | ✅ |
 | Move & resize the phone | ✅ |
 | Selectable notification sounds | ✅ |
+| Phone sounds: Key taps, app taps, lock and unlock, owls sent and landing in the chat on screen | ✅ |
 | Do Not Disturb, plus staying quiet during duels | ✅ |
 | Languages, picked per player in Settings | ✅ |
 | Deleted characters: Their owl retires and leaves its bulk owls | ✅ |
@@ -443,12 +450,15 @@ Edit `data/frantic-owls.json` in the server directory (set `FRANTIC_OWLS_CONFIG`
 | `notifications.sounds` | the six shipped sounds | Sounds players can choose from: `[{ "id", "label", "file" }]`, where `file` is inside `UI/` (`.wav`, `.mp3` or `.ogg`) and `id` is 1-24 of a-z, 0-9, `_` or `-`. At most 16. Add your own by dropping a file into `UI/Sounds/` and listing it. |
 | `notifications.defaultSound` | `"hoot"` | Sound for players who have not picked one. |
 | `notifications.wwiseEvent` | `"UI_OwlMail_Envelope_Open"` | Wwise event for `"wwise"` mode. |
+| `effects.enabled` | `true` | Play the phone sounds (see above). `false` removes them and their settings. |
+| `effects.muggle.*` / `effects.parchment.*` | the files in `UI/Sounds/Phone/` and `UI/Sounds/Parchment/` | The file of each phone sound for each theme: `keyTap`, `keyEraseTap`, `appTap`, `lock`, `unlock`, `messageSent` and `messageReceived`, inside `UI/` (`.wav`, `.mp3` or `.ogg`). `""` silences that one sound. |
 | `notifications.quietActivities` | `["duel:standard"]` | hmp-activities activities that keep the phone quiet while they run (see [Do Not Disturb](#do-not-disturb)). `"*"` means all, `[]` turns it off. |
 | `ui.scale` | `1.0` | Extra UI scale on top of the automatic resolution scaling (sizes are authored for 1080p). |
 | `ui.widthPx` / `heightPx` / `rightMarginPx` | `360` / `700` / `32` | Phone size and distance from the right edge, at 1080p. |
 | `ui.defaultTheme` | `"muggle"` | Theme for players who have not picked one: `"muggle"` (Muggle Phone) or `"parchment"`. The old name `"night"` still means Muggle Phone. |
 | `ui.defaultLanguage` | `"en-GB"` | Language for players who have not picked one, and for the server log and command descriptions. Must have a file in `Lang/`. |
 | `ui.allowMove` | `false` | Let players drag the phone anywhere on screen and scale it (60% - 160%). Saved per character; `/owl_resetpos` undoes it. With this off, saved positions are ignored. |
+| `ui.lockScreen` | `true` | Show the lock screen each time the phone is taken out. Players can still turn theirs off; `false` removes it and its setting. |
 
 ### Network and lag compensation
 
@@ -498,6 +508,6 @@ Just feed the resource root to a web server (e.g. `python -m http.server` inside
 
 Resource itself is under BSD 3-Clause; see [LICENCE](LICENCE). Basically, keep my copyright notice and disclaimer in and you'll be fine. Also, if anything breaks, it's not my problem.
 
-`UI/Fonts` holds Cinzel and Spectral under the SIL Open Font License 1.1 (see the `OFL-*.txt` files). Font Awesome Free is loaded from its CDN rather than redistributed. The sounds in `UI/Sounds/` are synthesised for this resource.
+`UI/Fonts` holds Cinzel and Spectral under the SIL Open Font License 1.1 (see the `OFL-*.txt` files). Font Awesome Free is loaded from its CDN rather than redistributed. The sounds in `UI/Sounds/` (the phone sounds in `UI/Sounds/Phone/` included) are synthesised for this resource.
 
 Frantic's Wizarding Communication by FranticDreamer. Discord: `franticdreamer`, GitHub: [edgarbarney](https://github.com/edgarbarney).

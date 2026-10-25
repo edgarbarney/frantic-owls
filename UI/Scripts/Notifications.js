@@ -343,6 +343,8 @@ Owls.Notifications = (() =>
 
 		if (action)
 		{
+			// A banner tapped on the lock screen opens the lock too, to show what it was about.
+			Owls.LockScreen.Unlock(true);
 			action();
 		}
 	});

@@ -24,6 +24,10 @@ Type `/owl` to take it out of your robes, or use up-arrow key on your keyboard.
 | **No longer flies** | Number disconnected | That character is gone. You may still read your old owls with them. |
 | **Muggle Phone** / **Parchment** | Themes | Your enchanted slab can look as it is, or can look like a muggle phone. |
 
+## Taking It Out
+
+Your slab locks itself whenever you put it away. On the Muggle Phone, touch the **fingerprint** under the clock. On Parchment it arrives as a sealed letter: **Break the wax seal** to open it. You can turn the lock off under Appearance in Settings.
+
 ## The Apps
 
 Your home screen holds five apps with these icons:
@@ -53,6 +57,7 @@ Your home screen holds five apps with these icons:
 
 ## Handy Charms
 
+- **Phone sounds** (Settings, Notifications) are the little taps and clicks your slab makes as you use it. Turn them down or off there.
 - **Do Not Disturb** (Settings) silences every hoot, ring and pop-up. It switches on by itself during duels if you let it.
 - **Move & Resize Phone** (Settings, if your server allows it) lets you put the phone anywhere on screen. Lost it? `/owl_resetpos` summons it back.
 

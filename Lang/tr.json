@@ -423,6 +423,25 @@
 		"location.arrived": "Paylaşılan konuma vardınız.",
 		"location.markerOf": "{name} kişisinin baykuşu",
 		"location.markerShared": "Paylaşılan konum",
+		"lock.breakSeal": "Mührü kır",
+		"lock.informs": {
+			"one": "Size sunulan {count} baykuş",
+			"other": "Size sunulan {count} baykuş"
+		},
+		"lock.letterDate": "{date} · {time}",
+		"lock.letterFor": "{name} için bir mektup",
+		"lock.letterForYou": "Size bir mektup",
+		"lock.missedCalls": {
+			"one": "{count} cevapsız Uçuç-Araması",
+			"other": "{count} cevapsız Uçuç-Araması"
+		},
+		"lock.sealHint": "Baykuş postanızı açmak için mührü kırın.",
+		"lock.touchHint": "Kilidi açmak için dokunun",
+		"lock.unlock": "Kilidi aç",
+		"lock.unread": {
+			"one": "{count} okunmamış baykuş",
+			"other": "{count} okunmamış baykuş"
+		},
 		"message.locationPreview": "Konum",
 		"message.locationPreviewPlace": "Konum: {place}",
 		"message.pollPreview": "Anket: {question}",
@@ -502,7 +521,12 @@
 		"settings.callVolumeLabel": "ARAMA SES DÜZEYİ",
 		"settings.doNotDisturb": "Rahatsız Etmeyin",
 		"settings.doNotDisturbHint": "Tüm sesleri, açılır bildirimleri ve bildirim şeritlerini susturur. Baykuşlar gelmeye devam eder ve okunmamış sayılır.",
+		"settings.effects": "Telefon sesleri",
+		"settings.effectsHint": "Yazarken ve uygulama açarken dokunma sesleri, kilitleme ve kilit açma sesi, okuduğunuz konuşmada kalkan ve konan baykuşlar.",
+		"settings.effectsVolumeLabel": "TELEFON SESLERİ SES DÜZEYİ",
 		"settings.languageLabel": "DİL",
+		"settings.lockScreen": "Kilit ekranı",
+		"settings.lockScreenHint": "Telefonu her çıkardığınızda bir kilit ekranı gösterir: Muggle telefonunda bir saat, Parşömen temasında mühürlü bir mektup.",
 		"settings.move": "Telefonu taşı ve boyutlandır",
 		"settings.moveHint": "Telefon ekran dışında mı kaldı? {command} komutuyla geri getirebilirsiniz.",
 		"settings.off": "Kapalı",

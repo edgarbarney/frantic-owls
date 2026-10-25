@@ -423,6 +423,25 @@
 		"location.arrived": "You have reached the shared location.",
 		"location.markerOf": "{name}'s owl",
 		"location.markerShared": "Shared location",
+		"lock.breakSeal": "Break the seal",
+		"lock.informs": {
+			"one": "{count} owl offered to you",
+			"other": "{count} owls offered to you"
+		},
+		"lock.letterDate": "{date} · {time}",
+		"lock.letterFor": "A letter for {name}",
+		"lock.letterForYou": "A letter for you",
+		"lock.missedCalls": {
+			"one": "{count} missed Floo-Call",
+			"other": "{count} missed Floo-Calls"
+		},
+		"lock.sealHint": "Break the seal to open your owl post.",
+		"lock.touchHint": "Touch to unlock",
+		"lock.unlock": "Unlock",
+		"lock.unread": {
+			"one": "{count} unread owl",
+			"other": "{count} unread owls"
+		},
 		"message.locationPreview": "Location",
 		"message.locationPreviewPlace": "Location: {place}",
 		"message.pollPreview": "Poll: {question}",
@@ -502,7 +521,12 @@
 		"settings.callVolumeLabel": "CALL VOLUME",
 		"settings.doNotDisturb": "Do Not Disturb",
 		"settings.doNotDisturbHint": "Hold back every sound, pop-up and banner. Owls still arrive and count as unread.",
+		"settings.effects": "Phone sounds",
+		"settings.effectsHint": "Taps as you type and open apps, the click of locking and unlocking, and owls taking off and landing in the chat you are reading.",
+		"settings.effectsVolumeLabel": "PHONE SOUNDS VOLUME",
 		"settings.languageLabel": "LANGUAGE",
+		"settings.lockScreen": "Lock screen",
+		"settings.lockScreenHint": "Show a lock screen each time you take out the phone: a clock on Muggle Phone, a sealed letter on Parchment.",
 		"settings.move": "Move & Resize Phone",
 		"settings.moveHint": "Lost it off screen? {command} puts it back.",
 		"settings.off": "Off",

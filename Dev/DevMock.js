@@ -179,12 +179,13 @@
 			{ id: "quill", label: "Quill Scratch", file: "../UI/Sounds/QuillScratch.wav" },
 			{ id: "harp", label: "Enchanted Harp", file: "../UI/Sounds/EnchantedHarp.wav" },
 		],
+		effects: { muggle: { keyTap: "../UI/Sounds/Phone/KeyTap.wav", keyEraseTap: "../UI/Sounds/Phone/KeyEraseTap.wav", appTap: "../UI/Sounds/Phone/AppTap.wav", lock: "../UI/Sounds/Phone/Lock.wav", unlock: "../UI/Sounds/Phone/Unlock.wav", messageSent: "../UI/Sounds/Phone/MessageSent.wav", messageReceived: "../UI/Sounds/Phone/MessageReceived.wav" }, parchment: { keyTap: "../UI/Sounds/Parchment/KeyTap.wav", keyEraseTap: "../UI/Sounds/Parchment/KeyEraseTap.wav", appTap: "../UI/Sounds/Parchment/AppTap.wav", lock: "../UI/Sounds/Parchment/Lock.wav", unlock: "../UI/Sounds/Parchment/Unlock.wav", messageSent: "../UI/Sounds/Parchment/MessageSent.wav", messageReceived: "../UI/Sounds/Parchment/MessageReceived.wav" } },
 		defaultSound: "hoot", readReceipts: true, typingIndicators: true, unsendSeconds: 120, maxPinnedChats: 5,
-		nearbyRefreshMs: 1000, requestTimeoutMs: 8000, ui: { scale: 1, widthPx: 360, heightPx: 700, rightMarginPx: 32, defaultTheme: "muggle", defaultLanguage: "en-GB", allowMove: true },
+		nearbyRefreshMs: 1000, requestTimeoutMs: 8000, ui: { scale: 1, widthPx: 360, heightPx: 700, rightMarginPx: 32, defaultTheme: "muggle", defaultLanguage: "en-GB", allowMove: true, lockScreen: true },
 		languages: [], quietActivities: true,
 	};
 
-	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", ringtone: "", ringtoneVolume: 0.8, callVolume: 1, readReceipts: true, typingIndicators: true, theme: "", layout: null, language: "", doNotDisturb: false, quietDuringActivities: true, wallpaperUrl: "", colourScheme: "default", animations: true };
+	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", ringtone: "", ringtoneVolume: 0.8, callVolume: 1, readReceipts: true, typingIndicators: true, theme: "", layout: null, language: "", doNotDisturb: false, quietDuringActivities: true, wallpaperUrl: "", colourScheme: "default", animations: true, lockScreen: true, soundEffects: true, effectsVolume: 0.5 };
 
 	/// <summary>
 	/// Read the language files once, the way the server reads Lang/ at start.

@@ -240,6 +240,7 @@ Owls.App = (() =>
 	function OpenApp(name)
 	{
 		FinishMotion();
+		Owls.Effects.Play("appTap");
 
 		const home = GetTop();
 		const insets = home && home.name === "Home" && HasMotion() ? GetIconInsets(name) : null;
@@ -739,12 +740,27 @@ Owls.App = (() =>
 	}
 
 	/// <summary>
-	/// Whether the phone is open.
+	/// Whether the player can see the phone's screens: it is open and not behind the lock screen.
 	/// </summary>
-	/// <returns>True while open</returns>
+	/// <returns>True while open and unlocked</returns>
 	function IsOpen()
 	{
-		return isOpen;
+		return isOpen && !Owls.LockScreen.IsLocked();
+	}
+
+	/// <summary>
+	/// The phone's screens came into view (the phone opened unlocked, or its lock was just opened): the top screen counts as looked at.
+	/// </summary>
+	function Reveal()
+	{
+		const top = GetTop();
+
+		if (top && top.instance.OnOpened)
+		{
+			top.instance.OnOpened();
+		}
+
+		PlayFallIn();
 	}
 
 	/// <summary>
@@ -810,6 +826,7 @@ Owls.App = (() =>
 		Owls.Util.SetLocale(Owls.Lang.GetId());
 		UpdateQuietIndicator();
 		Rebuild();
+		Owls.LockScreen.Refresh("settings");
 	});
 
 	Bridge.On("owl:retired", (data) => Store.SetRetired(String(data.number)));
@@ -863,10 +880,19 @@ Owls.App = (() =>
 		const message = data.message;
 		Store.ClearTyping(chat.id, message.sender);
 
-		// Notes (someone leaving) update the chat silently: no sound, no pop-up, nothing unread.
-		if (!Store.AddMessage(message) || (isOpen && GetVisibleChatId() === chat.id) || Store.IsNote(message))
+		const isNew = Store.AddMessage(message);
+		const isReading = IsOpen() && GetVisibleChatId() === chat.id;
+
+		// The player is reading this very chat (the chat screen marks it read): no pop-up, just the soft sound of an owl landing in it.
+		if (isNew && isReading && !Store.IsNote(message) && !Store.IsMuted(chat))
 		{
-			// Nothing to announce: a duplicate, or the player is reading this very chat (the chat screen marks it read).
+			Owls.Effects.Play("messageReceived");
+		}
+
+		// Notes (someone leaving) update the chat silently: no sound, no pop-up, nothing unread.
+		if (!isNew || isReading || Store.IsNote(message))
+		{
+			// Nothing to announce: a duplicate, or the player is reading this very chat.
 			Notifications.ReleaseIfIdle();
 			return;
 		}
@@ -973,10 +999,11 @@ Owls.App = (() =>
 		Store.SetCall(data.call);
 		Notifications.StartRinging(Store.GetDisplayName(data.call.number));
 
-		// Like a phone, the call takes over the screen; a closed phone shows it once opened.
+		// Like a phone, the call takes over the screen, lock and all; a closed phone shows it once opened.
 		if (isOpen)
 		{
 			ShowCall();
+			Owls.LockScreen.Unlock(false);
 		}
 	});
 
@@ -1016,6 +1043,12 @@ Owls.App = (() =>
 
 	Bridge.On("ui:opened", () =>
 	{
+		// Taken out again before it had finished going away: it still locked in between.
+		if (closeTimer !== null)
+		{
+			Owls.LockScreen.OnClosed();
+		}
+
 		clearTimeout(closeTimer);
 		closeTimer = null;
 		phone.classList.remove("is-closing");
@@ -1030,19 +1063,22 @@ Owls.App = (() =>
 			ShowCall();
 		}
 
-		const top = GetTop();
-
-		if (top && top.instance.OnOpened)
+		// Behind the lock nothing counts as looked at yet; the lock reveals the phone once it is opened.
+		if (!Owls.LockScreen.OnOpened())
 		{
-			top.instance.OnOpened();
+			Reveal();
 		}
-
-		PlayFallIn();
 	});
 
 	// Input goes back to the game at once; the phone slides away, and only then does the page let the client hide the view.
 	Bridge.On("ui:closed", () =>
 	{
+		// The click of the screen locking, as the phone goes away; Frantic_Phone played it at the same moment.
+		if (Owls.LockScreen.IsEnabled() && !Owls.LockScreen.IsLocked())
+		{
+			Owls.Effects.Play("lock");
+		}
+
 		isOpen = false;
 		Notifications.SetPhoneOpen(false);
 		phone.classList.add("is-closing");
@@ -1053,6 +1089,7 @@ Owls.App = (() =>
 			closeTimer = null;
 			phone.hidden = true;
 			phone.classList.remove("is-closing");
+			Owls.LockScreen.OnClosed();
 			Notifications.ReleaseIfIdle();
 		}, closeAnimationMs);
 	});
@@ -1108,6 +1145,8 @@ Owls.App = (() =>
 			UpdateCallIndicator();
 		}
 
+		Owls.LockScreen.Refresh(reason);
+
 		const top = GetTop();
 
 		if (top)
@@ -1115,6 +1154,8 @@ Owls.App = (() =>
 			top.instance.Refresh(reason);
 		}
 	});
+
+	Owls.LockScreen.SetOnUnlocked(Reveal);
 
 	window.addEventListener("keydown", (event) =>
 	{
@@ -1131,12 +1172,23 @@ Owls.App = (() =>
 			return;
 		}
 
+		// On the lock screen Escape puts the phone away rather than going back behind it.
+		if (Owls.LockScreen.IsLocked())
+		{
+			Close();
+			return;
+		}
+
 		Back();
 	});
 
 	document.getElementById("phone-close").innerHTML = Owls.Icons.close;
 	document.getElementById("status-call-icon").innerHTML = Owls.Icons.flame;
-	callIndicator.addEventListener("click", ShowCall);
+	callIndicator.addEventListener("click", () =>
+	{
+		ShowCall();
+		Owls.LockScreen.Unlock(false);
+	});
 	quietIndicator.innerHTML = Owls.Icons.moon;
 	document.getElementById("phone-close").addEventListener("click", Close);
 	document.getElementById("home-bar").addEventListener("click", Home);

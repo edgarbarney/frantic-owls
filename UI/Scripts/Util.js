@@ -259,6 +259,16 @@ Owls.Util = (() =>
 	}
 
 	/// <summary>
+	/// The weekday and date of a timestamp in words (e.g. "Sunday 25 October"), for the lock screen.
+	/// </summary>
+	/// <param name="time">Epoch milliseconds</param>
+	/// <returns>Formatted date</returns>
+	function FormatLongDate(time)
+	{
+		return longDateFormat.format(new Date(time));
+	}
+
+	/// <summary>
 	/// Length of a call, like a phone's call timer ("0:42", "12:05" or "1:02:05").
 	/// </summary>
 	/// <param name="durationMs">Milliseconds</param>
@@ -305,5 +315,5 @@ Owls.Util = (() =>
 		return needle.length === 0 || String(text || "").toLowerCase().includes(needle);
 	}
 
-	return { Element, GetInitials, GetColour, GetNameColour, CreateAvatar, FormatClock, FormatListTime, FormatDay, FormatDuration, GetDayStart, NewKey, CompareNames, Matches, SetLocale };
+	return { Element, GetInitials, GetColour, GetNameColour, CreateAvatar, FormatClock, FormatListTime, FormatDay, FormatLongDate, FormatDuration, GetDayStart, NewKey, CompareNames, Matches, SetLocale };
 })();

@@ -1280,6 +1280,7 @@ Owls.Screens.Chat = (() =>
 			ResetPoll();
 			Owls.Store.SetServerTime(result.data.serverNow);
 			Owls.Store.AddMessage(result.data.message);
+			PlaySent();
 			lastReadSent = Math.max(lastReadSent, result.data.message.id);
 			body.scrollTop = body.scrollHeight;
 		}
@@ -1625,6 +1626,17 @@ Owls.Screens.Chat = (() =>
 		// ========================
 
 		/// <summary>
+		/// The sound of an owl taking off, once the server has it, if this chat is still the one on screen.
+		/// </summary>
+		function PlaySent()
+		{
+			if (Owls.App.IsOpen() && Owls.App.GetVisibleChatId() === chatId)
+			{
+				Owls.Effects.Play("messageSent");
+			}
+		}
+
+		/// <summary>
 		/// Deliver one owl, showing it as pending until the server confirms it.
 		/// </summary>
 		/// <param name="text">Message text</param>
@@ -1646,6 +1658,7 @@ Owls.Screens.Chat = (() =>
 			Owls.Store.SetServerTime(result.data.serverNow);
 			Owls.Store.RemovePending(chatId, clientKey);
 			Owls.Store.AddMessage(result.data.message);
+			PlaySent();
 			lastReadSent = Math.max(lastReadSent, result.data.message.id);
 		}
 
@@ -1700,6 +1713,7 @@ Owls.Screens.Chat = (() =>
 			ShowBar(null);
 			Owls.Store.SetServerTime(result.data.serverNow);
 			Owls.Store.AddMessage(result.data.message);
+			PlaySent();
 			lastReadSent = Math.max(lastReadSent, result.data.message.id);
 			body.scrollTop = body.scrollHeight;
 		}
@@ -1742,6 +1756,7 @@ Owls.Screens.Chat = (() =>
 			input.focus();
 			UpdateComposer();
 			Owls.Store.SetDraft(chatId, input.value);
+			Owls.Effects.Play("keyTap");
 			PingTyping();
 		}
 

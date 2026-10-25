@@ -19,7 +19,7 @@ Owls.Store = (() =>
 	/// <summary>
 	/// Default settings, used until the server's arrive.
 	/// </summary>
-	const defaultSettings = Object.freeze({ notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", ringtone: "", ringtoneVolume: 0.8, callVolume: 1, readReceipts: true, typingIndicators: true, theme: "", layout: null, language: "", doNotDisturb: false, quietDuringActivities: true, wallpaperUrl: "", colourScheme: "default", animations: true });
+	const defaultSettings = Object.freeze({ notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", ringtone: "", ringtoneVolume: 0.8, callVolume: 1, readReceipts: true, typingIndicators: true, theme: "", layout: null, language: "", doNotDisturb: false, quietDuringActivities: true, wallpaperUrl: "", colourScheme: "default", animations: true, lockScreen: true, soundEffects: true, effectsVolume: 0.5 });
 
 	/// <summary>
 	/// Delay that gathers unknown chat members into one profile lookup.

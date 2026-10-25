@@ -31,6 +31,8 @@ const maxLayoutScale = 1.6;
 /// doNotDisturb silences every pop-up, banner and sound; quietDuringActivities does the same only while a notifications.quietActivities activity (e.g. a duel) runs.
 /// colourScheme picks the Muggle Phone theme's colours ("default" or one of the four houses); Parchment ignores it.
 /// animations turns the Muggle Phone's motion on or off: icons falling into place, and apps opening from and closing into their icons.
+/// lockScreen shows the lock screen each time the phone is taken out (a clock on Muggle Phone, a sealed letter on Parchment), when the server allows it (ui.lockScreen).
+/// soundEffects plays the phone's own sounds (key taps, app taps, locking, owls sent and arriving in the chat on screen) at effectsVolume, when the server has any (effects).
 /// wallpaperUrl is the home screen's picture ("" for none). Only its owner's page ever loads it, so unlike profile pictures it shows nobody else's IP address to the image host.
 /// </para>
 ///
@@ -58,6 +60,9 @@ const defaultSettings = Object.freeze
 	wallpaperUrl: "",
 	colourScheme: "default",
 	animations: true,
+	lockScreen: true,
+	soundEffects: true,
+	effectsVolume: 0.5,
 });
 
 /// <summary>
@@ -116,6 +121,7 @@ function SanitiseSettings(raw, base = defaultSettings)
 	const volume = Number(source.notificationVolume);
 	const ringtoneVolume = Number(source.ringtoneVolume);
 	const callVolume = Number(source.callVolume);
+	const effectsVolume = Number(source.effectsVolume);
 
 	return {
 		notificationSound: typeof source.notificationSound === "boolean" ? source.notificationSound : base.notificationSound,
@@ -135,6 +141,9 @@ function SanitiseSettings(raw, base = defaultSettings)
 		wallpaperUrl: typeof source.wallpaperUrl === "string" && source.wallpaperUrl.length <= maxWallpaperLength ? source.wallpaperUrl : base.wallpaperUrl,
 		colourScheme: colourSchemes.includes(source.colourScheme) ? source.colourScheme : base.colourScheme,
 		animations: typeof source.animations === "boolean" ? source.animations : base.animations,
+		lockScreen: typeof source.lockScreen === "boolean" ? source.lockScreen : base.lockScreen,
+		soundEffects: typeof source.soundEffects === "boolean" ? source.soundEffects : base.soundEffects,
+		effectsVolume: Number.isFinite(effectsVolume) ? Math.min(1, Math.max(0, effectsVolume)) : base.effectsVolume,
 	};
 }
 
