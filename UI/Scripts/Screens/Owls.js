@@ -72,6 +72,12 @@ Owls.Screens.Owls = (() =>
 
 		const time = chat.lastMessage ? Math.max(chat.lastMessage.sentAt, chat.lastMessage.deliverAt || 0) : chat.lastActivityAt;
 		const typing = Owls.Store.GetTypingText(chat.id, chat.kind === "group");
+		const draft = Owls.Store.GetDraft(chat.id).replace(/\s+/g, " ").trim();
+
+		// Someone typing is news; your own unsent draft comes next, then the latest owl.
+		const subtitle = typing ? Element("span", { className: "row-subtitle is-typing", text: typing })
+			: draft ? Element("span", { className: "row-subtitle" }, [Element("span", { className: "draft-label", text: T("owls.draftLabel") }), Element("span", { text: ` ${draft}` })])
+			: Element("span", { className: "row-subtitle", text: GetPreview(chat) });
 
 		return Element("button", { className: `list-row${pinned ? " is-pinned" : ""}`, on: { click: () => Owls.App.Navigate("Chat", { chatId: chat.id }) } },
 		[
@@ -79,7 +85,7 @@ Owls.Screens.Owls = (() =>
 			Element("span", { className: "row-text" },
 			[
 				Element("span", { className: "row-title", text: Owls.Store.GetChatTitle(chat) }),
-				Element("span", { className: `row-subtitle${typing ? " is-typing" : ""}`, text: typing || GetPreview(chat) }),
+				subtitle,
 			]),
 			Element("span", { className: "row-meta" }, [Element("span", { text: Owls.Util.FormatListTime(time) }), Element("span", { className: "row-badges" }, [pinned, muted, badge])]),
 		]);
@@ -109,7 +115,7 @@ Owls.Screens.Owls = (() =>
 		/// <param name="reason">Change reason from the store</param>
 		function Refresh(reason)
 		{
-			if (reason !== "chats" && reason !== "contacts" && reason !== "profiles" && reason !== "blocks" && reason !== "senders" && reason !== "reset" && reason !== "ready" && !String(reason).startsWith("typing:"))
+			if (reason !== "chats" && reason !== "contacts" && reason !== "profiles" && reason !== "blocks" && reason !== "senders" && reason !== "drafts" && reason !== "reset" && reason !== "ready" && !String(reason).startsWith("typing:"))
 			{
 				return;
 			}

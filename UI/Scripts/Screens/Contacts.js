@@ -7,7 +7,7 @@
 
 /// <summary>
 /// Alphabetical contact list with a search field behind the search icon.
-/// Tapping a contact opens their details.
+/// Tapping a contact opens their details; with numbers.dialling on, the plus adds one by typing in their owl number.
 /// </summary>
 Owls.Screens.Contacts = (() =>
 {
@@ -38,7 +38,8 @@ Owls.Screens.Contacts = (() =>
 	{
 		const body = Element("div", { className: "screen-body" });
 		const search = Widgets.SearchToggle(T("contacts.search"), () => Refresh("contacts"));
-		const header = Widgets.Header(T("home.contacts"), [search.button]);
+		const addButton = Owls.Store.state.config.numbersDialling ? Widgets.IconButton(Owls.Icons.userPlus, T("dial.contactTitle"), () => Owls.App.Navigate("Dial", { mode: "contact" })) : null;
+		const header = Widgets.Header(T("home.contacts"), [search.button, addButton]);
 		const element = Element("div", { className: "screen" }, [header.element, search.row, body]);
 
 		/// <summary>

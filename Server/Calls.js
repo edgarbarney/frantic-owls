@@ -93,6 +93,11 @@ class CallService
 	#hooks;
 
 	/// <summary>
+	/// NumberDialler instance, for calls to a number typed in.
+	/// </summary>
+	#dialler;
+
+	/// <summary>
 	/// Per-owl limiter for starting calls, keyed by owl number, so nobody can ring someone over and over.
 	/// </summary>
 	#startLimiter;
@@ -253,6 +258,7 @@ class CallService
 
 	/// <summary>
 	/// Find who an owl wants to call: one of their contacts, or an owl number they already know (to call back from the log or a chat).
+	/// With numbers.dialling on, any live owl's number typed in will do as well.
 	/// </summary>
 	/// <param name="entry">Directory entry of the caller</param>
 	/// <param name="data">{ contactId } or { number }</param>
@@ -267,11 +273,11 @@ class CallService
 			return contact ? { number: contact.number, error: "" } : { number: "", error: "error.contactGone" };
 		}
 
-		const number = String(data.number ?? "");
+		const number = this.#dialler.Normalise(data.number);
 
-		if (!/^\d{8}$/.test(number))
+		if (!number)
 		{
-			return { number: "", error: "error.callUnknown" };
+			return { number: "", error: this.#dialler.IsEnabled() ? "error.numberInvalid" : "error.callUnknown" };
 		}
 
 		// Official senders and the owl itself are refused by the caller's checks; only strangers are refused here.
@@ -287,13 +293,19 @@ class CallService
 			return { number: "", error: "error.callFailed" };
 		}
 
-		return related ? { number, error: "" } : { number: "", error: "error.callUnknown" };
+		if (related)
+		{
+			return { number, error: "" };
+		}
+
+		// A stranger's number typed in: only on servers that allow dialling, and only to an owl that exists.
+		return this.#dialler.IsEnabled() ? this.#dialler.Resolve(entry, number) : { number: "", error: "error.callUnknown" };
 	}
 
 	/// <summary>
 	/// Constructor.
 	/// </summary>
-	/// <param name="services">{ database, directory, outbox, hmp, config (the "calls" section), blocks, audit, hooks }</param>
+	/// <param name="services">{ database, directory, outbox, hmp, config (the "calls" section), blocks, audit, hooks, dialler }</param>
 	constructor(services)
 	{
 		this.#database = services.database;
@@ -303,6 +315,7 @@ class CallService
 		this.#blocks = services.blocks;
 		this.#audit = services.audit;
 		this.#hooks = services.hooks;
+		this.#dialler = services.dialler;
 		this.#startLimiter = services.hmp.rateLimit.create({ limit: this.#config.rateLimitCount, windowMs: this.#config.rateLimitWindowMs });
 		this.#voiceLimiter = services.hmp.rateLimit.create({ limit: voiceMessagesPerSecond, windowMs: 1000 });
 	}

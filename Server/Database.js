@@ -151,6 +151,30 @@ const migrations =
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 		],
 	},
+	{
+		version: 2,
+		name: "mark forwarded owls",
+		statements:
+		[
+			"ALTER TABLE frantic_owls_messages ADD COLUMN forwarded TINYINT(1) NOT NULL DEFAULT 0",
+		],
+	},
+	{
+		version: 3,
+		name: "create poll votes",
+		statements:
+		[
+			`CREATE TABLE IF NOT EXISTS frantic_owls_poll_votes (
+				message_id BIGINT UNSIGNED NOT NULL,
+				owl_number CHAR(8) NOT NULL,
+				option_index TINYINT UNSIGNED NOT NULL,
+				voted_at BIGINT NOT NULL,
+				PRIMARY KEY (message_id, owl_number, option_index),
+				KEY idx_frantic_owls_poll_votes_number (owl_number),
+				CONSTRAINT fk_frantic_owls_poll_votes_message FOREIGN KEY (message_id) REFERENCES frantic_owls_messages (id) ON DELETE CASCADE
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		],
+	},
 ];
 
 /// <summary>
@@ -219,6 +243,17 @@ function VisibleToMember(alias)
 }
 
 /// <summary>
+/// SQL expression: the part of a message's body a quote of it needs (replies and pins).
+/// A poll's body is JSON, so it is read whole for ToQuote to take the question out; cutting it at 200 characters would leave JSON that cannot be read.
+/// </summary>
+/// <param name="alias">Messages table alias</param>
+/// <returns>SQL fragment</returns>
+function QuoteBody(alias)
+{
+	return `CASE WHEN ${alias}.kind = 'poll' THEN ${alias}.body ELSE LEFT(${alias}.body, 200) END`;
+}
+
+/// <summary>
 /// Chat summary as one member sees it. Two "now" parameters come first (unread count, then last visible message).
 ///
 /// <para>
@@ -231,8 +266,8 @@ function VisibleToMember(alias)
 /// </summary>
 const chatSummarySelect = `SELECT c.id, c.kind, c.title, c.avatar_url, c.created_by, c.created_at, c.pinned_message_id, cm.muted_until, cm.role, cm.pinned_at,
 		m.id AS last_id, m.body AS last_body, m.sender_number AS last_sender, m.sent_at AS last_sent_at, m.kind AS last_kind, m.deliver_at AS last_deliver_at, m.unsent_at AS last_unsent_at,
-		p.sender_number AS pinned_sender, p.kind AS pinned_kind, LEFT(p.body, 200) AS pinned_body, p.sent_at AS pinned_sent_at,
-		(SELECT COUNT(*) FROM frantic_owls_messages x WHERE x.chat_id = c.id AND x.id > cm.last_read_message_id AND x.sender_number <> cm.owl_number AND x.kind IN ('text', 'location') AND x.unsent_at = 0 AND ${VisibleToMember("x")}) AS unread
+		p.sender_number AS pinned_sender, p.kind AS pinned_kind, ${QuoteBody("p")} AS pinned_body, p.sent_at AS pinned_sent_at,
+		(SELECT COUNT(*) FROM frantic_owls_messages x WHERE x.chat_id = c.id AND x.id > cm.last_read_message_id AND x.sender_number <> cm.owl_number AND x.kind IN ('text', 'location', 'poll') AND x.unsent_at = 0 AND ${VisibleToMember("x")}) AS unread
 	FROM frantic_owls_chat_members cm
 	JOIN frantic_owls_chats c ON c.id = cm.chat_id
 	LEFT JOIN frantic_owls_messages m ON m.id = (SELECT MAX(v.id) FROM frantic_owls_messages v WHERE v.chat_id = c.id AND ${VisibleToMember("v")})
@@ -242,12 +277,12 @@ const chatSummarySelect = `SELECT c.id, c.kind, c.title, c.avatar_url, c.created
 /// Column list and join shared by every message read, so each record also carries a short quote of the owl it replies to.
 /// A quote of an owl the server deleted is left out of the join, so it shows as "no longer there".
 /// </summary>
-const messageColumns = `m.id, m.chat_id, m.sender_number, m.body, m.kind, m.sent_at, m.deliver_at, m.reply_to_id, m.unsent_at,
-	r.sender_number AS reply_sender, r.kind AS reply_kind, LEFT(r.body, 200) AS reply_body, r.unsent_at AS reply_unsent_at`;
+const messageColumns = `m.id, m.chat_id, m.sender_number, m.body, m.kind, m.sent_at, m.deliver_at, m.reply_to_id, m.unsent_at, m.forwarded,
+	r.sender_number AS reply_sender, r.kind AS reply_kind, ${QuoteBody("r")} AS reply_body, r.unsent_at AS reply_unsent_at`;
 const messageSource = "frantic_owls_messages m LEFT JOIN frantic_owls_messages r ON r.id = m.reply_to_id AND r.deleted_at = 0";
 
 /// <summary>
-/// Kinds of message rows. "text" is an owl someone wrote and "location" one carrying where its sender stood (its body is JSON).
+/// Kinds of message rows. "text" is an owl someone wrote, "location" one carrying where its sender stood and "poll" a question for a bulk owl to vote on (both bodies are JSON).
 /// The others are notes the server records about the chat itself, which the page draws as a centred line ("Bram left.") and which never count as unread.
 /// A note's sender is the owl who did it; its body is JSON with any details ({ target } for the member it concerns, { title } for a rename).
 /// </summary>
@@ -255,6 +290,7 @@ const MessageKind = Object.freeze
 ({
 	Text: "text",
 	Location: "location",
+	Poll: "poll",
 	Left: "left",
 	Added: "added",
 	Removed: "removed",
@@ -281,6 +317,17 @@ const CallOutcome = Object.freeze
 	Cancelled: "cancelled",
 	Busy: "busy",
 	Unreachable: "unreachable",
+});
+
+/// <summary>
+/// Outcome of saving changes to a contact.
+/// </summary>
+const ContactWrite = Object.freeze
+({
+	Saved: "saved",
+	Missing: "missing",
+	Duplicate: "duplicate",
+	Failed: "failed",
 });
 
 /// <summary>
@@ -317,14 +364,43 @@ function MapContact(row)
 }
 
 /// <summary>
+/// Read a poll's body.
+/// </summary>
+/// <param name="body">Body of a message with kind "poll"</param>
+/// <returns>{ question, options, multiple }, or null when the body is not a usable poll</returns>
+function ReadPoll(body)
+{
+	// The body is JSON the server wrote; a damaged row should read as "no poll", not take the request down.
+	try
+	{
+		const poll = JSON.parse(String(body || ""));
+
+		if (!poll || typeof poll.question !== "string" || !Array.isArray(poll.options) || poll.options.length < 2)
+		{
+			return null;
+		}
+
+		return { question: poll.question, options: poll.options.map(String), multiple: poll.multiple === true };
+	}
+	catch (error)
+	{
+		return null;
+	}
+}
+
+/// <summary>
 /// The short quote of a replied-to owl that travels with a reply. An unsent owl is quoted without its text.
+/// A poll is quoted by its question, so quotes and pins never carry a whole poll.
 /// </summary>
 /// <param name="message">Replied-to message record (or a row mapped to { id, sender, kind, body, unsentAt })</param>
 /// <returns>{ id, sender, kind, body, unsent }</returns>
 function ToQuote(message)
 {
 	const unsent = Number(message.unsentAt || 0) > 0;
-	return { id: Number(message.id), sender: String(message.sender || ""), kind: String(message.kind || MessageKind.Text), body: unsent ? "" : String(message.body || "").slice(0, 200), unsent };
+	const kind = String(message.kind || MessageKind.Text);
+	const poll = kind === MessageKind.Poll && !unsent ? ReadPoll(message.body) : null;
+	const body = unsent ? "" : poll ? poll.question : String(message.body || "");
+	return { id: Number(message.id), sender: String(message.sender || ""), kind, body: body.slice(0, 200), unsent };
 }
 
 /// <summary>
@@ -353,7 +429,40 @@ function MapMessage(row)
 		deliverAt: Number(row.deliver_at || 0),
 		replyTo,
 		unsentAt,
+		forwarded: Number(row.forwarded || 0) === 1,
 	};
+}
+
+/// <summary>
+/// Group poll vote rows by poll, then by voter.
+/// </summary>
+/// <param name="rows">Rows with message_id, owl_number and option_index</param>
+/// <returns>Map of message ID to [{ number, options }]</returns>
+function GroupVotes(rows)
+{
+	const byMessage = new Map();
+
+	for (const row of rows)
+	{
+		const messageId = Number(row.message_id);
+		const number = String(row.owl_number);
+
+		if (!byMessage.has(messageId))
+		{
+			byMessage.set(messageId, new Map());
+		}
+
+		const voters = byMessage.get(messageId);
+
+		if (!voters.has(number))
+		{
+			voters.set(number, []);
+		}
+
+		voters.get(number).push(Number(row.option_index));
+	}
+
+	return new Map([...byMessage].map(([messageId, voters]) => [messageId, [...voters].map(([number, options]) => ({ number, options }))]));
 }
 
 /// <summary>
@@ -654,20 +763,39 @@ class OwlDatabase
 	}
 
 	/// <summary>
-	/// Rename a contact and change its picture.
+	/// Rename a contact, change its picture and point it at another owl number.
 	/// </summary>
 	/// <param name="ownerNumber">Owl number that must own the contact</param>
 	/// <param name="contactId">Contact row ID</param>
 	/// <param name="name">New display name, already validated</param>
 	/// <param name="avatarUrl">New avatar URL, already validated (may be empty)</param>
-	/// <returns>True if a row owned by ownerNumber was changed</returns>
-	async UpdateContact(ownerNumber, contactId, name, avatarUrl)
+	/// <param name="contactNumber">Owl number it points at, already checked to belong to a live owl</param>
+	/// <returns>ContactWrite.Saved, ContactWrite.Missing when no row owned by ownerNumber matched, ContactWrite.Duplicate when another contact of the owner already holds that number, or ContactWrite.Failed</returns>
+	async UpdateContact(ownerNumber, contactId, name, avatarUrl, contactNumber)
 	{
-		return this.#Run("UpdateContact", async () =>
+		// The owner and number pair is a unique key, so a number another contact already holds is an expected outcome, not an error to log.
+		try
 		{
-			const affected = await this.#mysql.update("UPDATE frantic_owls_contacts SET display_name = ?, avatar_url = ?, updated_at = ? WHERE owner_number = ? AND id = ?", [name, avatarUrl, Date.now(), ownerNumber, contactId]);
-			return Number(affected) > 0;
-		}, false);
+			const found = Number(await this.#mysql.scalar("SELECT COUNT(*) FROM frantic_owls_contacts WHERE owner_number = ? AND id = ?", [ownerNumber, contactId]));
+
+			if (found === 0)
+			{
+				return ContactWrite.Missing;
+			}
+
+			await this.#mysql.update("UPDATE frantic_owls_contacts SET display_name = ?, avatar_url = ?, contact_number = ?, updated_at = ? WHERE owner_number = ? AND id = ?", [name, avatarUrl, contactNumber, Date.now(), ownerNumber, contactId]);
+			return ContactWrite.Saved;
+		}
+		catch (error)
+		{
+			if (error && (error.code === "ER_DUP_ENTRY" || error.errno === 1062))
+			{
+				return ContactWrite.Duplicate;
+			}
+
+			Logger.LogError("Database", `UpdateContact failed: ${Logger.Describe(error)}`);
+			return ContactWrite.Failed;
+		}
 	}
 
 	/// <summary>
@@ -846,20 +974,21 @@ class OwlDatabase
 	/// <param name="senderNumber">Sender's owl number, already checked to be allowed to write here</param>
 	/// <param name="body">Message text, already validated</param>
 	/// <param name="deliverAt">When the owl lands, in epoch milliseconds; 0 for at once</param>
-	/// <param name="kind">A MessageKind: Text or Location for owls, any other kind for a note about the chat</param>
+	/// <param name="kind">A MessageKind: Text, Location or Poll for owls, any other kind for a note about the chat</param>
 	/// <param name="replyTo">Message record this owl answers, already checked to be visible in the same chat; null for none</param>
+	/// <param name="forwarded">Whether the owl is a copy forwarded from another chat</param>
 	/// <returns>Stored message record, or null on failure</returns>
-	async InsertMessage(chatId, senderNumber, body, deliverAt = 0, kind = MessageKind.Text, replyTo = null)
+	async InsertMessage(chatId, senderNumber, body, deliverAt = 0, kind = MessageKind.Text, replyTo = null, forwarded = false)
 	{
 		return this.#Run("InsertMessage", () => this.#mysql.transaction(async (tx) =>
 		{
 			const sentAt = Date.now();
-			const id = Number(await tx.insert("INSERT INTO frantic_owls_messages (chat_id, sender_number, body, kind, sent_at, deliver_at, reply_to_id) VALUES (?, ?, ?, ?, ?, ?, ?)", [chatId, senderNumber, body, kind, sentAt, deliverAt, replyTo ? replyTo.id : null]));
+			const id = Number(await tx.insert("INSERT INTO frantic_owls_messages (chat_id, sender_number, body, kind, sent_at, deliver_at, reply_to_id, forwarded) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [chatId, senderNumber, body, kind, sentAt, deliverAt, replyTo ? replyTo.id : null, forwarded ? 1 : 0]));
 
 			await tx.update("UPDATE frantic_owls_chats SET last_message_id = ?, last_message_at = ? WHERE id = ?", [id, sentAt, chatId]);
 			await tx.update("UPDATE frantic_owls_chat_members SET last_read_message_id = GREATEST(last_read_message_id, ?) WHERE chat_id = ? AND owl_number = ?", [id, chatId, senderNumber]);
 
-			return { id, chatId, sender: senderNumber, body, kind, sentAt, deliverAt, replyTo: replyTo ? ToQuote(replyTo) : null, unsentAt: 0 };
+			return { id, chatId, sender: senderNumber, body, kind, sentAt, deliverAt, replyTo: replyTo ? ToQuote(replyTo) : null, unsentAt: 0, forwarded };
 		}), null);
 	}
 
@@ -878,7 +1007,7 @@ class OwlDatabase
 		{
 			const now = Date.now();
 			const wipe = this.#isSoftDelete ? "" : "body = '', ";
-			const affected = Number(await tx.update(`UPDATE frantic_owls_messages SET ${wipe}unsent_at = ? WHERE id = ? AND chat_id = ? AND sender_number = ? AND unsent_at = 0 AND deleted_at = 0 AND kind IN ('text', 'location') AND sent_at >= ?`, [now, messageId, chatId, senderNumber, sentAfter]));
+			const affected = Number(await tx.update(`UPDATE frantic_owls_messages SET ${wipe}unsent_at = ? WHERE id = ? AND chat_id = ? AND sender_number = ? AND unsent_at = 0 AND deleted_at = 0 AND kind IN ('text', 'location', 'poll') AND sent_at >= ?`, [now, messageId, chatId, senderNumber, sentAfter]));
 
 			if (affected === 0)
 			{
@@ -1137,7 +1266,7 @@ class OwlDatabase
 			}
 
 			const promoted = members.length > 0 ? await this.#EnsureAdmin(tx, chatId) : "";
-			return { message: { id, chatId, sender: number, body: "", kind, sentAt, deliverAt: 0, replyTo: null, unsentAt: 0 }, members, promoted };
+			return { message: { id, chatId, sender: number, body: "", kind, sentAt, deliverAt: 0, replyTo: null, unsentAt: 0, forwarded: false }, members, promoted };
 		}), null);
 	}
 
@@ -1351,9 +1480,87 @@ class OwlDatabase
 
 			const hasMore = rows.length > limit;
 			const page = rows.slice(0, limit).map(MapMessage).reverse();
+			const pollIds = page.filter((message) => message.kind === MessageKind.Poll && message.unsentAt === 0).map((message) => message.id);
+
+			// Polls carry their votes, so a page draws them without asking again.
+			if (pollIds.length > 0)
+			{
+				const votes = GroupVotes(await this.#mysql.query("SELECT message_id, owl_number, option_index FROM frantic_owls_poll_votes WHERE message_id IN (?) ORDER BY voted_at, option_index", [pollIds]));
+
+				for (const message of page)
+				{
+					if (message.kind === MessageKind.Poll)
+					{
+						message.votes = votes.get(message.id) || [];
+					}
+				}
+			}
 
 			return { messages: page, hasMore };
 		}, null);
+	}
+
+	/// <summary>
+	/// Find the owls of a chat whose text contains a query, as one member sees them (see VisibleToMember), newest first.
+	/// Written owls and polls only; locations, notes and unsent owls are left out.
+	/// </summary>
+	/// <param name="chatId">Chat row ID</param>
+	/// <param name="viewer">Owl number of the member searching</param>
+	/// <param name="query">Text to look for, already trimmed; matched without regard to case</param>
+	/// <param name="limit">Most results returned</param>
+	/// <returns>{ messages, hasMore }, or null on failure</returns>
+	async SearchMessages(chatId, viewer, query, limit)
+	{
+		return this.#Run("SearchMessages", async () =>
+		{
+			// LIKE treats % and _ as wildcards, so they are escaped to be searched for as typed. "!" is the escape rather than the backslash,
+			// which a server running NO_BACKSLASH_ESCAPES would not honour.
+			const pattern = `%${query.replace(/[!%_]/g, (character) => `!${character}`)}%`;
+			const rows = await this.#mysql.query(
+				`SELECT ${messageColumns} FROM ${messageSource} JOIN frantic_owls_chat_members cm ON cm.chat_id = m.chat_id AND cm.owl_number = ? JOIN frantic_owls_chats c ON c.id = m.chat_id
+				WHERE m.chat_id = ? AND m.kind IN ('text', 'poll') AND m.unsent_at = 0 AND m.body LIKE ? ESCAPE '!' AND ${VisibleToMember("m")}
+				ORDER BY m.id DESC LIMIT ?`,
+				[viewer, chatId, pattern, Date.now(), limit + 1]);
+
+			return { messages: rows.slice(0, limit).map(MapMessage), hasMore: rows.length > limit };
+		}, null);
+	}
+
+	// ========================
+	// Polls
+	// ========================
+
+	/// <summary>
+	/// Every vote cast in one poll.
+	/// </summary>
+	/// <param name="messageId">Poll message ID</param>
+	/// <returns>[{ number, options }] in the order the votes were cast, or null on failure</returns>
+	async ListPollVotes(messageId)
+	{
+		return this.#Run("ListPollVotes", async () => GroupVotes(await this.#mysql.query("SELECT message_id, owl_number, option_index FROM frantic_owls_poll_votes WHERE message_id = ? ORDER BY voted_at, option_index", [messageId])).get(Number(messageId)) || [], null);
+	}
+
+	/// <summary>
+	/// Replace one owl's votes in a poll. An empty list takes their vote back.
+	/// </summary>
+	/// <param name="messageId">Poll message ID</param>
+	/// <param name="number">Voting owl number</param>
+	/// <param name="options">Option indexes, already checked against the poll</param>
+	/// <returns>True on success</returns>
+	async SetPollVotes(messageId, number, options)
+	{
+		return this.#Run("SetPollVotes", () => this.#mysql.transaction(async (tx) =>
+		{
+			const now = Date.now();
+			await tx.update("DELETE FROM frantic_owls_poll_votes WHERE message_id = ? AND owl_number = ?", [messageId, number]);
+
+			for (const option of options)
+			{
+				await tx.insert("INSERT INTO frantic_owls_poll_votes (message_id, owl_number, option_index, voted_at) VALUES (?, ?, ?, ?)", [messageId, number, option, now]);
+			}
+
+			return true;
+		}), false);
 	}
 
 	/// <summary>
@@ -1651,6 +1858,24 @@ class OwlDatabase
 		return this.#Run("GetCharacterForNumber", async () => Number(await this.#mysql.scalar("SELECT character_id FROM frantic_owls_numbers WHERE owl_number = ?", [number]) || 0), -1);
 	}
 
+	/// <summary>
+	/// Whether an owl number belongs to a character, now or before it was retired.
+	/// </summary>
+	/// <param name="number">Owl number</param>
+	/// <returns>"live", "retired", "" when no character ever had it, or null on failure</returns>
+	async GetNumberState(number)
+	{
+		return this.#Run("GetNumberState", async () =>
+		{
+			if (Number(await this.#mysql.scalar("SELECT COUNT(*) FROM frantic_owls_numbers WHERE owl_number = ?", [number])) > 0)
+			{
+				return "live";
+			}
+
+			return Number(await this.#mysql.scalar("SELECT COUNT(*) FROM frantic_owls_retired_numbers WHERE owl_number = ?", [number])) > 0 ? "retired" : "";
+		}, null);
+	}
+
 	// ========================
 	// Profiles
 	// ========================
@@ -1792,4 +2017,4 @@ class OwlDatabase
 	}
 }
 
-module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, IsSenderNumber, ToQuote };
+module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll };

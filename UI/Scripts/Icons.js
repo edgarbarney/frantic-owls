@@ -77,5 +77,12 @@ Owls.Icons = (() =>
 		microphoneSlash: Fa("microphone-slash"),
 		callIn: Fa("arrow-down"),
 		callOut: Fa("arrow-up"),
+		forward: Fa("share"),
+		poll: Fa("square-poll-vertical"),
+		dial: Fa("hashtag"),
+		radio: Fa("circle", "regular"),
+		radioOn: Fa("circle-check"),
+		box: Fa("square", "regular"),
+		boxOn: Fa("square-check"),
 	});
 })();

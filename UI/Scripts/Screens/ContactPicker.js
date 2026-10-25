@@ -11,6 +11,7 @@
 /// "bulk" mode: tick several contacts, optionally name the group, and create a group chat.
 /// "add" mode: tick contacts to add to an existing bulk owl (its admins only); members already in it are not offered.
 /// "call" mode: tap one contact to call them; official senders and owls that no longer fly are not offered.
+/// With numbers.dialling on, "single" and "call" mode also lead to typing a number in.
 /// </summary>
 Owls.Screens.ContactPicker = (() =>
 {
@@ -143,6 +144,32 @@ Owls.Screens.ContactPicker = (() =>
 		}
 
 		/// <summary>
+		/// Build a row above the contacts that leads somewhere else (Bulk Owl, typing a number in).
+		/// </summary>
+		/// <param name="icon">Icon markup</param>
+		/// <param name="title">Row title</param>
+		/// <param name="hint">Line under the title</param>
+		/// <param name="onClick">Click handler</param>
+		/// <returns>Row element</returns>
+		function CreateShortcutRow(icon, title, hint, onClick)
+		{
+			const holder = Element("span", { className: "avatar" });
+			holder.style.background = "var(--ink-raised)";
+			holder.style.color = "var(--gold)";
+			holder.innerHTML = icon;
+
+			return Element("button", { className: "list-row bulk-row", on: { click: onClick } },
+			[
+				holder,
+				Element("span", { className: "row-text" },
+				[
+					Element("span", { className: "row-title", text: title }),
+					Element("span", { className: "row-subtitle", text: hint }),
+				]),
+			]);
+		}
+
+		/// <summary>
 		/// Rebuild the list.
 		/// </summary>
 		/// <param name="reason">Change reason from the store</param>
@@ -169,20 +196,12 @@ Owls.Screens.ContactPicker = (() =>
 
 			if (!isBulk && !isCalling)
 			{
-				const bulkIcon = Element("span", { className: "avatar" });
-				bulkIcon.style.background = "var(--ink-raised)";
-				bulkIcon.style.color = "var(--gold)";
-				bulkIcon.innerHTML = Owls.Icons.group;
+				rows.push(CreateShortcutRow(Owls.Icons.group, T("picker.bulkTitle"), T("picker.bulkHint"), () => Owls.App.Navigate("ContactPicker", { mode: "bulk" })));
+			}
 
-				rows.push(Element("button", { className: "list-row bulk-row", on: { click: () => Owls.App.Navigate("ContactPicker", { mode: "bulk" }) } },
-				[
-					bulkIcon,
-					Element("span", { className: "row-text" },
-					[
-						Element("span", { className: "row-title", text: T("picker.bulkTitle") }),
-						Element("span", { className: "row-subtitle", text: T("picker.bulkHint") }),
-					]),
-				]));
+			if (!isBulk && config.numbersDialling)
+			{
+				rows.push(CreateShortcutRow(Owls.Icons.dial, isCalling ? T("dial.callTitle") : T("dial.owlTitle"), T("picker.dialHint"), () => Owls.App.Navigate("Dial", { mode: isCalling ? "call" : "owl" })));
 			}
 
 			if (contacts.length === 0)

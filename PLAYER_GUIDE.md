@@ -14,6 +14,7 @@ Type `/owl` to take it out of your robes, or use up-arrow key on your keyboard.
 |---|---|---|
 | **Owl** | Text message | A written message. It takes a moment to fly; "In flight…" means it has not landed yet. |
 | **Your owl** | Phone number | Your character's own address. Each character has one, and it stays with them. |
+| **Owl number** | The digits of a phone number | The 8 digits of your owl. Where the server shows them, they are on your card in Settings, and others can type them in to owl you, call you or save you. |
 | **Bulk Owl** | Group chat | One owl sent to several contacts at once, who can all answer. Admins keep it in order. |
 | **Floo-Call** | Phone call | Talk to a contact by voice, through the Floo instead of a wire or radio. |
 | **Inform** | Swapping numbers | Hand your owl to a wizard standing near you so they can add you to their contacts. |
@@ -28,7 +29,7 @@ Type `/owl` to take it out of your robes, or use up-arrow key on your keyboard.
 Your home screen holds five apps with these icons:
 
 - 🔥 **Floo-Calls**: The call log and new calls. Missed calls show as a badge.
-- 📖 **Contacts**: Every wizard whose owl you hold. Star the dearest ones as **Favourites**.
+- 📖 **Contacts**: Every wizard whose owl you hold. Star the dearest ones as **Favourites**. Where the server allows it, the plus adds someone by their owl number, a contact's page lets you change their number, and **Send New Owl** and **New Floo-Call** take a number too. One number, one contact: Edit or delete the old one first.
 - 🦉 **Owls**: All your chats. The badge counts owls you have not read yet.
 - 📜 **Inform**: Offer your owl to someone nearby, or answer someone offering theirs (**Accept**, **Exchange** to give yours back, or **Decline**).
 - ⚙️ **Settings**: Your picture, theme, house colours, sounds, ringtone, language, privacy and blocked owls.
@@ -41,9 +42,12 @@ Your home screen holds five apps with these icons:
 
 ## Inside a Chat
 
-- **Tap an owl** to **Reply**, **Pin** it under the chat's header, **Unsend** it or **Delete for yourself**.
+- **Tap an owl** to **Reply**, **Forward** it to other chats, **Pin** it under the chat's header, **Unsend** it or **Delete for yourself**.
+- **The magnifying glass** searches the whole chat, not only what is on screen. Tap a result to fly back to it.
 - **The smiling face** opens the emoji picker. Muggles invented them; we added a Magic page.
 - **The location pin** sends a location owl.
+- **The chart** (bulk owls only) asks everyone a question to vote on. Tap an answer to vote, and tap it again to take your vote back.
+- **Unfinished owls wait for you**: Leave a chat mid-sentence and the words stay in the box, marked **Draft** in your chat list.
 - **The bell** mutes a chat. Owls still arrive; they just stop hooting.
 - **Read** and **typing…** show when the other side has read your owl or is writing. Turn either off in Settings and you stop seeing theirs too. Fair is fair.
 

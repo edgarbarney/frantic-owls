@@ -2,7 +2,10 @@
 	"command": "owl",
 	"openKey": "up",
 	"numbers": {
-		"visible": false
+		"visible": false,
+		"dialling": false,
+		"rateLimitCount": 10,
+		"rateLimitWindowMs": 60000
 	},
 	"contacts": {
 		"maxContacts": 250,
@@ -20,7 +23,14 @@
 		"rateLimitCount": 8,
 		"rateLimitWindowMs": 5000,
 		"unsendSeconds": 120,
-		"maxPinnedChats": 5
+		"maxPinnedChats": 5,
+		"maxForwardTargets": 5
+	},
+	"polls": {
+		"enabled": true,
+		"maxOptions": 10,
+		"maxQuestionLength": 200,
+		"maxOptionLength": 100
 	},
 	"privacy": {
 		"readReceipts": true,

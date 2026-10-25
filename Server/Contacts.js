@@ -2,6 +2,8 @@
 "use strict";
 
 const { Ok, Fail } = require("./Result.js");
+const { Problem } = require("./Lang.js");
+const { ContactWrite } = require("./Database.js");
 const { ClampInteger } = require("./Config.js");
 const { CheckAvatarUrl } = require("./Avatars.js");
 
@@ -54,6 +56,11 @@ class ContactService
 	#avatarsConfig;
 
 	/// <summary>
+	/// NumberDialler instance, for contacts typed in by number.
+	/// </summary>
+	#dialler;
+
+	/// <summary>
 	/// Clean and check a contact display name.
 	/// </summary>
 	/// <param name="raw">Client-supplied name</param>
@@ -71,12 +78,14 @@ class ContactService
 	/// <param name="hmp">hmp-lib server import</param>
 	/// <param name="contactsConfig">The "contacts" section of the server config</param>
 	/// <param name="avatarsConfig">The "avatars" section of the server config</param>
-	constructor(database, hmp, contactsConfig, avatarsConfig)
+	/// <param name="dialler">NumberDialler instance</param>
+	constructor(database, hmp, contactsConfig, avatarsConfig, dialler)
 	{
 		this.#database = database;
 		this.#hmp = hmp;
 		this.#config = contactsConfig;
 		this.#avatarsConfig = avatarsConfig;
+		this.#dialler = dialler;
 	}
 
 	/// <summary>
@@ -101,10 +110,21 @@ class ContactService
 	}
 
 	/// <summary>
-	/// Rename a contact and/or change their picture override (an empty link clears the override).
+	/// The refusal for a contact whose number another contact of the same owner already holds.
+	/// The owner and number pair is a unique key, so two contacts can never share a number.
+	/// </summary>
+	/// <param name="holder">The contact already holding the number</param>
+	/// <returns>Failed result naming that contact</returns>
+	#FailTaken(holder)
+	{
+		return Fail(Problem("error.contactNumberTaken", { name: holder.name }));
+	}
+
+	/// <summary>
+	/// Rename a contact, change their picture override (an empty link clears the override) and, with numbers.dialling on, their owl number.
 	/// </summary>
 	/// <param name="entry">Directory entry of the requesting owl</param>
-	/// <param name="data">{ contactId, name, avatarUrl }</param>
+	/// <param name="data">{ contactId, name, avatarUrl, number } where number is optional and keeps the current one when missing</param>
 	/// <returns>Result carrying the updated contact</returns>
 	async Update(entry, data)
 	{
@@ -134,12 +154,57 @@ class ContactService
 			return Fail("error.contactGone");
 		}
 
-		if (!await this.#database.UpdateContact(entry.number, contactId, name, avatar.url))
+		const typed = data.number === undefined || data.number === null ? contact.number : this.#dialler.Normalise(data.number);
+
+		if (!typed)
 		{
+			return Fail("error.numberInvalid");
+		}
+
+		const isNewNumber = typed !== contact.number;
+
+		if (isNewNumber)
+		{
+			const holder = await this.#database.FindContactByNumber(entry.number, typed);
+
+			if (holder === undefined)
+			{
+				return Fail("error.contactSaveFailed");
+			}
+
+			// Checked before the number is looked up, so a duplicate costs nothing against the dialling limit.
+			if (holder)
+			{
+				return this.#FailTaken(holder);
+			}
+
+			const target = await this.#dialler.Resolve(entry, typed);
+
+			if (target.error)
+			{
+				return Fail(target.error);
+			}
+		}
+
+		switch (await this.#database.UpdateContact(entry.number, contactId, name, avatar.url, typed))
+		{
+		case ContactWrite.Saved:
+			break;
+		case ContactWrite.Missing:
+			return Fail("error.contactGone");
+		case ContactWrite.Duplicate:
+		{
+			// Another request saved the number to a contact between the check above and the write.
+			const holder = await this.#database.FindContactByNumber(entry.number, typed);
+			return holder ? this.#FailTaken(holder) : Fail("error.contactSaveFailed");
+		}
+		default:
 			return Fail("error.contactSaveFailed");
 		}
 
-		return Ok({ contact: { ...contact, name, avatarUrl: avatar.url, updatedAt: Date.now() } });
+		// A contact moved to another owl shows that owl's own picture now, until an override is set.
+		const profileAvatarUrl = isNewNumber ? await this.#database.GetProfileAvatar(typed) || "" : contact.profileAvatarUrl;
+		return Ok({ contact: { ...contact, number: typed, name, avatarUrl: avatar.url, profileAvatarUrl, updatedAt: Date.now() } });
 	}
 
 	/// <summary>
@@ -216,7 +281,53 @@ class ContactService
 		case AddContactStatus.Added:
 			return Ok({ contact: result.contact });
 		case AddContactStatus.AlreadyKnown:
-			return Fail("error.alreadyContact");
+			return this.#FailTaken(result.contact);
+		case AddContactStatus.Full:
+			return Fail("error.contactsFull");
+		default:
+			return Fail("error.contactSaveFailed");
+		}
+	}
+
+	/// <summary>
+	/// Save an owl as a contact by typing in its number (numbers.dialling).
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ number, name }</param>
+	/// <returns>Result carrying the new contact</returns>
+	async AddByNumber(entry, data)
+	{
+		const name = this.#CleanName(data.name);
+
+		if (name.length === 0)
+		{
+			return Fail("error.contactNameMissing");
+		}
+
+		// A number already saved needs no lookup, so it costs nothing against the dialling limit.
+		const typed = this.#dialler.Normalise(data.number);
+		const known = typed ? await this.#database.FindContactByNumber(entry.number, typed) : null;
+
+		if (known)
+		{
+			return this.#FailTaken(known);
+		}
+
+		const target = await this.#dialler.Resolve(entry, data.number);
+
+		if (target.error)
+		{
+			return Fail(target.error);
+		}
+
+		const result = await this.AddOnBehalf(entry.number, target.number, name);
+
+		switch (result.status)
+		{
+		case AddContactStatus.Added:
+			return Ok({ contact: result.contact });
+		case AddContactStatus.AlreadyKnown:
+			return this.#FailTaken(result.contact);
 		case AddContactStatus.Full:
 			return Fail("error.contactsFull");
 		default:

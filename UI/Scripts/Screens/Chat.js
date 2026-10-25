@@ -7,7 +7,8 @@
 
 /// <summary>
 /// One conversation: the contact's picture and name on top, the history in the middle, and the composer at the bottom.
-/// Tapping an owl selects it and offers Reply, Pin, Delete (from this phone) and, for your own recent owls, Unsend.
+/// Tapping an owl selects it and offers Reply, Forward, Pin, Delete (from this phone) and, for your own recent owls, Unsend.
+/// The search icon looks through the whole chat on the server; bulk owls also take polls. Unsent text is kept as the chat's draft.
 ///
 /// <para>
 /// NOTE: Sent owls appear immediately as pending bubbles and are swapped for the stored message when the server replies.
@@ -43,6 +44,22 @@ Owls.Screens.Chat = (() =>
 	const confirmWindowMs = 4000;
 
 	/// <summary>
+	/// Shortest search the server takes, and how long typing must pause before a search is sent.
+	/// </summary>
+	const minSearchLength = 2;
+	const searchDelayMs = 350;
+
+	/// <summary>
+	/// Most pages of older owls loaded to reach an owl jumped to (from a quote, the pinned bar or a search result).
+	/// </summary>
+	const maxJumpPages = 25;
+
+	/// <summary>
+	/// Characters of context kept before a search match in a result's snippet.
+	/// </summary>
+	const snippetLead = 24;
+
+	/// <summary>
 	/// Create the screen.
 	/// </summary>
 	/// <param name="params">{ chatId }</param>
@@ -67,6 +84,9 @@ Owls.Screens.Chat = (() =>
 		let replyTo = null;
 		let pendingConfirm = "";
 		let confirmTimer = null;
+		let searchTimer = null;
+		let searchSerial = 0;
+		let isJumping = false;
 
 		// ========================
 		// Header
@@ -76,13 +96,24 @@ Owls.Screens.Chat = (() =>
 		const headerTitle = Element("span", { className: "screen-title" });
 		const headerSub = Element("span", { className: "chat-header-sub" });
 		const headerButton = Element("button", { className: "chat-header-button" }, [headerAvatar, Element("span", { className: "chat-header-text" }, [headerTitle, headerSub])]);
+		const searchButton = Widgets.IconButton(Owls.Icons.search, T("chat.search"), () => ToggleSearch());
 		const callButton = Widgets.IconButton(Owls.Icons.flame, T("call.start"), () => Call());
 		const pinChatButton = Widgets.IconButton(Owls.Icons.thumbtack, T("chat.pinChat"), () => PinChat());
 		const muteButton = Widgets.IconButton(Owls.Icons.bell, T("chat.notifications"), () => ShowBar(muteBar));
 		const blockButton = Widgets.IconButton(Owls.Icons.ban, T("chat.blockOwl"), () => ShowBar(blockBar));
 		const leaveButton = Widgets.IconButton(Owls.Icons.leave, T("chat.leaveBulk"), () => ShowBar(leaveBar));
-		const header = Element("div", { className: "screen-header" }, [Widgets.IconButton(Owls.Icons.back, T("common.back"), () => Owls.App.Back()), headerButton, callButton, pinChatButton, muteButton, blockButton, leaveButton]);
+		const header = Element("div", { className: "screen-header" }, [Widgets.IconButton(Owls.Icons.back, T("common.back"), () => Owls.App.Back()), headerButton, searchButton, callButton, pinChatButton, muteButton, blockButton, leaveButton]);
 		const headerError = Element("div", { className: "form-error chat-error" });
+
+		// ========================
+		// Search
+		// ========================
+
+		const searchInput = Element("input", { className: "text-input", attributes: { type: "text", maxlength: 64, placeholder: T("chat.searchPlaceholder") } });
+		const searchRow = Element("div", { className: "search-row" }, [searchInput]);
+		const searchResults = Element("div", { className: "screen-body chat-search-results" });
+		searchRow.hidden = true;
+		searchResults.hidden = true;
 
 		// ========================
 		// Pinned Owl
@@ -176,12 +207,91 @@ Owls.Screens.Chat = (() =>
 		]);
 
 		// ========================
+		// Poll Bar
+		// ========================
+
+		const maxPollOptions = config.pollMaxOptions || 10;
+		const pollError = Element("span", { className: "form-error" });
+		const pollQuestion = Element("input", { className: "text-input", attributes: { type: "text", maxlength: config.pollMaxQuestionLength || 200, placeholder: T("chat.pollQuestion") } });
+		const pollOptions = Element("div", { className: "poll-inputs" });
+		const pollAddOption = Element("button", { className: "secondary-button", on: { click: () => AddPollOption("") } });
+		const pollMultiple = Element("button", { className: "toggle", title: T("chat.pollMultiple"), attributes: { role: "switch", "aria-checked": "false" } });
+		const pollSend = Element("button", { className: "primary-button", text: T("chat.pollSend") });
+		const pollBar = Element("div", { className: "leave-bar poll-bar" },
+		[
+			Element("span", { className: "leave-text", text: T("chat.pollIntro") }),
+			pollQuestion,
+			pollOptions,
+			pollAddOption,
+			Element("div", { className: "setting-row" },
+			[
+				Element("span", { className: "setting-text" }, [Element("span", { className: "row-title", text: T("chat.pollMultiple") })]),
+				pollMultiple,
+			]),
+			pollError,
+			Element("div", { className: "button-row" },
+			[
+				Element("button", { className: "secondary-button", text: T("common.cancel"), on: { click: () => ShowBar(null) } }),
+				pollSend,
+			]),
+		]);
+
+		pollAddOption.innerHTML = Owls.Icons.plus;
+		pollAddOption.appendChild(Element("span", { text: T("chat.pollAddOption") }));
+		pollMultiple.addEventListener("click", () =>
+		{
+			const isOn = !pollMultiple.classList.contains("is-on");
+			pollMultiple.classList.toggle("is-on", isOn);
+			pollMultiple.setAttribute("aria-checked", String(isOn));
+		});
+
+		/// <summary>
+		/// Add one more answer field to the poll being written.
+		/// </summary>
+		/// <param name="text">Its starting text</param>
+		function AddPollOption(text)
+		{
+			const count = pollOptions.children.length;
+
+			if (count >= maxPollOptions)
+			{
+				return;
+			}
+
+			const field = Element("input", { className: "text-input", attributes: { type: "text", maxlength: config.pollMaxOptionLength || 100, placeholder: T("chat.pollOption", { count: count + 1 }) } });
+			field.value = text;
+			pollOptions.appendChild(field);
+			pollAddOption.hidden = pollOptions.children.length >= maxPollOptions;
+
+			if (count >= 2)
+			{
+				field.focus();
+			}
+		}
+
+		/// <summary>
+		/// Empty the poll form, with the two answers every poll needs.
+		/// </summary>
+		function ResetPoll()
+		{
+			pollQuestion.value = "";
+			pollOptions.replaceChildren();
+			pollMultiple.classList.remove("is-on");
+			pollMultiple.setAttribute("aria-checked", "false");
+			AddPollOption("");
+			AddPollOption("");
+		}
+
+		ResetPoll();
+
+		// ========================
 		// Owl Actions Bar
 		// ========================
 
 		const actionError = Element("span", { className: "form-error" });
 		const actionText = Element("span", { className: "leave-text" });
 		const replyAction = ActionButton(Owls.Icons.reply, T("chat.reply"), () => StartReply());
+		const forwardAction = ActionButton(Owls.Icons.forward, T("chat.forward"), () => ForwardSelected());
 		const pinAction = ActionButton(Owls.Icons.thumbtack, T("chat.pin"), () => TogglePinSelected());
 		const hideAction = ActionButton(Owls.Icons.trash, T("chat.deleteForMe"), () => Confirm("hide", hideAction, HideSelected));
 		const unsendAction = ActionButton(Owls.Icons.unsend, T("chat.unsend"), () => Confirm("unsend", unsendAction, UnsendSelected));
@@ -192,6 +302,7 @@ Owls.Screens.Chat = (() =>
 			Element("div", { className: "chip-row" },
 			[
 				replyAction,
+				forwardAction,
 				pinAction,
 				hideAction,
 				unsendAction,
@@ -221,7 +332,7 @@ Owls.Screens.Chat = (() =>
 		/// <param name="bar">Bar element, or null</param>
 		function ShowBar(bar)
 		{
-			for (const candidate of [muteBar, blockBar, leaveBar, locationBar])
+			for (const candidate of [muteBar, blockBar, leaveBar, locationBar, pollBar])
 			{
 				candidate.hidden = candidate !== bar;
 			}
@@ -230,10 +341,16 @@ Owls.Screens.Chat = (() =>
 			blockError.textContent = "";
 			leaveError.textContent = "";
 			locationError.textContent = "";
+			pollError.textContent = "";
 
 			if (bar)
 			{
 				Select(0);
+			}
+
+			if (bar === pollBar)
+			{
+				pollQuestion.focus();
 			}
 		}
 
@@ -260,14 +377,15 @@ Owls.Screens.Chat = (() =>
 		const emojiPicker = Owls.EmojiPicker.Create((emoji) => InsertText(emoji));
 		const emojiButton = Widgets.IconButton(Owls.Icons.smile, T("chat.emoji"), () => ToggleEmoji(), "composer-button");
 		const locationButton = Widgets.IconButton(Owls.Icons.location, T("chat.sendYourLocation"), () => ShowBar(locationBar.hidden ? locationBar : null), "composer-button");
+		const pollButton = Widgets.IconButton(Owls.Icons.poll, T("chat.poll"), () => ShowBar(pollBar.hidden ? pollBar : null), "composer-button");
 		const counter = Element("div", { className: "composer-counter" });
 		const replyName = Element("span", { className: "reply-name" });
 		const replySnippet = Element("span", { className: "reply-snippet" });
 		const replyIcon = Element("span", { className: "reply-icon" });
 		replyIcon.innerHTML = Owls.Icons.reply;
 		const replyBar = Element("div", { className: "reply-bar" }, [replyIcon, Element("span", { className: "reply-text" }, [replyName, replySnippet]), Widgets.IconButton(Owls.Icons.close, T("chat.cancelReply"), () => SetReply(null))]);
-		const composer = Element("div", { className: "composer" }, [locationButton, input, emojiButton, sendButton]);
-		const element = Element("div", { className: "screen" }, [header, pinnedBar, headerError, muteBar, blockBar, leaveBar, locationBar, blockedNotice, unknownBar, body, counter, readOnlyNotice, actionBar, replyBar, emojiPicker.element, composer]);
+		const composer = Element("div", { className: "composer" }, [locationButton, pollButton, input, emojiButton, sendButton]);
+		const element = Element("div", { className: "screen" }, [header, searchRow, pinnedBar, headerError, muteBar, blockBar, leaveBar, locationBar, pollBar, blockedNotice, unknownBar, searchResults, body, counter, readOnlyNotice, actionBar, replyBar, emojiPicker.element, composer]);
 
 		replyBar.hidden = true;
 		actionBar.hidden = true;
@@ -377,11 +495,13 @@ Owls.Screens.Chat = (() =>
 			const canWrite = writeState.canWrite && !isBlocked;
 			composer.hidden = !canWrite;
 			locationButton.hidden = !config.locationsEnabled || isOfficial;
+			pollButton.hidden = chat.kind !== "group" || !config.pollsEnabled;
 
 			if (!canWrite)
 			{
 				emojiPicker.Hide();
 				locationBar.hidden = true;
+				pollBar.hidden = true;
 				SetReply(null);
 			}
 
@@ -552,6 +672,31 @@ Owls.Screens.Chat = (() =>
 		}
 
 		/// <summary>
+		/// Whether an owl can be forwarded: written owls and locations, not polls (which belong to their bulk owl) or unsent owls.
+		/// </summary>
+		/// <param name="message">Message record</param>
+		/// <returns>True when Forward is offered</returns>
+		function CanForward(message)
+		{
+			if ((config.maxForwardTargets ?? 5) === 0 || Number(message.unsentAt) > 0)
+			{
+				return false;
+			}
+
+			return message.kind === "location" ? !!config.locationsEnabled : !message.kind || message.kind === "text";
+		}
+
+		/// <summary>
+		/// Choose where the selected owl goes.
+		/// </summary>
+		function ForwardSelected()
+		{
+			const messageId = selectedId;
+			Select(0);
+			Owls.App.Navigate("Forward", { chatId, messageId });
+		}
+
+		/// <summary>
 		/// Select an owl to act on, or clear the selection with 0.
 		/// </summary>
 		/// <param name="messageId">Message ID, or 0</param>
@@ -585,13 +730,14 @@ Owls.Screens.Chat = (() =>
 			}
 
 			// Hide the other bars so only one strip of buttons is ever open.
-			for (const bar of [muteBar, blockBar, leaveBar, locationBar])
+			for (const bar of [muteBar, blockBar, leaveBar, locationBar, pollBar])
 			{
 				bar.hidden = true;
 			}
 
 			actionText.textContent = T("chat.quoteLine", { name: Owls.Store.GetDisplayName(message.sender), text: DescribeOwl(message) });
 			replyAction.hidden = isUnsent || composer.hidden;
+			forwardAction.hidden = !CanForward(message);
 			pinAction.hidden = isUnsent || !CanPinOwls();
 			pinAction.lastChild.textContent = isPinned ? T("chat.unpin") : T("chat.pin");
 			unsendAction.hidden = !CanUnsend(message);
@@ -725,16 +871,34 @@ Owls.Screens.Chat = (() =>
 		}
 
 		/// <summary>
-		/// Scroll to a loaded owl and make it glow for a moment (from a quote or the pinned bar).
+		/// Scroll to an owl and make it glow for a moment (from a quote, the pinned bar or a search result).
+		/// An owl further back than the loaded history is reached by loading older pages first.
 		/// </summary>
 		/// <param name="messageId">Message ID</param>
-		function JumpTo(messageId)
+		async function JumpTo(messageId)
 		{
-			const bubble = messages.querySelector(`[data-message-id="${messageId}"]`);
+			if (isJumping)
+			{
+				return;
+			}
+
+			const history = Owls.Store.GetHistory(chatId);
+			let bubble = messages.querySelector(`[data-message-id="${messageId}"]`);
+
+			// IDs only grow, so an owl older than the oldest one loaded can only be on an older page.
+			isJumping = true;
+
+			for (let page = 0; !bubble && page < maxJumpPages && history.hasMore && history.messages.length > 0 && history.messages[0].id > messageId; ++page)
+			{
+				await LoadOlder();
+				bubble = messages.querySelector(`[data-message-id="${messageId}"]`);
+			}
+
+			isJumping = false;
 
 			if (!bubble)
 			{
-				ShowError(Owls.Store.GetHistory(chatId).hasMore ? T("chat.jumpFurther") : T("chat.jumpGone"));
+				ShowError(history.hasMore && history.messages.length > 0 && history.messages[0].id > messageId ? T("chat.jumpFurther") : T("chat.jumpGone"));
 				return;
 			}
 
@@ -754,6 +918,161 @@ Owls.Screens.Chat = (() =>
 			if (chat && chat.pinnedMessage)
 			{
 				JumpTo(chat.pinnedMessage.id);
+			}
+		});
+
+		// ========================
+		// Search
+		// ========================
+
+		/// <summary>
+		/// Open the search field under the header, or close it and go back to the chat.
+		/// </summary>
+		function ToggleSearch()
+		{
+			if (searchRow.hidden)
+			{
+				searchRow.hidden = false;
+				searchButton.classList.add("is-active");
+				Select(0);
+				searchInput.focus();
+				return;
+			}
+
+			CloseSearch();
+		}
+
+		/// <summary>
+		/// Close the search and show the chat again.
+		/// </summary>
+		function CloseSearch()
+		{
+			clearTimeout(searchTimer);
+			++searchSerial;
+			searchInput.value = "";
+			searchRow.hidden = true;
+			searchResults.hidden = true;
+			body.hidden = false;
+			searchButton.classList.remove("is-active");
+		}
+
+		/// <summary>
+		/// A line of a found owl's text around where the search matched.
+		/// </summary>
+		/// <param name="text">The owl's text in one line</param>
+		/// <param name="query">What was searched for</param>
+		/// <returns>{ before, match, after } so the match can be shown apart</returns>
+		function GetSnippet(text, query)
+		{
+			const at = text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+
+			// The server matches without regard to accents too, so the match may not be found here; the line is then shown from its start.
+			if (at < 0)
+			{
+				return { before: text, match: "", after: "" };
+			}
+
+			const start = Math.max(0, at - snippetLead);
+			return { before: `${start > 0 ? "…" : ""}${text.slice(start, at)}`, match: text.slice(at, at + query.length), after: text.slice(at + query.length) };
+		}
+
+		/// <summary>
+		/// Build the row of one found owl. Tapping it closes the search and jumps to the owl in the chat.
+		/// </summary>
+		/// <param name="message">Found message</param>
+		/// <param name="query">What was searched for</param>
+		/// <returns>Row element</returns>
+		function CreateSearchRow(message, query)
+		{
+			const snippet = GetSnippet(Owls.Store.GetMessageText(message).replace(/\s+/g, " "), query);
+			const name = Element("span", { className: "row-title", text: Owls.Store.GetDisplayName(message.sender) });
+			name.style.color = Owls.Util.GetNameColour(message.sender);
+
+			return Element("button", { className: "list-row search-result", on: { click: () =>
+			{
+				CloseSearch();
+				JumpTo(message.id);
+			} } },
+			[
+				Element("span", { className: "row-text" },
+				[
+					name,
+					Element("span", { className: "row-subtitle" }, [Element("span", { text: snippet.before }), Element("mark", { text: snippet.match }), Element("span", { text: snippet.after })]),
+				]),
+				Element("span", { className: "row-meta" }, [Element("span", { text: Owls.Util.FormatListTime(message.sentAt) })]),
+			]);
+		}
+
+		/// <summary>
+		/// Look for the text in the search field across the whole chat (the server searches, not only the owls loaded here).
+		/// </summary>
+		async function RunSearch()
+		{
+			clearTimeout(searchTimer);
+			const query = searchInput.value.replace(/\s+/g, " ").trim();
+			const serial = ++searchSerial;
+
+			if (query.length < minSearchLength)
+			{
+				searchResults.hidden = true;
+				body.hidden = false;
+				return;
+			}
+
+			searchResults.hidden = false;
+			body.hidden = true;
+			searchResults.replaceChildren(Widgets.EmptyState(T("chat.searching")));
+
+			const result = await Owls.Bridge.Request("chats.search", { chatId, query });
+
+			// A newer search (or closing the field) already replaced this one.
+			if (serial !== searchSerial)
+			{
+				return;
+			}
+
+			if (!result.ok)
+			{
+				searchResults.replaceChildren(Widgets.EmptyState(result.error));
+				return;
+			}
+
+			const found = (result.data.messages || []).filter((message) => !Owls.Store.IsBlocked(message.sender) || message.sender === Owls.Store.state.me.number);
+
+			if (found.length === 0)
+			{
+				searchResults.replaceChildren(Widgets.EmptyState(T("chat.searchNone")));
+				return;
+			}
+
+			const rows = found.map((message) => CreateSearchRow(message, query));
+
+			if (result.data.hasMore)
+			{
+				rows.push(Widgets.EmptyState(T("chat.searchMore")));
+			}
+
+			searchResults.replaceChildren(...rows);
+		}
+
+		searchInput.addEventListener("input", () =>
+		{
+			clearTimeout(searchTimer);
+			searchTimer = setTimeout(RunSearch, searchDelayMs);
+		});
+		searchInput.addEventListener("keydown", (event) =>
+		{
+			if (event.key === "Enter")
+			{
+				event.preventDefault();
+				RunSearch();
+			}
+			else if (event.key === "Escape")
+			{
+				// Escape closes the search, not the chat.
+				event.preventDefault();
+				event.stopPropagation();
+				CloseSearch();
 			}
 		});
 
@@ -856,6 +1175,118 @@ Owls.Screens.Chat = (() =>
 		}
 
 		/// <summary>
+		/// Build the inside of a poll's bubble: the question, then one button per answer with its share of the votes and who chose it.
+		/// Tapping an answer votes for it; tapping your own choice again takes it back.
+		/// </summary>
+		/// <param name="message">Message with kind "poll"</param>
+		/// <returns>Card element</returns>
+		function CreatePollCard(message)
+		{
+			const poll = Owls.Store.ParsePoll(message);
+
+			if (!poll)
+			{
+				return Element("span", { className: "unsent-text", text: T("chat.pollUnavailable") });
+			}
+
+			const me = Owls.Store.state.me.number;
+			const votes = Array.isArray(message.votes) ? message.votes : [];
+			const mine = new Set((votes.find((vote) => vote.number === me) || { options: [] }).options);
+			const canVote = message.id !== undefined && !Owls.Store.IsInFlight(message) && !composer.hidden;
+
+			const rows = poll.options.map((option, index) =>
+			{
+				const voters = votes.filter((vote) => vote.options.includes(index)).map((vote) => vote.number);
+				const share = votes.length > 0 ? Math.round((voters.length / votes.length) * 100) : 0;
+				const isChosen = mine.has(index);
+				const mark = Element("span", { className: "poll-mark" });
+				mark.innerHTML = poll.multiple ? (isChosen ? Owls.Icons.boxOn : Owls.Icons.box) : (isChosen ? Owls.Icons.radioOn : Owls.Icons.radio);
+
+				const bar = Element("span", { className: "poll-bar-fill" });
+				bar.style.width = `${share}%`;
+
+				const names = voters.map(Owls.Store.GetDisplayName);
+				const row = Element("button", { className: `poll-option${isChosen ? " is-chosen" : ""}` },
+				[
+					Element("span", { className: "poll-option-head" }, [mark, Element("span", { className: "poll-option-text", text: option }), Element("span", { className: "poll-count", text: String(voters.length) })]),
+					Element("span", { className: "poll-bar-track" }, [bar]),
+					names.length > 0 ? Element("span", { className: "poll-voters", text: names.length > 3 ? T("common.listAndMore", { list: names.slice(0, 3).join(T("common.listSeparator")), count: names.length - 3 }) : names.join(T("common.listSeparator")) }) : null,
+				]);
+
+				row.disabled = !canVote;
+				row.addEventListener("click", (event) =>
+				{
+					event.stopPropagation();
+
+					// One answer: tapping it again takes the vote back. Several: each tap ticks or unticks one.
+					const next = new Set(poll.multiple ? mine : []);
+
+					if (mine.has(index))
+					{
+						next.delete(index);
+					}
+					else
+					{
+						next.add(index);
+					}
+
+					Vote(message.id, [...next].sort((first, second) => first - second));
+				});
+				return row;
+			});
+
+			return Element("div", { className: "poll-card" },
+			[
+				Element("span", { className: "poll-question", text: poll.question }),
+				Element("span", { className: "poll-hint", text: poll.multiple ? T("chat.pollHintMultiple") : T("chat.pollHintSingle") }),
+				...rows,
+				Element("span", { className: "poll-total", text: T("chat.pollVotes", { count: votes.length }) }),
+			]);
+		}
+
+		/// <summary>
+		/// Cast, change or take back the player's vote in a poll.
+		/// </summary>
+		/// <param name="messageId">Poll message ID</param>
+		/// <param name="options">Indexes of the chosen answers; empty takes the vote back</param>
+		async function Vote(messageId, options)
+		{
+			const result = await Owls.Bridge.Request("polls.vote", { chatId, messageId, options });
+			ShowError(result.ok ? "" : result.error);
+
+			if (result.ok)
+			{
+				Owls.Store.SetPollVotes(chatId, messageId, result.data.votes);
+			}
+		}
+
+		/// <summary>
+		/// Send the poll written in the poll bar.
+		/// </summary>
+		async function SendPoll()
+		{
+			const options = [...pollOptions.children].map((field) => field.value.trim()).filter((option) => option.length > 0);
+			pollSend.disabled = true;
+			const result = await Owls.Bridge.Request("messages.sendPoll", { chatId, question: pollQuestion.value, options, multiple: pollMultiple.classList.contains("is-on") });
+			pollSend.disabled = false;
+
+			if (!result.ok)
+			{
+				pollError.textContent = result.error;
+				return;
+			}
+
+			ShowBar(null);
+			ResetPoll();
+			Owls.Store.SetServerTime(result.data.serverNow);
+			Owls.Store.AddMessage(result.data.message);
+			lastReadSent = Math.max(lastReadSent, result.data.message.id);
+			body.scrollTop = body.scrollHeight;
+		}
+
+		pollSend.addEventListener("click", SendPoll);
+
+		/// <summary>
 		/// The quote shown at the top of a reply's bubble. Tapping it jumps to the answered owl.
 		/// </summary>
 		/// <param name="quote">{ id, sender, kind, body, unsent }</param>
@@ -948,6 +1379,11 @@ Owls.Screens.Chat = (() =>
 				classes.push("is-location");
 			}
 
+			if (message.kind === "poll" && !isUnsent)
+			{
+				classes.push("is-poll");
+			}
+
 			timeLine.appendChild(Element("span", { text: timeText }));
 
 			if (statusIcon)
@@ -966,11 +1402,21 @@ Owls.Screens.Chat = (() =>
 
 			const content = isUnsent
 				? Element("span", { className: "unsent-text", text: isMine ? T("message.unsent.you") : T("message.unsent") })
-				: message.kind === "location" ? CreateLocationCard(message, isMine) : Element("span", { text: message.body });
+				: message.kind === "location" ? CreateLocationCard(message, isMine) : message.kind === "poll" ? CreatePollCard(message) : Element("span", { text: message.body });
+
+			let forwarded = null;
+
+			if (message.forwarded && !isUnsent)
+			{
+				forwarded = Element("span", { className: "bubble-forwarded" });
+				forwarded.innerHTML = Owls.Icons.forward;
+				forwarded.appendChild(Element("span", { text: T("chat.forwarded") }));
+			}
 
 			const bubble = Element("div", { className: classes.join(" ") },
 			[
 				sender,
+				forwarded,
 				message.replyTo && !isUnsent ? CreateQuote(message.replyTo) : null,
 				content,
 				timeLine,
@@ -1217,6 +1663,7 @@ Owls.Screens.Chat = (() =>
 
 			const quote = replyTo;
 			input.value = "";
+			Owls.Store.SetDraft(chatId, "");
 			emojiPicker.Hide();
 			emojiButton.classList.remove("is-active");
 			SetReply(null);
@@ -1294,6 +1741,7 @@ Owls.Screens.Chat = (() =>
 			input.selectionStart = input.selectionEnd = start + text.length;
 			input.focus();
 			UpdateComposer();
+			Owls.Store.SetDraft(chatId, input.value);
 			PingTyping();
 		}
 
@@ -1347,6 +1795,7 @@ Owls.Screens.Chat = (() =>
 		input.addEventListener("input", () =>
 		{
 			UpdateComposer();
+			Owls.Store.SetDraft(chatId, input.value);
 			PingTyping();
 		});
 		input.addEventListener("keydown", (event) =>
@@ -1374,6 +1823,7 @@ Owls.Screens.Chat = (() =>
 				input.value = `${input.value.slice(0, start)}\n${input.value.slice(input.selectionEnd)}`;
 				input.selectionStart = input.selectionEnd = start + 1;
 				UpdateComposer();
+				Owls.Store.SetDraft(chatId, input.value);
 				return;
 			}
 
@@ -1456,6 +1906,9 @@ Owls.Screens.Chat = (() =>
 			}
 		}
 
+		// Whatever was left unsent here last time is waiting in the composer.
+		input.value = Owls.Store.GetDraft(chatId).slice(0, maxLength);
+
 		RenderHeader();
 		RenderMessages("bottom");
 		UpdateComposer();
@@ -1483,6 +1936,7 @@ Owls.Screens.Chat = (() =>
 		{
 			clearTimeout(landingTimer);
 			clearTimeout(confirmTimer);
+			clearTimeout(searchTimer);
 		}
 
 		return { element, Refresh, Destroy, chatId, OnOpened: MarkRead };

@@ -5,7 +5,7 @@ const { Ok, Fail } = require("./Result.js");
 const { Problem } = require("./Lang.js");
 const { ClampInteger } = require("./Config.js");
 const { Logger } = require("./Logger.js");
-const { invalidId, IsSenderNumber, MessageKind, MemberRole } = require("./Database.js");
+const { invalidId, IsSenderNumber, MessageKind, MemberRole, ToQuote, ReadPoll } = require("./Database.js");
 const { CheckAvatarUrl } = require("./Avatars.js");
 
 /// <summary>
@@ -17,7 +17,19 @@ const typingDurationMs = 5000;
 /// <summary>
 /// Message kinds that are owls someone sent (as opposed to notes about the chat).
 /// </summary>
-const owlKinds = Object.freeze([MessageKind.Text, MessageKind.Location]);
+const owlKinds = Object.freeze([MessageKind.Text, MessageKind.Location, MessageKind.Poll]);
+
+/// <summary>
+/// Message kinds that can be forwarded. A poll belongs to the bulk owl it asks; a copy elsewhere would count other votes.
+/// </summary>
+const forwardKinds = Object.freeze([MessageKind.Text, MessageKind.Location]);
+
+/// <summary>
+/// Shortest and longest text searched for inside a chat, and the most results sent back.
+/// </summary>
+const minSearchLength = 2;
+const maxSearchLength = 64;
+const maxSearchResults = 30;
 
 /// <summary>
 /// Longest accepted client-generated key for matching a sent owl to its optimistic bubble.
@@ -131,6 +143,17 @@ class ChatService
 	/// Per-owl limiter for group administration, keyed by owl number.
 	/// </summary>
 	#adminLimiter;
+
+	/// <summary>
+	/// Per-owl limiters for searching a chat and for poll votes, keyed by owl number.
+	/// </summary>
+	#searchLimiter;
+	#voteLimiter;
+
+	/// <summary>
+	/// NumberDialler instance, for chats opened by typing in a number.
+	/// </summary>
+	#dialler;
 
 	/// <summary>
 	/// Landing timers of owls in flight, by message ID.
@@ -371,8 +394,11 @@ class ChatService
 		const target = chat.kind === "direct" ? describe(recipients[0] || "") : chat.kind === "group" ? `bulk owl "${chat.title || "untitled"}" (#${chat.id}, ${chat.members.length} members)` : "everyone";
 		const category = origin === "announcement" ? "announcements" : origin === "system" ? "system" : "messages";
 		const isLocation = message.kind === MessageKind.Location;
-		const title = origin === "announcement" ? "Announcement" : origin === "system" ? "Official owl" : `${chat.kind === "group" ? "Bulk owl" : "Owl"}${isLocation ? " (location)" : ""}`;
-		const fields = this.#audit.ShouldIncludeBodies() ? [{ name: isLocation ? "Location" : "Message", value: message.body }] : [];
+		const poll = message.kind === MessageKind.Poll ? ReadPoll(message.body) : null;
+		const label = isLocation ? " (location)" : poll ? " (poll)" : "";
+		const title = origin === "announcement" ? "Announcement" : origin === "system" ? "Official owl" : `${chat.kind === "group" ? "Bulk owl" : "Owl"}${message.forwarded ? " (forwarded)" : ""}${label}`;
+		const value = poll ? `${poll.question}\n${poll.options.map((option) => `• ${option}`).join("\n")}` : message.body;
+		const fields = this.#audit.ShouldIncludeBodies() ? [{ name: isLocation ? "Location" : poll ? "Poll" : "Message", value }] : [];
 
 		this.#audit.Log(category, title, `${describe(message.sender)} → ${target}${flightSeconds > 0 ? `\nLands in ${flightSeconds}s` : ""}`, fields);
 
@@ -386,6 +412,7 @@ class ChatService
 			origin,
 			recipients,
 			body: message.body,
+			forwarded: message.forwarded === true,
 			sentAt: message.sentAt,
 			deliverAt: message.deliverAt,
 		});
@@ -466,7 +493,7 @@ class ChatService
 	/// <summary>
 	/// Constructor.
 	/// </summary>
-	/// <param name="services">{ database, directory, outbox, hmp, config, blocks, senders, flight, audit, hooks, locations }</param>
+	/// <param name="services">{ database, directory, outbox, hmp, config, blocks, senders, flight, audit, hooks, locations, settings, dialler }</param>
 	constructor(services)
 	{
 		this.#database = services.database;
@@ -481,9 +508,12 @@ class ChatService
 		this.#hooks = services.hooks;
 		this.#locations = services.locations;
 		this.#settings = services.settings;
+		this.#dialler = services.dialler;
 		this.#sendLimiter = this.#hmp.rateLimit.create({ limit: this.#config.messages.rateLimitCount, windowMs: this.#config.messages.rateLimitWindowMs });
 		this.#typingLimiter = this.#hmp.rateLimit.create({ limit: 3, windowMs: 3000 });
 		this.#adminLimiter = this.#hmp.rateLimit.create({ limit: 10, windowMs: 10000 });
+		this.#searchLimiter = this.#hmp.rateLimit.create({ limit: 10, windowMs: 10000 });
+		this.#voteLimiter = this.#hmp.rateLimit.create({ limit: 10, windowMs: 10000 });
 	}
 
 	/// <summary>
@@ -494,6 +524,8 @@ class ChatService
 		this.#sendLimiter.sweep(this.#config.messages.rateLimitWindowMs * 4);
 		this.#typingLimiter.sweep(12000);
 		this.#adminLimiter.sweep(40000);
+		this.#searchLimiter.sweep(40000);
+		this.#voteLimiter.sweep(40000);
 	}
 
 	// ========================
@@ -581,6 +613,47 @@ class ChatService
 		}
 
 		return Ok({ chat });
+	}
+
+	/// <summary>
+	/// Open the one-to-one chat with an owl by its number: one it already knows (from a call or an earlier chat),
+	/// or, with numbers.dialling on, any live owl whose number was typed in.
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ number }</param>
+	/// <returns>Result carrying the chat summary</returns>
+	async OpenNumber(entry, data)
+	{
+		const typed = this.#dialler.Normalise(data.number);
+
+		if (!typed)
+		{
+			return Fail("error.numberInvalid");
+		}
+
+		if (typed === entry.number)
+		{
+			return Fail("error.selfOwl");
+		}
+
+		const related = await this.#database.AreRelated(entry.number, typed);
+
+		if (related === null)
+		{
+			return Fail("error.chatOpenFailed");
+		}
+
+		// Owls it already knows cost nothing against the dialling limit; only strangers are looked up.
+		const target = related ? { number: typed, error: "" } : await this.#dialler.Resolve(entry, typed);
+
+		if (target.error)
+		{
+			return Fail(target.error);
+		}
+
+		const chatId = await this.#EnsureDirectChat(entry.number, target.number);
+		const chat = chatId > 0 ? await this.#database.GetChatForMember(chatId, entry.number) : null;
+		return chat ? Ok({ chat }) : Fail("error.chatOpenFailed");
 	}
 
 	/// <summary>
@@ -752,13 +825,326 @@ class ChatService
 
 		if (replyTo)
 		{
-			const reply = { sender: replyTo.key, fromNumber: entry.number, characterId: entry.characterId, characterName: entry.characterName, playerId: entry.playerId, body, chatId, messageId: message.id };
-
-			// The callback belongs to another resource; whatever it does, it must not break this owl.
-			Promise.resolve().then(() => replyTo.onReply(reply)).catch((error) => Logger.LogError("Chats", `The reply handler of sender "${replyTo.key}" (${replyTo.resource}) failed: ${Logger.Describe(error)}`));
+			this.#PassReply(replyTo, entry, message);
 		}
 
 		return Ok({ message, clientKey, serverNow: Date.now() });
+	}
+
+	/// <summary>
+	/// Hand an owl written to a system sender to the reply handler of the resource behind it.
+	/// </summary>
+	/// <param name="replyTo">Live sender registration with an onReply handler</param>
+	/// <param name="entry">Directory entry of the writing owl</param>
+	/// <param name="message">Stored message record</param>
+	#PassReply(replyTo, entry, message)
+	{
+		const reply = { sender: replyTo.key, fromNumber: entry.number, characterId: entry.characterId, characterName: entry.characterName, playerId: entry.playerId, body: message.body, chatId: message.chatId, messageId: message.id };
+
+		// The callback belongs to another resource; whatever it does, it must not break this owl.
+		Promise.resolve().then(() => replyTo.onReply(reply)).catch((error) => Logger.LogError("Chats", `The reply handler of sender "${replyTo.key}" (${replyTo.resource}) failed: ${Logger.Describe(error)}`));
+	}
+
+	/// <summary>
+	/// Clean a one-line text such as a poll's question or one of its answers.
+	/// </summary>
+	/// <param name="raw">Text as supplied</param>
+	/// <param name="maxLength">Longest allowed length</param>
+	/// <returns>Cleaned text, possibly empty</returns>
+	#CleanLine(raw, maxLength)
+	{
+		return this.#hmp.text.clean(String(raw ?? ""), maxLength).replace(/\s+/g, " ").trim();
+	}
+
+	/// <summary>
+	/// Find the owls of a chat that contain some text. Only what the member can see is searched.
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ chatId, query }</param>
+	/// <returns>Result carrying { chatId, query, messages, hasMore } with the newest match first</returns>
+	async Search(entry, data)
+	{
+		const chatId = this.#ReadId(data.chatId);
+		const query = String(data.query ?? "").replace(/\s+/g, " ").trim().slice(0, maxSearchLength);
+
+		if (query.length < minSearchLength)
+		{
+			return Fail(Problem("error.searchShort", { count: minSearchLength }));
+		}
+
+		if (!this.#searchLimiter.allow(entry.number))
+		{
+			return Fail("error.slowDown");
+		}
+
+		const chat = chatId > 0 ? await this.#database.GetChatForMember(chatId, entry.number) : null;
+
+		if (!chat)
+		{
+			return Fail("error.chatGone");
+		}
+
+		const page = await this.#database.SearchMessages(chatId, entry.number, query, maxSearchResults);
+
+		if (!page)
+		{
+			return Fail("error.searchFailed");
+		}
+
+		// A poll's body is JSON, which LIKE also matches on its field names; keep the polls whose question or answers say it.
+		const needle = query.toLocaleLowerCase();
+		const messages = page.messages.filter((message) =>
+		{
+			const poll = message.kind === MessageKind.Poll ? ReadPoll(message.body) : null;
+			return message.kind !== MessageKind.Poll || (!!poll && [poll.question, ...poll.options].some((text) => text.toLocaleLowerCase().includes(needle)));
+		});
+
+		return Ok({ chatId, query, messages, hasMore: page.hasMore });
+	}
+
+	/// <summary>
+	/// Forward one owl to other chats and contacts: each gets a copy marked "forwarded", sent by the forwarding owl.
+	/// Every copy flies, is blocked and counts against the send rate limit like an owl written there.
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ chatId, messageId, chatIds, contactIds } naming the owl and where its copies go</param>
+	/// <returns>Result carrying { messages, chats, failures, serverNow } where failures lists { chatId, contactId, errorKey } for targets that were refused</returns>
+	async Forward(entry, data)
+	{
+		const limit = this.#config.messages.maxForwardTargets;
+
+		if (limit === 0)
+		{
+			return Fail("error.forwardOff");
+		}
+
+		const ReadIds = (list) => (Array.isArray(list) ? [...new Set(list.slice(0, limit + 1).map((id) => this.#ReadId(id)).filter((id) => id > 0))] : []);
+		const chatIds = ReadIds(data.chatIds);
+		const contactIds = ReadIds(data.contactIds);
+
+		if (chatIds.length + contactIds.length === 0)
+		{
+			return Fail("error.forwardNoTarget");
+		}
+
+		if (chatIds.length + contactIds.length > limit)
+		{
+			return Fail(Problem("error.forwardTooMany", { count: limit }));
+		}
+
+		const chatId = this.#ReadId(data.chatId);
+		const messageId = this.#ReadId(data.messageId);
+		const message = chatId > 0 && messageId > 0 ? await this.#database.GetVisibleMessage(chatId, entry.number, messageId) : null;
+
+		if (!message || !forwardKinds.includes(message.kind) || message.unsentAt > 0)
+		{
+			return Fail("error.cannotForward");
+		}
+
+		if (message.kind === MessageKind.Location && !this.#config.locations.enabled)
+		{
+			return Fail("error.locationsOff");
+		}
+
+		const targets = new Map();
+		const failures = [];
+
+		for (const id of chatIds)
+		{
+			const chat = await this.#database.GetChatForMember(id, entry.number);
+
+			if (chat)
+			{
+				targets.set(chat.id, chat);
+			}
+			else
+			{
+				failures.push({ chatId: id, contactId: 0, errorKey: "error.chatGone" });
+			}
+		}
+
+		for (const id of contactIds)
+		{
+			const contact = await this.#database.GetContact(entry.number, id);
+			const directId = contact && contact.number !== entry.number ? await this.#EnsureDirectChat(entry.number, contact.number) : 0;
+			const chat = directId > 0 ? await this.#database.GetChatForMember(directId, entry.number) : null;
+
+			if (chat)
+			{
+				targets.set(chat.id, chat);
+			}
+			else
+			{
+				failures.push({ chatId: 0, contactId: id, errorKey: contact ? "error.chatOpenFailed" : "error.contactGone" });
+			}
+		}
+
+		const sent = [];
+
+		for (const chat of targets.values())
+		{
+			const { error, replyTo } = await this.#CheckWritable(entry, chat);
+			const refusal = error || (replyTo && message.kind !== MessageKind.Text ? "error.writtenRepliesOnly" : "") || (!this.#sendLimiter.allow(entry.number) ? "error.owlsTired" : "");
+
+			if (refusal)
+			{
+				failures.push({ chatId: chat.id, contactId: 0, errorKey: refusal });
+				continue;
+			}
+
+			const copy = await this.#database.InsertMessage(chat.id, entry.number, message.body, replyTo ? 0 : this.#flight.GetDeliverAt(entry, chat), message.kind, null, true);
+
+			if (!copy)
+			{
+				failures.push({ chatId: chat.id, contactId: 0, errorKey: "error.sendFailed" });
+				continue;
+			}
+
+			await this.#Publish(chat, copy);
+			this.#Record(chat, copy, "player");
+
+			if (replyTo)
+			{
+				this.#PassReply(replyTo, entry, copy);
+			}
+
+			sent.push({ chat, message: copy });
+		}
+
+		if (sent.length === 0)
+		{
+			return Fail(failures.length > 0 ? failures[0].errorKey : "error.sendFailed");
+		}
+
+		return Ok({ messages: sent.map((item) => item.message), chats: sent.map((item) => item.chat), failures, serverNow: Date.now() });
+	}
+
+	// ========================
+	// Polls
+	// ========================
+
+	/// <summary>
+	/// Ask a bulk owl a question with answers to vote on. It flies, lands and counts as unread like a written owl.
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ chatId, question, options, multiple } where multiple lets each member pick more than one answer</param>
+	/// <returns>Result carrying { message, serverNow }</returns>
+	async SendPoll(entry, data)
+	{
+		const polls = this.#config.polls;
+
+		if (!polls.enabled)
+		{
+			return Fail("error.pollsOff");
+		}
+
+		if (!this.#sendLimiter.allow(entry.number))
+		{
+			return Fail("error.owlsTired");
+		}
+
+		const chatId = this.#ReadId(data.chatId);
+		const chat = chatId > 0 ? await this.#database.GetChatForMember(chatId, entry.number) : null;
+
+		if (!chat)
+		{
+			return Fail("error.chatGone");
+		}
+
+		if (chat.kind !== "group")
+		{
+			return Fail("error.pollsOnlyBulk");
+		}
+
+		const question = this.#CleanLine(data.question, polls.maxQuestionLength);
+		const raw = Array.isArray(data.options) ? data.options.slice(0, polls.maxOptions + 1) : [];
+		const options = raw.map((option) => this.#CleanLine(option, polls.maxOptionLength)).filter((option) => option.length > 0);
+
+		if (question.length === 0)
+		{
+			return Fail("error.pollQuestionMissing");
+		}
+
+		if (options.length > polls.maxOptions)
+		{
+			return Fail(Problem("error.pollTooMany", { count: polls.maxOptions }));
+		}
+
+		if (options.length < 2)
+		{
+			return Fail("error.pollTooFew");
+		}
+
+		if (new Set(options.map((option) => option.toLocaleLowerCase())).size !== options.length)
+		{
+			return Fail("error.pollDuplicate");
+		}
+
+		const body = JSON.stringify({ question, options, multiple: data.multiple === true });
+		const message = await this.#database.InsertMessage(chatId, entry.number, body, this.#flight.GetDeliverAt(entry, chat), MessageKind.Poll);
+
+		if (!message)
+		{
+			return Fail("error.sendFailed");
+		}
+
+		message.votes = [];
+		await this.#Publish(chat, message);
+		this.#Record(chat, message, "player");
+		return Ok({ message, serverNow: Date.now() });
+	}
+
+	/// <summary>
+	/// Vote in a poll, change the vote or take it back (an empty list). Every member online sees the new count at once.
+	/// </summary>
+	/// <param name="entry">Directory entry of the voting owl</param>
+	/// <param name="data">{ chatId, messageId, options } where options are the indexes of the chosen answers</param>
+	/// <returns>Result carrying { chatId, messageId, votes } with every vote in the poll</returns>
+	async Vote(entry, data)
+	{
+		if (!this.#voteLimiter.allow(entry.number))
+		{
+			return Fail("error.slowDown");
+		}
+
+		const chatId = this.#ReadId(data.chatId);
+		const messageId = this.#ReadId(data.messageId);
+		const chat = chatId > 0 ? await this.#database.GetChatForMember(chatId, entry.number) : null;
+
+		if (!chat || chat.kind !== "group")
+		{
+			return Fail("error.chatGone");
+		}
+
+		const message = messageId > 0 ? await this.#database.GetVisibleMessage(chatId, entry.number, messageId) : null;
+		const poll = message && message.kind === MessageKind.Poll && message.unsentAt === 0 ? ReadPoll(message.body) : null;
+
+		if (!poll)
+		{
+			return Fail("error.pollGone");
+		}
+
+		const requested = Array.isArray(data.options) ? data.options.slice(0, poll.options.length).map(Number) : [];
+		const options = [...new Set(requested)].filter((index) => Number.isInteger(index) && index >= 0 && index < poll.options.length).sort((first, second) => first - second);
+
+		if (options.length !== requested.length)
+		{
+			return Fail("error.pollChoice");
+		}
+
+		if (!poll.multiple && options.length > 1)
+		{
+			return Fail("error.pollOneAnswer");
+		}
+
+		if (!await this.#database.SetPollVotes(messageId, entry.number, options))
+		{
+			return Fail("error.voteFailed");
+		}
+
+		const votes = await this.#database.ListPollVotes(messageId) || [];
+		this.#PushToMembers(chat.members, entry.number, "poll:votes", { chatId, messageId, votes });
+		return Ok({ chatId, messageId, votes });
 	}
 
 	/// <summary>
@@ -1155,7 +1541,7 @@ class ChatService
 		}
 
 		const chat = await this.#database.GetChat(chatId);
-		const pinnedMessage = message ? { id: message.id, sender: message.sender, kind: message.kind, body: message.body.slice(0, 200), unsent: false, sentAt: message.sentAt } : null;
+		const pinnedMessage = message ? { ...ToQuote(message), sentAt: message.sentAt } : null;
 
 		if (chat)
 		{

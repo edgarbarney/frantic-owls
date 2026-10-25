@@ -3118,3 +3118,234 @@ button.settings-card:hover
 		opacity: 0.9;
 	}
 }
+
+/* ======================== */
+/* Search, Forward & Drafts */
+/* ======================== */
+
+/* A chat's header holds up to five buttons beside its title, so they sit closer together than other headers' do. */
+.screen-header:has(.chat-header-button)
+{
+	gap: 0.15rem;
+	padding-right: 0.4rem;
+}
+
+.screen-header:has(.chat-header-button) > .icon-button
+{
+	width: 1.95rem;
+}
+
+.screen-header:has(.chat-header-button) > .chat-header-button
+{
+	margin-right: 0.25rem;
+}
+
+.search-result .row-subtitle mark
+{
+	border-radius: 0.15rem;
+	background: rgba(var(--accent-rgb), 0.3);
+	color: var(--text);
+}
+
+.bubble-forwarded
+{
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	margin-bottom: 0.15rem;
+	font-size: 0.68rem;
+	font-style: italic;
+	opacity: 0.75;
+}
+
+.bubble-forwarded i
+{
+	font-size: 0.62rem;
+}
+
+.forward-preview
+{
+	overflow: hidden;
+	padding-left: 0.5rem;
+	border-left: 0.15rem solid var(--gold);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: 0.8rem;
+	color: var(--text-dim);
+}
+
+.draft-label
+{
+	font-weight: 700;
+	color: var(--danger);
+}
+
+.dial-input
+{
+	font-size: 1.3rem;
+	letter-spacing: 0.15em;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.details .field-hint,
+.dial-own
+{
+	align-self: stretch;
+}
+
+.dial-own
+{
+	text-align: center;
+}
+
+/* ======================== */
+/* Polls                    */
+/* ======================== */
+
+.bubble.is-poll
+{
+	min-width: 14rem;
+	white-space: normal;
+}
+
+.poll-card
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.poll-question
+{
+	font-family: var(--font-heading);
+	font-size: 0.9rem;
+	font-weight: 700;
+}
+
+.poll-hint,
+.poll-total
+{
+	font-size: 0.7rem;
+	opacity: 0.7;
+}
+
+.poll-option
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	width: 100%;
+	padding: 0.3rem 0.4rem;
+	border-radius: 0.5rem;
+	text-align: left;
+	color: inherit;
+}
+
+.poll-option:hover:not(:disabled)
+{
+	background: rgba(0, 0, 0, 0.1);
+}
+
+.poll-option:disabled
+{
+	cursor: default;
+}
+
+.poll-option-head
+{
+	display: flex;
+	align-items: center;
+	gap: 0.45rem;
+}
+
+.poll-mark
+{
+	width: 1rem;
+	flex: none;
+	text-align: center;
+}
+
+.bubble.is-theirs .poll-option.is-chosen .poll-mark
+{
+	color: var(--gold);
+}
+
+.poll-option-text
+{
+	flex: 1;
+	min-width: 0;
+	font-size: 0.85rem;
+	word-break: break-word;
+}
+
+.poll-count
+{
+	flex: none;
+	font-size: 0.75rem;
+	opacity: 0.8;
+}
+
+.poll-bar-track
+{
+	display: block;
+	overflow: hidden;
+	height: 0.3rem;
+	margin-left: 1.45rem;
+	border-radius: 0.15rem;
+	background: rgba(0, 0, 0, 0.15);
+}
+
+.poll-bar-fill
+{
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--gold);
+	transition: width 0.25s ease;
+}
+
+.bubble.is-mine .poll-bar-fill
+{
+	background: var(--bubble-mine-text);
+}
+
+.poll-voters
+{
+	overflow: hidden;
+	margin-left: 1.45rem;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: 0.66rem;
+	opacity: 0.7;
+}
+
+.poll-bar
+{
+	overflow-y: auto;
+	max-height: 60%;
+}
+
+.poll-inputs
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.poll-bar .text-input
+{
+	padding: 0.4rem 0.6rem;
+}
+
+.poll-bar .primary-button
+{
+	padding: 0.4rem 0.9rem;
+}
+
+.poll-bar > .secondary-button
+{
+	align-self: flex-start;
+	padding: 0.35rem 0.7rem;
+	font-size: 0.75rem;
+}

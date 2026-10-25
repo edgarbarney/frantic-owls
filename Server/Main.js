@@ -18,6 +18,7 @@ const { FlightPlanner } = require("./Flight.js");
 const { SenderRegistry } = require("./Senders.js");
 const { AuditLog } = require("./AuditLog.js");
 const { LocationService } = require("./Locations.js");
+const { NumberDialler } = require("./Numbers.js");
 const { CreateApi } = require("./Api.js");
 const { RequestDispatcher } = require("./Requests.js");
 const { Ok } = require("./Result.js");
@@ -89,14 +90,15 @@ const outbox = new Outbox(config.network.flushIntervalMs, config.network.maxBatc
 const audit = new AuditLog(config.logging);
 const blocks = new BlockService(database);
 const flight = new FlightPlanner(hmp, directory, config.flight);
+const dialler = new NumberDialler(database, hmp, config.numbers);
 const settings = new SettingsService(database, config.ui, directory, config.avatars);
-const contacts = new ContactService(database, hmp, config.contacts, config.avatars);
+const contacts = new ContactService(database, hmp, config.contacts, config.avatars, dialler);
 const profiles = new ProfileService(database, directory, outbox, config.avatars);
 const senders = new SenderRegistry(database, hmp, config.avatars, PushSendersToAll);
 const locations = new LocationService(database, outbox, hmp, config.locations, () => ImportOptional("hmp-blips"));
-const chats = new ChatService({ database, directory, outbox, hmp, config, blocks, senders, flight, audit, locations, settings, hooks: { Describe, OnSent } });
+const chats = new ChatService({ database, directory, outbox, hmp, config, blocks, senders, flight, audit, locations, settings, dialler, hooks: { Describe, OnSent } });
 const inform = new InformService({ directory, contacts, profiles, outbox, hmp, config: config.inform, blocks, audit });
-const calls = new CallService({ database, directory, outbox, hmp, config: config.calls, blocks, audit, hooks: { Describe, OnCall } });
+const calls = new CallService({ database, directory, outbox, hmp, config: config.calls, blocks, audit, dialler, hooks: { Describe, OnCall } });
 const requests = new RequestDispatcher(hmp, directory, outbox, config.network);
 
 /// <summary>
@@ -465,7 +467,10 @@ requests.Register("contacts.update", (entry, data) => contacts.Update(entry, dat
 requests.Register("contacts.delete", (entry, data) => contacts.Delete(entry, data));
 requests.Register("contacts.saveFromChat", (entry, data) => contacts.SaveFromChat(entry, data));
 requests.Register("contacts.favourite", (entry, data) => contacts.SetFavourite(entry, data));
+requests.Register("contacts.addByNumber", (entry, data) => contacts.AddByNumber(entry, data));
 requests.Register("chats.openDirect", (entry, data) => chats.OpenDirect(entry, data));
+requests.Register("chats.openNumber", (entry, data) => chats.OpenNumber(entry, data));
+requests.Register("chats.search", (entry, data) => chats.Search(entry, data));
 requests.Register("chats.createGroup", (entry, data) => chats.CreateGroup(entry, data));
 requests.Register("chats.history", (entry, data) => chats.History(entry, data));
 requests.Register("chats.read", (entry, data) => chats.MarkRead(entry, data));
@@ -483,6 +488,9 @@ requests.Register("messages.sendLocation", (entry, data) => chats.SendLocation(e
 requests.Register("messages.unsend", (entry, data) => chats.Unsend(entry, data));
 requests.Register("messages.hide", (entry, data) => chats.Hide(entry, data));
 requests.Register("messages.pin", (entry, data) => chats.PinMessage(entry, data));
+requests.Register("messages.forward", (entry, data) => chats.Forward(entry, data));
+requests.Register("messages.sendPoll", (entry, data) => chats.SendPoll(entry, data));
+requests.Register("polls.vote", (entry, data) => chats.Vote(entry, data));
 requests.Register("locations.show", (entry, data) => locations.Show(entry, data));
 requests.Register("locations.hide", (entry, data) => locations.Hide(entry, data));
 requests.Register("inform.nearby", (entry) => inform.ListNearby(entry));
@@ -718,6 +726,7 @@ async function Start()
 		chats.Sweep();
 		inform.Sweep();
 		calls.Sweep();
+		dialler.Sweep();
 		requests.Sweep();
 	}, maintenanceIntervalMs);
 

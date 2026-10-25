@@ -41,6 +41,8 @@
 		{ id: 5, chatId: 3, sender: "20000004", body: "Who fed the Puffskein?", sentAt: now - 5 * minute },
 		{ id: 6, chatId: 3, sender: "20000001", body: "Not me. Probably Everett.", sentAt: now - 4 * minute, replyTo: { id: 5, sender: "20000004", kind: "text", body: "Who fed the Puffskein?", unsent: false } },
 		{ id: 11, chatId: 3, sender: me.number, body: "It was me. Sorry.", sentAt: now - 3 * minute },
+		{ id: 12, chatId: 3, sender: "20000005", kind: "poll", body: JSON.stringify({ question: "Where do we meet on Saturday?", options: ["The Room of Requirement", "Hogsmeade", "The Forbidden Forest (please no)"], multiple: false }), sentAt: now - 2 * minute, votes: [{ number: "20000001", options: [0] }, { number: "20000004", options: [1] }, { number: "20000005", options: [0] }] },
+		{ id: 13, chatId: 2, sender: "20000003", body: "Bring the map. Ominis says the Scriptorium is open again.", sentAt: now - 80 * minute, forwarded: true },
 		{ id: 7, chatId: 4, sender: "30000009", body: "Psst. I hear you sell Wiggenweld?", sentAt: now - 3 * 24 * 60 * minute },
 		{ id: 8, chatId: 5, sender: "00000001", body: "The Floo Network will be closed for maintenance tonight. Travel by broom.", sentAt: now - 30 * minute },
 		{ id: 9, chatId: 6, sender: "00000002", body: "Your vault statement: 1,204 Galleons, 7 Sickles.", sentAt: now - 2 * 60 * minute },
@@ -166,7 +168,7 @@
 		],
 		command: "owl",
 		openKey: "up",
-		numbersVisible: false, maxNameLength: 40, maxAvatarUrlLength: 512, maxMessageLength: 500, maxGroupMembers: 12, maxGroupTitleLength: 40,
+		numbersVisible: true, numbersDialling: true, maxForwardTargets: 5, pollsEnabled: true, pollMaxOptions: 10, pollMaxQuestionLength: 200, pollMaxOptionLength: 100, maxNameLength: 40, maxAvatarUrlLength: 512, maxMessageLength: 500, maxGroupMembers: 12, maxGroupTitleLength: 40,
 		informCooldownSeconds: 30, informConsent: true, locationsEnabled: true, toastDurationMs: 3000, bannerDurationMs: 4000, soundMode: "file", wwiseEvent: "",
 		sounds:
 		[
@@ -653,9 +655,29 @@
 		case "contacts.update":
 		{
 			const contact = contacts.find((entry) => entry.id === data.contactId);
+			const number = data.number === undefined ? contact.number : String(data.number).replace(/[\s-]/g, "");
+			const holder = contacts.find((entry) => entry.number === number && entry !== contact);
+
+			// Like the server: two contacts never share a number, and a new number must belong to an owl (2 to 4 in the preview).
+			if (holder)
+			{
+				return { ok: false, errorKey: "error.contactNumberTaken", errorParams: { name: holder.name } };
+			}
+
+			if (number !== contact.number && !/^[2-4]\d{7}$/.test(number))
+			{
+				return { ok: false, errorKey: /^\d{8}$/.test(number) ? "error.numberUnknown" : "error.numberInvalid" };
+			}
+
+			if (!String(data.name).trim())
+			{
+				return { ok: false, error: "A contact needs a name." };
+			}
+
 			contact.name = String(data.name).trim();
 			contact.avatarUrl = String(data.avatarUrl).trim();
-			return contact.name ? { ok: true, data: { contact: { ...contact } } } : { ok: false, error: "A contact needs a name." };
+			contact.number = number;
+			return { ok: true, data: { contact: { ...contact } } };
 		}
 		case "contacts.delete":
 			contacts.splice(contacts.findIndex((entry) => entry.id === data.contactId), 1);
@@ -695,6 +717,128 @@
 			return { ok: true, data: { avatarUrl: me.avatarUrl } };
 		case "profiles.lookup":
 			return { ok: true, data: { profiles: data.numbers.map((number) => ({ number, avatarUrl: "" })) } };
+		case "contacts.addByNumber":
+		{
+			const number = String(data.number || "").replace(/[\s-]/g, "");
+
+			const holder = contacts.find((entry) => entry.number === number);
+
+			if (holder)
+			{
+				return { ok: false, errorKey: "error.contactNumberTaken", errorParams: { name: holder.name } };
+			}
+
+			// Like the server, only numbers some character owns can be saved; in the preview those start with 2 to 4.
+			if (!/^[2-4]\d{7}$/.test(number))
+			{
+				return { ok: false, errorKey: /^\d{8}$/.test(number) ? "error.numberUnknown" : "error.numberInvalid" };
+			}
+
+			const contact = { id: nextId++, number, name: String(data.name).trim(), avatarUrl: "", updatedAt: Date.now() };
+			contacts.push(contact);
+			return { ok: true, data: { contact: { ...contact } } };
+		}
+		case "chats.openNumber":
+		{
+			const number = String(data.number || "").replace(/[\s-]/g, "");
+
+			if (!/^[2-4]\d{7}$/.test(number))
+			{
+				return { ok: false, errorKey: /^\d{8}$/.test(number) ? "error.numberUnknown" : "error.numberInvalid" };
+			}
+
+			let chat = chats.find((entry) => entry.kind === "direct" && entry.members.includes(number));
+
+			if (!chat)
+			{
+				chat = { id: nextId++, kind: "direct", title: "", members: [me.number, number], createdAt: Date.now() };
+				chats.push(chat);
+			}
+
+			return { ok: true, data: { chat: Summarise(chat) } };
+		}
+		case "chats.search":
+		{
+			const query = String(data.query || "").trim().toLocaleLowerCase();
+
+			if (query.length < 2)
+			{
+				return { ok: false, errorKey: "error.searchShort", errorParams: { count: 2 } };
+			}
+
+			const found = messages.filter((message) => message.chatId === data.chatId && !hidden.has(message.id) && !message.unsentAt && (!message.kind || message.kind === "text" || message.kind === "poll") && message.body.toLocaleLowerCase().includes(query));
+			return { ok: true, data: { chatId: data.chatId, query, messages: found.reverse(), hasMore: false } };
+		}
+		case "messages.forward":
+		{
+			const source = messages.find((entry) => entry.id === data.messageId);
+			const targets = [...(data.chatIds || []).map((id) => chats.find((entry) => entry.id === id))];
+
+			for (const contactId of data.contactIds || [])
+			{
+				const contact = contacts.find((entry) => entry.id === contactId);
+				let chat = chats.find((entry) => entry.kind === "direct" && entry.members.includes(contact.number));
+
+				if (!chat)
+				{
+					chat = { id: nextId++, kind: "direct", title: "", members: [me.number, contact.number], createdAt: Date.now() };
+					chats.push(chat);
+				}
+
+				targets.push(chat);
+			}
+
+			const sentAt = Date.now();
+			const copies = targets.filter(Boolean).map((chat) => ({ id: nextId++, chatId: chat.id, sender: me.number, body: source.body, kind: source.kind || "text", sentAt, deliverAt: 0, replyTo: null, unsentAt: 0, forwarded: true }));
+			messages.push(...copies);
+			return { ok: true, data: { messages: copies, chats: targets.filter(Boolean).map(Summarise), failures: [], serverNow: Date.now() } };
+		}
+		case "messages.sendPoll":
+		{
+			const chat = chats.find((entry) => entry.id === data.chatId);
+			const options = (data.options || []).map((option) => String(option).trim()).filter(Boolean);
+
+			if (!chat || chat.kind !== "group")
+			{
+				return { ok: false, errorKey: "error.pollsOnlyBulk" };
+			}
+
+			if (!String(data.question || "").trim())
+			{
+				return { ok: false, errorKey: "error.pollQuestionMissing" };
+			}
+
+			if (options.length < 2)
+			{
+				return { ok: false, errorKey: "error.pollTooFew" };
+			}
+
+			const sentAt = Date.now();
+			const message = { id: nextId++, chatId: chat.id, sender: me.number, kind: "poll", body: JSON.stringify({ question: String(data.question).trim(), options, multiple: !!data.multiple }), sentAt, deliverAt: 0, replyTo: null, unsentAt: 0, votes: [] };
+			messages.push(message);
+
+			// Someone else in the bulk owl votes a moment later, so live counts can be seen.
+			setTimeout(() =>
+			{
+				message.votes = [...message.votes.filter((vote) => vote.number !== "20000001"), { number: "20000001", options: [options.length - 1] }];
+				Push([{ type: "poll:votes", data: { chatId: chat.id, messageId: message.id, votes: message.votes } }]);
+			}, 2500);
+
+			return { ok: true, data: { message, serverNow: Date.now() } };
+		}
+		case "polls.vote":
+		{
+			const message = messages.find((entry) => entry.id === data.messageId && entry.kind === "poll");
+
+			if (!message)
+			{
+				return { ok: false, errorKey: "error.pollGone" };
+			}
+
+			const others = (message.votes || []).filter((vote) => vote.number !== me.number);
+			message.votes = data.options.length > 0 ? [...others, { number: me.number, options: [...data.options] }] : others;
+			return { ok: true, data: { chatId: data.chatId, messageId: message.id, votes: message.votes } };
+		}
 		default:
 			return { ok: false, error: `Mock does not know "${action}".` };
 		}

@@ -26,6 +26,16 @@ Owls.Store = (() =>
 	/// </summary>
 	const profileLookupDelayMs = 150;
 
+	/// <summary>
+	/// Browser storage key prefix of the drafts; the owl number follows, so each character keeps their own.
+	/// </summary>
+	const draftStorageKey = "frantic-owls:drafts:";
+
+	/// <summary>
+	/// Delay that gathers keystrokes into one write of the drafts to browser storage.
+	/// </summary>
+	const draftSaveDelayMs = 400;
+
 	const state =
 	{
 		isReady: false,
@@ -49,12 +59,14 @@ Owls.Store = (() =>
 		callEnd: null,
 		callLog: [],
 		shownLocation: null,
+		drafts: new Map(),
 		serverOffsetMs: 0,
 	};
 
 	const listeners = new Set();
 	const profilesToLookUp = new Set();
 	let profileLookupTimer = null;
+	let draftSaveTimer = null;
 
 	/// <summary>
 	/// Tell every subscriber that something changed.
@@ -108,6 +120,11 @@ Owls.Store = (() =>
 	{
 		const isSameOwl = state.me.number === (data.me && data.me.number);
 
+		if (!isSameOwl)
+		{
+			SaveDraftsNow();
+		}
+
 		state.me = { number: "", name: "", avatarUrl: "", ...(data.me || {}) };
 		state.config = data.config || {};
 		state.settings = { ...defaultSettings, ...(data.settings || {}) };
@@ -125,6 +142,7 @@ Owls.Store = (() =>
 		if (!isSameOwl)
 		{
 			state.histories.clear();
+			LoadDrafts();
 		}
 		else
 		{
@@ -144,6 +162,8 @@ Owls.Store = (() =>
 	/// </summary>
 	function Clear()
 	{
+		// Written while the owl number is still known, since it names where the drafts are kept.
+		SaveDraftsNow();
 		state.isReady = false;
 		state.me = { number: "", name: "", avatarUrl: "" };
 		state.profiles.clear();
@@ -161,6 +181,7 @@ Owls.Store = (() =>
 		state.callLog = [];
 		state.shownLocation = null;
 		state.quiet = { active: false, label: "" };
+		state.drafts.clear();
 		Notify("reset");
 	}
 
@@ -185,6 +206,121 @@ Owls.Store = (() =>
 
 		state.isReady = true;
 		Notify("ready");
+	}
+
+	// ========================
+	// Drafts
+	// ========================
+
+	/// <summary>
+	/// Read the current owl's drafts back from browser storage.
+	///
+	/// <para>
+	/// NOTE: Drafts never leave this machine. They live in the page while it runs and in browser storage between sessions,
+	/// which the game's browser may or may not keep; losing them only costs an unfinished owl, so nothing is sent to the server.
+	/// </para>
+	///
+	/// </summary>
+	function LoadDrafts()
+	{
+		state.drafts.clear();
+
+		if (!state.me.number)
+		{
+			return;
+		}
+
+		// Storage can be switched off or full of something unreadable; the drafts then simply start empty.
+		try
+		{
+			const saved = JSON.parse(window.localStorage.getItem(draftStorageKey + state.me.number) || "{}");
+
+			for (const [chatId, text] of Object.entries(saved && typeof saved === "object" ? saved : {}))
+			{
+				if (Number(chatId) > 0 && typeof text === "string" && text.trim().length > 0)
+				{
+					state.drafts.set(Number(chatId), text);
+				}
+			}
+		}
+		catch (error)
+		{
+			state.drafts.clear();
+		}
+
+		Notify("drafts");
+	}
+
+	/// <summary>
+	/// Write the current owl's drafts to browser storage at once, instead of waiting for the next quiet moment.
+	/// </summary>
+	function SaveDraftsNow()
+	{
+		clearTimeout(draftSaveTimer);
+		draftSaveTimer = null;
+
+		if (!state.me.number)
+		{
+			return;
+		}
+
+		// See LoadDrafts: without storage, drafts last as long as the page does.
+		try
+		{
+			const key = draftStorageKey + state.me.number;
+
+			if (state.drafts.size === 0)
+			{
+				window.localStorage.removeItem(key);
+			}
+			else
+			{
+				window.localStorage.setItem(key, JSON.stringify(Object.fromEntries(state.drafts)));
+			}
+		}
+		catch (error)
+		{
+			return;
+		}
+	}
+
+	/// <summary>
+	/// Keep what the player has written but not sent in a chat, or forget it with an empty text.
+	/// </summary>
+	/// <param name="chatId">Chat ID</param>
+	/// <param name="text">Composer text</param>
+	function SetDraft(chatId, text)
+	{
+		const draft = String(text || "");
+		const hadDraft = state.drafts.has(chatId);
+
+		if (draft.trim().length === 0)
+		{
+			state.drafts.delete(chatId);
+		}
+		else
+		{
+			state.drafts.set(chatId, draft);
+		}
+
+		clearTimeout(draftSaveTimer);
+		draftSaveTimer = setTimeout(SaveDraftsNow, draftSaveDelayMs);
+
+		// The chat list only needs to hear when a chat gains or loses its draft, not about every keystroke.
+		if (hadDraft !== state.drafts.has(chatId))
+		{
+			Notify("drafts");
+		}
+	}
+
+	/// <summary>
+	/// The unsent text kept for a chat.
+	/// </summary>
+	/// <param name="chatId">Chat ID</param>
+	/// <returns>Draft text, or ""</returns>
+	function GetDraft(chatId)
+	{
+		return state.drafts.get(chatId) || "";
 	}
 
 	// ========================
@@ -233,7 +369,44 @@ Owls.Store = (() =>
 	/// <returns>True for notes</returns>
 	function IsNote(message)
 	{
-		return !!message.kind && message.kind !== "text" && message.kind !== "location";
+		return !!message.kind && message.kind !== "text" && message.kind !== "location" && message.kind !== "poll";
+	}
+
+	/// <summary>
+	/// Read the question and answers a poll carries.
+	/// </summary>
+	/// <param name="message">Message with kind "poll"</param>
+	/// <returns>{ question, options, multiple }, or null if the body is not a usable poll (quotes and pins carry only the question)</returns>
+	function ParsePoll(message)
+	{
+		// The body is JSON the server wrote; a damaged row should show as "unavailable", not break the chat.
+		try
+		{
+			const raw = JSON.parse(String(message.body || ""));
+			return raw && typeof raw.question === "string" && Array.isArray(raw.options) ? { question: raw.question, options: raw.options.map(String), multiple: raw.multiple === true } : null;
+		}
+		catch (error)
+		{
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// Record the votes of a poll, as the server last counted them.
+	/// </summary>
+	/// <param name="chatId">Chat ID</param>
+	/// <param name="messageId">Poll message ID</param>
+	/// <param name="votes">[{ number, options }]</param>
+	function SetPollVotes(chatId, messageId, votes)
+	{
+		const history = state.histories.get(chatId);
+		const message = history ? history.messages.find((candidate) => candidate.id === messageId) : null;
+
+		if (message)
+		{
+			message.votes = Array.isArray(votes) ? votes : [];
+			Notify(`history:${chatId}`);
+		}
 	}
 
 	/// <summary>
@@ -293,6 +466,13 @@ Owls.Store = (() =>
 		{
 			const location = ParseLocation(message);
 			return location && location.place ? `\u{1F4CD} ${T("message.locationPreviewPlace", { place: location.place })}` : `\u{1F4CD} ${T("message.locationPreview")}`;
+		}
+
+		// A whole poll is JSON; a quote or pin of one carries only its question.
+		if (message.kind === "poll")
+		{
+			const poll = ParsePoll(message);
+			return `\u{1F4CA} ${T("message.pollPreview", { question: poll ? poll.question : String(message.body || "") })}`;
 		}
 
 		return IsNote(message) ? GetNoteText(message) : String(message.body || "");
@@ -1081,6 +1261,12 @@ Owls.Store = (() =>
 		state.histories.delete(chatId);
 		state.reads.delete(chatId);
 		state.typing.delete(chatId);
+
+		if (state.drafts.has(chatId))
+		{
+			SetDraft(chatId, "");
+		}
+
 		Notify("chats");
 	}
 
@@ -1540,7 +1726,8 @@ Owls.Store = (() =>
 		Reset, Clear, SetReady,
 		NotifyChanged: Notify,
 		ApplyProfilesChunk, SetProfile, EnsureProfiles, GetProfileAvatarUrl, GetAvatarUrl, GetTheme, GetColourScheme,
-		SetServerTime, GetServerNow, IsInFlight, IsNote, ParseLocation, SetShownLocation, IsLocationShown, GetMessageText,
+		SetDraft, GetDraft,
+		SetServerTime, GetServerNow, IsInFlight, IsNote, ParseLocation, ParsePoll, SetPollVotes, SetShownLocation, IsLocationShown, GetMessageText,
 		IsShared, SetReads, SetRead, GetReadBy, SetTyping, ClearTyping, GetTyping, GetTypingText,
 		SetInformRequests, AddInformRequest, RemoveInformRequest, GetInformRequests,
 		SetCall, EndCall, ApplyCallsChunk, AddCallEntry, RemoveCallEntries, MarkCallsSeen, GetMissedCallCount, GetCallState,

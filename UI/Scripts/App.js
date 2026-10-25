@@ -519,6 +519,33 @@ Owls.App = (() =>
 	}
 
 	/// <summary>
+	/// Open the one-to-one chat with an owl by its number (typed in, when the server allows dialling): the existing one if there is one, a new one otherwise.
+	/// </summary>
+	/// <param name="number">Owl number, spaces allowed</param>
+	/// <returns>Promise of { ok, error }</returns>
+	async function OpenNumberChat(number)
+	{
+		const existing = Store.FindDirectChat(String(number).replace(/[\s-]/g, ""));
+
+		if (existing)
+		{
+			OpenChat(existing.id);
+			return { ok: true, error: "" };
+		}
+
+		const result = await Bridge.Request("chats.openNumber", { number });
+
+		if (!result.ok)
+		{
+			return result;
+		}
+
+		Store.UpsertChat(result.data.chat);
+		OpenChat(result.data.chat.id);
+		return { ok: true, error: "" };
+	}
+
+	/// <summary>
 	/// The chat on screen, if the top screen is a chat.
 	/// </summary>
 	/// <returns>Chat ID, or 0</returns>
@@ -801,6 +828,7 @@ Owls.App = (() =>
 	Bridge.On("chat:read", (data) => Store.SetRead(data.chatId, String(data.number), data.messageId));
 	Bridge.On("chat:typing", (data) => Store.SetTyping(data.chatId, String(data.number), data.durationMs));
 	Bridge.On("message:unsent", (data) => Store.MarkUnsent(data.chatId, data.messageId, data.unsentAt));
+	Bridge.On("poll:votes", (data) => Store.SetPollVotes(data.chatId, data.messageId, data.votes));
 
 	Bridge.On("chat:removed", (data) =>
 	{
@@ -1117,5 +1145,5 @@ Owls.App = (() =>
 	Home();
 	Bridge.Send("frantic-owls:ready", null);
 
-	return { Navigate, OpenApp, Back, Home, ReplaceUntil, Rebuild, OpenChat, OpenDirectChat, GetVisibleChatId, StartCall, ShowCall, DismissCall, Close, IsOpen };
+	return { Navigate, OpenApp, Back, Home, ReplaceUntil, Rebuild, OpenChat, OpenDirectChat, OpenNumberChat, GetVisibleChatId, StartCall, ShowCall, DismissCall, Close, IsOpen };
 })();

@@ -18,6 +18,9 @@ const defaultConfig = Object.freeze
 	numbers:
 	{
 		visible: false,
+		dialling: false,
+		rateLimitCount: 10,
+		rateLimitWindowMs: 60000,
 	},
 	contacts:
 	{
@@ -39,6 +42,14 @@ const defaultConfig = Object.freeze
 		rateLimitWindowMs: 5000,
 		unsendSeconds: 120,
 		maxPinnedChats: 5,
+		maxForwardTargets: 5,
+	},
+	polls:
+	{
+		enabled: true,
+		maxOptions: 10,
+		maxQuestionLength: 200,
+		maxOptionLength: 100,
 	},
 	privacy:
 	{
@@ -296,7 +307,11 @@ function Sanitise(config)
 
 	config.command = String(config.command || fallback.command).trim().replace(/^\//, "").toLowerCase() || fallback.command;
 	config.openKey = String(config.openKey || "").trim().toLowerCase();
-	config.numbers.visible = config.numbers.visible === true;
+	const numbers = config.numbers;
+	numbers.visible = numbers.visible === true;
+	numbers.dialling = numbers.dialling === true;
+	numbers.rateLimitCount = ClampInteger(numbers.rateLimitCount, 1, 1000, fallback.numbers.rateLimitCount);
+	numbers.rateLimitWindowMs = ClampInteger(numbers.rateLimitWindowMs, 1000, 3600000, fallback.numbers.rateLimitWindowMs);
 
 	// The crest is worded by the language files now; an old config's branding section is simply ignored.
 	delete config.branding;
@@ -318,6 +333,13 @@ function Sanitise(config)
 	messages.rateLimitWindowMs = ClampInteger(messages.rateLimitWindowMs, 100, 600000, fallback.messages.rateLimitWindowMs);
 	messages.unsendSeconds = ClampInteger(messages.unsendSeconds, 0, 86400, fallback.messages.unsendSeconds);
 	messages.maxPinnedChats = ClampInteger(messages.maxPinnedChats, 0, 50, fallback.messages.maxPinnedChats);
+	messages.maxForwardTargets = ClampInteger(messages.maxForwardTargets, 0, 20, fallback.messages.maxForwardTargets);
+
+	const polls = config.polls;
+	polls.enabled = polls.enabled !== false;
+	polls.maxOptions = ClampInteger(polls.maxOptions, 2, 12, fallback.polls.maxOptions);
+	polls.maxQuestionLength = ClampInteger(polls.maxQuestionLength, 10, 300, fallback.polls.maxQuestionLength);
+	polls.maxOptionLength = ClampInteger(polls.maxOptionLength, 10, 150, fallback.polls.maxOptionLength);
 
 	const privacy = config.privacy;
 	privacy.readReceipts = privacy.readReceipts !== false;
@@ -464,7 +486,9 @@ function GetClientConfig(config, languages)
 		quietActivities: config.notifications.quietActivities.length > 0,
 		command: config.command,
 		openKey: config.openKey,
-		numbersVisible: config.numbers.visible,
+		// Dialling by number is useless unless players can read their own number to hand it out, so it shows numbers too.
+		numbersVisible: config.numbers.visible || config.numbers.dialling,
+		numbersDialling: config.numbers.dialling,
 		maxNameLength: config.contacts.maxNameLength,
 		maxAvatarUrlLength: config.avatars.maxUrlLength,
 		maxMessageLength: config.messages.maxLength,
@@ -489,6 +513,11 @@ function GetClientConfig(config, languages)
 		typingIndicators: config.privacy.typingIndicators,
 		unsendSeconds: config.messages.unsendSeconds,
 		maxPinnedChats: config.messages.maxPinnedChats,
+		maxForwardTargets: config.messages.maxForwardTargets,
+		pollsEnabled: config.polls.enabled,
+		pollMaxOptions: config.polls.maxOptions,
+		pollMaxQuestionLength: config.polls.maxQuestionLength,
+		pollMaxOptionLength: config.polls.maxOptionLength,
 		wwiseEvent: config.notifications.wwiseEvent,
 		nearbyRefreshMs: config.network.nearbyRefreshMs,
 		requestTimeoutMs: config.network.requestTimeoutMs,

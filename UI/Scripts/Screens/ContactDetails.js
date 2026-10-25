@@ -9,6 +9,7 @@
 /// One contact: picture, editable name and picture override, a favourite star, a call button, Send Owl and delete.
 /// The picture preview follows the link field as it is typed, so a broken link is obvious before saving.
 /// An empty override shows the picture the owl chose for themselves; "Use Their Picture" clears a saved override.
+/// With numbers.dialling on, the owl number can be edited too; two contacts can never share a number.
 /// </summary>
 Owls.Screens.ContactDetails = (() =>
 {
@@ -38,6 +39,7 @@ Owls.Screens.ContactDetails = (() =>
 
 		let isBusy = false;
 		let deleteArmedTimer = null;
+		const canEditNumber = !!config.numbersDialling;
 
 		const favouriteButton = Widgets.IconButton(Owls.Icons.starOutline, T("details.favouriteAdd"), () => ToggleFavourite());
 		const callButton = Widgets.IconButton(Owls.Icons.flame, T("call.start"), () => Call());
@@ -47,6 +49,7 @@ Owls.Screens.ContactDetails = (() =>
 		const numberLine = Element("div", { className: "field-hint" });
 		const retiredLine = Element("div", { className: "field-hint", text: T("details.retired") });
 		const nameInput = Element("input", { className: "text-input", attributes: { type: "text", maxlength: config.maxNameLength || 40, placeholder: T("details.namePlaceholder") } });
+		const numberInput = Element("input", { className: "text-input", attributes: { type: "text", inputmode: "numeric", maxlength: 9, placeholder: "1234 5678", autocomplete: "off" } });
 		const urlInput = Element("input", { className: "text-input", attributes: { type: "text", maxlength: config.maxAvatarUrlLength || 512, placeholder: "https://i.imgur.com/example.gif" } });
 		const error = Element("div", { className: "form-error" });
 		const saveButton = Element("button", { className: "primary-button", text: T("common.save") });
@@ -58,6 +61,7 @@ Owls.Screens.ContactDetails = (() =>
 		owlButton.innerHTML = Owls.Icons.quill;
 		owlButton.appendChild(Element("span", { text: T("details.sendOwl") }));
 		nameInput.value = initial.name;
+		numberInput.value = Owls.Store.FormatNumber(initial.number);
 		urlInput.value = initial.avatarUrl;
 
 		const element = Element("div", { className: "screen" },
@@ -69,9 +73,10 @@ Owls.Screens.ContactDetails = (() =>
 				[
 					avatarHolder,
 					nameHeading,
-					config.numbersVisible ? numberLine : null,
+					config.numbersVisible && !canEditNumber ? numberLine : null,
 					retiredLine,
 					Element("label", { className: "field" }, [Element("span", { className: "field-label", text: T("details.nameLabel") }), nameInput]),
+					canEditNumber ? Element("label", { className: "field" }, [Element("span", { className: "field-label", text: T("dial.numberLabel") }), numberInput]) : null,
 					Element("label", { className: "field" },
 					[
 						Element("span", { className: "field-label", text: T("details.pictureLabel") }),
@@ -193,7 +198,17 @@ Owls.Screens.ContactDetails = (() =>
 		}
 
 		/// <summary>
-		/// Save the edited name and picture.
+		/// The digits typed in the number field.
+		/// </summary>
+		/// <returns>Up to 8 digits</returns>
+		function GetDigits()
+		{
+			return numberInput.value.replace(/\D/g, "").slice(0, 8);
+		}
+
+		/// <summary>
+		/// Save the edited name, picture and (when allowed) number.
+		/// A number another contact already has is refused here at once; the server checks again, since the pair is a unique key there.
 		/// </summary>
 		async function Save()
 		{
@@ -202,9 +217,31 @@ Owls.Screens.ContactDetails = (() =>
 				return;
 			}
 
+			const request = { contactId: params.contactId, name: nameInput.value, avatarUrl: urlInput.value };
+
+			if (canEditNumber)
+			{
+				const number = GetDigits();
+				const holder = Owls.Store.state.contactsByNumber.get(number);
+
+				if (number.length !== 8)
+				{
+					error.textContent = T("error.numberInvalid");
+					return;
+				}
+
+				if (holder && holder.id !== params.contactId)
+				{
+					error.textContent = T("error.contactNumberTaken", { name: holder.name });
+					return;
+				}
+
+				request.number = number;
+			}
+
 			error.textContent = "";
 			SetBusy(true);
-			const result = await Owls.Bridge.Request("contacts.update", { contactId: params.contactId, name: nameInput.value, avatarUrl: urlInput.value });
+			const result = await Owls.Bridge.Request("contacts.update", request);
 			SetBusy(false);
 
 			if (!result.ok)
@@ -215,6 +252,7 @@ Owls.Screens.ContactDetails = (() =>
 
 			Owls.Store.UpsertContact(result.data.contact);
 			nameInput.value = result.data.contact.name;
+			numberInput.value = Owls.Store.FormatNumber(result.data.contact.number);
 			urlInput.value = result.data.contact.avatarUrl;
 			header.title.textContent = result.data.contact.name;
 			UpdatePreview();
@@ -288,18 +326,27 @@ Owls.Screens.ContactDetails = (() =>
 
 		nameInput.addEventListener("input", UpdatePreview);
 		urlInput.addEventListener("input", UpdatePreview);
+		numberInput.addEventListener("input", () =>
+		{
+			// Written in two groups of four, like everywhere else on the phone.
+			const digits = GetDigits();
+			numberInput.value = digits.length > 4 ? `${digits.slice(0, 4)} ${digits.slice(4)}` : digits;
+		});
 		saveButton.addEventListener("click", Save);
 		owlButton.addEventListener("click", () => Owls.App.OpenDirectChat(params.contactId));
 		deleteButton.addEventListener("click", Delete);
 		clearButton.addEventListener("click", ClearOverride);
 		blockButton.addEventListener("click", ToggleBlock);
-		nameInput.addEventListener("keydown", (event) =>
+		for (const field of [nameInput, numberInput])
 		{
-			if (event.key === "Enter")
+			field.addEventListener("keydown", (event) =>
 			{
-				Save();
-			}
-		});
+				if (event.key === "Enter")
+				{
+					Save();
+				}
+			});
+		}
 
 		/// <summary>
 		/// Leave if the contact disappeared (deleted elsewhere or a re-sync); follow their own picture changing.

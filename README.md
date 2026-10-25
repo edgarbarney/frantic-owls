@@ -8,8 +8,8 @@ IMPORTANT: For now, calls are disabled by default in the config because they are
 
 Summary of current capabilities:
 
-- **Contacts**: An alphabetical address book with search. Each contact shows the profile picture that owl chose for themselves. Opening a contact lets you rename them, set a picture override that only you see (any direct image link, GIFs included, e.g. `https://i.imgur.com/abc123.gif`), clear that override again with **Use Their Picture**, star them as a **favourite**, send them an owl, or delete them. Favourites are listed together at the top of Contacts and of every contact picker.
-- **Owls**: The messaging app. Chats are sorted by their latest owl, with search behind the search icon; **pinned** chats (the pin in a chat's header, up to 5) stay on top. **Send New Owl** (bottom right) picks a contact, or **Bulk Owl** picks several to start a group. Each contact has exactly one chat: Starting a new owl to someone you already talk to opens the existing chat. A bulk owl can be left from the button in its header; the others see a quiet "... left." note, the leaver loses access to its history, and the last one out closes it for good. One-to-one chats cannot be left. Tap an owl to **Reply** to it, **Pin** it at the top of the chat, **Delete** it from your phone, or **Unsend** one of your own for everyone (see [Owl actions](#owl-actions)). Bulk owls have admins; see [Bulk owl admins](#bulk-owl-admins). Beside the message box, the emoji button opens a picker (its last tab remembers the ones you used) and the pin sends where you are standing as a **location owl**; see [Location owls](#location-owls).
+- **Contacts**: An alphabetical address book with search. Each contact shows the profile picture that owl chose for themselves. Opening a contact lets you rename them, set a picture override that only you see (any direct image link, GIFs included, e.g. `https://i.imgur.com/abc123.gif`), clear that override again with **Use Their Picture**, star them as a **favourite**, send them an owl, or delete them. Favourites are listed together at the top of Contacts and of every contact picker. On servers with `numbers.dialling`, the plus in the header adds a contact by typing in their owl number; see [Owl numbers](#owl-numbers).
+- **Owls**: The messaging app. Chats are sorted by their latest owl, with search behind the search icon; **pinned** chats (the pin in a chat's header, up to 5) stay on top. **Send New Owl** (bottom right) picks a contact, or **Bulk Owl** picks several to start a group. Each contact has exactly one chat: Starting a new owl to someone you already talk to opens the existing chat. A bulk owl can be left from the button in its header; the others see a quiet "... left." note, the leaver loses access to its history, and the last one out closes it for good. One-to-one chats cannot be left. Tap an owl to **Reply** to it, **Forward** it, **Pin** it at the top of the chat, **Delete** it from your phone, or **Unsend** one of your own for everyone (see [Owl actions](#owl-actions)). The magnifying glass in a chat's header searches the whole chat; see [Searching a chat](#searching-a-chat). Bulk owls have admins (see [Bulk owl admins](#bulk-owl-admins)) and take [polls](#polls). Beside the message box, the emoji button opens a picker (its last tab remembers the ones you used) and the pin sends where you are standing as a **location owl**; see [Location owls](#location-owls). Whatever is left unsent in a chat's message box stays there as its **draft**, marked "Draft:" in the chat list.
 - **Floo-Calls**: The first app on the home screen. Call a contact with the flame in their contact page or a one-to-one chat's header, from the call log, or with **New Floo-Call**. The phone rings for them with the ringtone they picked (and a flickering flame pop-up even while their phone is closed) until they answer, decline or `calls.ringSeconds` pass. While a call lasts, going back keeps it; a green timer in the status bar returns to it. Once answered, the two players talk through their microphones, at any distance, with **Mute** and **Hang Up** on the call screen; their voices pass through the server, so neither sees the other's IP address. The app is the call log: Every call made and received, missed calls in red, with a count on the app until you look. See [Floo-Calls](#floo-calls).
 - **Inform**: Offer your owl to a player standing nearby. They are asked first and can **Accept** it, **Exchange** (accept it and give you theirs back) or **Decline**; once accepted, you are in their contacts under your character's name. Offers they have not answered wait on their Inform screen (with a count on its tile) for a minute. You can inform the same person once every 30 seconds (configurable); different people have no limit. Servers can turn the asking off, and then informs land straight in the contacts as before.
 - **Settings**: Grouped like a phone's Settings app. The first page shows the crest, your card and one row per category, each with what is set:
@@ -143,23 +143,24 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Soft deletion: Deleted owls stay in the database unless the server opts out | ✅ |
 | Optional pruning of old owls (off unless the server sets it) | ✅ |
 | Floo-Calls: Ringing, answer, decline, hang up, busy and missed calls, a call log, selectable ringtones | ✅ |
+| A draft kept per chat | ✅ |
+| Owl numbers: Adding a contact, owling and Floo-Calling by typing in a number (`numbers.dialling`) | ✅ |
+| Search inside a chat | ✅ |
+| Forward an owl | ✅ |
+| Polls in bulk owls | ✅ |
 | Voice calls: Opus through the server, mute, call volume | 🚧 |
 | Taking photos | 🚧 |
 | Video calls | 🚧 |
 | Playing music to other players (via youtube, soundcloud etc.) | ⬜ |
 | Colour schemes for Parchment | ⬜ |
-| Adding a contact by typing in their owl number | ⬜ |
+| Lock Screens | ⬜ |
 | Privacy policy every character accepts before their first owl | ⬜ |
 | Howlers: An owl that shouts itself out loud for everyone nearby, then burns | ⬜ |
 | Parcels and Galleons: Items (hmp-inventory) or money (hmp-banking) carried by an owl | ⬜ |
 | Apps from other resources: Their own tiles on the home screen | ⬜ |
 | Public directory of businesses and services | ⬜ |
 | Owl the Ministry: Report in-character emergencies, call Ministry employees and Aurors | ⬜ |
-| Search inside a chat | ⬜ |
-| Forward an owl | ⬜ |
-| Polls in bulk owls | ⬜ |
 | Send-later owls | ⬜ |
-| A draft kept per chat | ⬜ |
 | Announcements for one hmp-core group or house | ⬜ |
 | Grigotts Banking app | ⬜ |
 | Social Media apps | ⬜ |
@@ -222,10 +223,25 @@ Every change of a call also raises the server event `frantic-owls:call` (see [Fo
 
 Tap any owl in a chat to select it:
 
-- **Reply** quotes it above your next owl. Tapping a quote jumps to the owl it answers.
+- **Reply** quotes it above your next owl. Tapping a quote jumps to the owl it answers, loading older owls on the way if it is further back.
+- **Forward** sends a copy to up to `messages.maxForwardTargets` (5 by default) chats and contacts at once, picked from your writable chats and the contacts you have no chat with yet. The copy is yours, marked "Forwarded", and flies, is blocked and counts against your owl rate limit like an owl you wrote there; it does not say who wrote the original. Written owls and locations can be forwarded, polls cannot. `0` turns forwarding off.
 - **Pin** puts it in a bar under the chat's header for everyone, with a note in the chat. One owl is pinned at a time; pinning another replaces it. In a one-to-one chat either owl can pin; in a bulk owl only its admins can.
 - **Delete for me** removes it from your phone only.
 - **Unsend** (your own owls, within `messages.unsendSeconds`, 2 minutes by default) wipes its text for everyone and leaves "This owl was unsent." in its place. An owl unsent while still in flight never lands. `0` turns unsending off.
+
+## Searching a chat
+
+The magnifying glass in a chat's header opens a search field. The server searches the whole chat, not only the owls the phone has loaded, and lists the 30 newest owls that contain the text (written owls and polls, by their question or answers; at least 2 characters, without regard to case). Tapping a result closes the search and jumps to that owl, loading older owls until it is on screen. Only owls the searcher can see are searched: nothing from before they joined a bulk owl, nothing they deleted for themselves and nothing from owls they blocked.
+
+## Polls
+
+The chart beside the message box of a bulk owl writes a poll: A question and 2 to `polls.maxOptions` (10 by default) answers, with **Allow several answers** for polls where each member may pick more than one. A poll flies, lands, counts as unread, can be pinned, replied to and unsent like any owl, but cannot be forwarded, since its votes belong to its bulk owl.
+
+Tapping an answer votes for it; tapping your own choice again takes the vote back, and on a single-answer poll tapping another answer moves your vote. Every member sees the count, a bar and the names of who chose each answer, updated at once for everyone online. Members only vote in polls they can see, so someone added later cannot vote in older polls. `polls.enabled: false` removes the chart.
+
+## Drafts
+
+Whatever is left unsent in a chat's message box stays there as that chat's draft, and the chat list shows it as "Draft: ..." until it is sent or cleared. Drafts never reach the server: They are kept by the phone page while it runs and in the game browser's local storage between sessions, for each character separately. Whether the game's browser keeps that storage after the game closes has not been checked in game; if it does not, drafts last until the game closes.
 
 ## Read receipts and typing
 
@@ -315,7 +331,15 @@ Pictures load straight from each viewer's machine, so the image host sees the IP
 
 ## Owl numbers
 
-Every character is given a random 8-digit owl number the first time it loads in the backend. Contacts, chats and messages are all keyed by that number rather than by character ID, so typing a number in by hand can be added later without changing the schema. Numbers are not shown to players unless `numbers.visible` is enabled. They do travel to the client (that is how a chat knows which contact a member is), so treat them as "unlisted", not secret.
+Every character is given a random 8-digit owl number the first time it loads in the backend. Contacts, chats and messages are all keyed by that number rather than by character ID. Numbers are not shown to players unless `numbers.visible` or `numbers.dialling` is enabled. They do travel to the client (that is how a chat knows which contact a member is), so treat them as "unlisted", not secret.
+
+With `numbers.dialling` (off by default), players can reach an owl by typing in its number, the way phone numbers work:
+
+- **Contacts** gets a plus in its header that adds a contact by number and name, and each contact's page gets an **Owl Number** field to change the number it points at. Two contacts can never share a number (the database keys contacts by owner and number): Adding or changing one to a number another contact already has is refused with "Contact has the same number as ... Identical numbers are not allowed. Please edit or delete the existing contact."
+- **Send New Owl** gets an **Owl a Number** row and **New Floo-Call** a **Dial a Number** row, which owl or call a number without saving it first.
+- Each player's own number is shown on their card in Settings and under the number field, so they know what to hand out. Dialling turns `numbers.visible` on with it.
+
+A number must belong to a live character's owl: Unknown numbers are refused ("No owl flies to that number."), and so are retired owls, official senders' numbers and the player's own. Since that tells a player which numbers exist, typing in numbers the owl does not already know is limited to `numbers.rateLimitCount` per `numbers.rateLimitWindowMs` (10 a minute by default); numbers already in their contacts, chats or call log cost nothing. Everything else stays as it was: Blocks, flight time and the rest apply to owls and calls to a typed-in number like to any other.
 
 ## For other resources
 
@@ -345,7 +369,7 @@ const number = await Owls.GetOwlNumber(42);
 
 To follow calls, listen for the server event `frantic-owls:call`. It fires when a call starts ringing (`state: "ringing"`), is answered (`"active"`) and ends (`"ended"`), with `{ callId, state, outcome, caller, callee, callerPlayerId, calleePlayerId, startedAt, answeredAt }`. `caller` and `callee` are owl numbers, a player ID is `-1` when that owl is offline, and `outcome` is set once it ended: `"answered"`, `"missed"`, `"declined"` or `"cancelled"`.
 
-To react to owls instead of sending them, listen for the server event `frantic-owls:sent`. It carries `{ chatId, chatKind, messageId, kind, sender, origin, recipients, body, sentAt, deliverAt }` for every owl sent (not for group notes), where `origin` is `"player"`, `"system"` or `"announcement"`. `kind` is `"text"`, or `"location"` for a location owl, whose `body` is then JSON: `{ x, y, z, areaId, regionId, world, place }` (centimetres, as `player.position`).
+To react to owls instead of sending them, listen for the server event `frantic-owls:sent`. It carries `{ chatId, chatKind, messageId, kind, sender, origin, recipients, body, forwarded, sentAt, deliverAt }` for every owl sent (not for group notes), where `origin` is `"player"`, `"system"` or `"announcement"` and `forwarded` is `true` for a forwarded copy. `kind` is `"text"`, `"location"` for a location owl, whose `body` is then JSON: `{ x, y, z, areaId, regionId, world, place }` (centimetres, as `player.position`), or `"poll"` for a poll, whose `body` is JSON too: `{ question, options, multiple }`. Votes raise no event.
 
 ## Configuration
 
@@ -356,6 +380,8 @@ Edit `data/frantic-owls.json` in the server directory (set `FRANTIC_OWLS_CONFIG`
 | `command` | `"owl"` | Chat command that opens the phone. |
 | `openKey` | `"up"` | Key that also opens the phone (the up arrow by default; any HogwartsMP key name such as `"f3"` works), registered through hmp-lib shortcuts. `""` turns it off. |
 | `numbers.visible` | `false` | Show owl numbers in the UI (contact details, unknown senders). |
+| `numbers.dialling` | `false` | Let players add contacts, owl and Floo-Call by typing in an owl number (see [Owl numbers](#owl-numbers)). Shows numbers too. |
+| `numbers.rateLimitCount` / `rateLimitWindowMs` | `10` / `60000` | At most this many unknown numbers typed in per window, per character. |
 | `contacts.maxContacts` | `250` | Contacts per character. |
 | `contacts.maxNameLength` | `40` | Longest contact name. |
 | `avatars.maxUrlLength` | `512` | Longest picture link (profile pictures, overrides and wallpapers). |
@@ -367,6 +393,10 @@ Edit `data/frantic-owls.json` in the server directory (set `FRANTIC_OWLS_CONFIG`
 | `messages.rateLimitCount` / `rateLimitWindowMs` | `8` / `5000` | At most this many owls per window, per character. |
 | `messages.unsendSeconds` | `120` | How long after sending an owl can be unsent. `0` turns unsending off. |
 | `messages.maxPinnedChats` | `5` | Chats each player can pin to the top of their list. `0` hides chat pinning. |
+| `messages.maxForwardTargets` | `5` | Chats and contacts one owl can be forwarded to at once. `0` turns forwarding off. |
+| `polls.enabled` | `true` | Let players send polls to bulk owls. |
+| `polls.maxOptions` | `10` | Answers a poll can have (2 - 12). |
+| `polls.maxQuestionLength` / `maxOptionLength` | `200` / `100` | Longest poll question and answer. |
 | `storage.disableSoftDelete` | `false` | Really delete owls instead of keeping them hidden in the database (see [Deleting and pruning](#deleting-and-pruning)). |
 | `storage.messageRetentionDays` | `0` | Delete owls older than this many days, checked hourly. `0` keeps them forever. |
 | `privacy.readReceipts` | `true` | Allow read receipts (players can still turn theirs off). |
@@ -443,6 +473,7 @@ frantic-owls/
 │   ├── Lang.js      language files and the text of every player-facing message
 │   ├── Database.js  schema migrations and every query
 │   ├── Directory.js online owls and owl number assignment
+│   ├── Numbers.js   owl numbers typed in by players (numbers.dialling)
 │   ├── Outbox.js    batched, size-capped delivery to clients
 │   ├── Avatars.js   picture link validation
 │   ├── Chats.js     chats and the one delivery path every owl takes
@@ -461,7 +492,7 @@ frantic-owls/
 
 I also created a preview thingy for working on the UI without running the game.
 
-Just feed the resource root to a web server (e.g. `python -m http.server` inside it) and open `Dev/Preview.html`. It loads the real `UI/Index.html` and the real language files, and some buttons on the left simulate opening, closing, incoming owls, inform requests (and an inform without consent), `/owl_resetpos`, someone leaving a group, people typing, being removed from a group, a Ministry announcement, a duel starting and ending, a contact's character being deleted, an incoming call, the other side hanging up or muting, and a call missed while busy. During a call the other player is an echo: Your own voice comes back a quarter of a second later. Calling Natsai is answered after 3 seconds, Sebastian is busy, Poppy cannot be reached, and anyone else rings out after 15 seconds. Owls you send in the preview fly for 5 seconds and are read 2.5 seconds after landing, and **Show on map** only logs the route to the browser console.
+Just feed the resource root to a web server (e.g. `python -m http.server` inside it) and open `Dev/Preview.html`. It loads the real `UI/Index.html` and the real language files, and some buttons on the left simulate opening, closing, incoming owls, inform requests (and an inform without consent), `/owl_resetpos`, someone leaving a group, people typing, being removed from a group, a Ministry announcement, a duel starting and ending, a contact's character being deleted, an incoming call, the other side hanging up or muting, and a call missed while busy. During a call the other player is an echo: Your own voice comes back a quarter of a second later. Calling Natsai is answered after 3 seconds, Sebastian is busy, Poppy cannot be reached, and anyone else rings out after 15 seconds. Dialling is on in the preview: Numbers starting with 2, 3 or 4 belong to an owl, any other is unknown. Beast Club has a poll, and a poll you send there gets a vote from Ambrose 2.5 seconds later. Owls you send in the preview fly for 5 seconds and are read 2.5 seconds after landing, and **Show on map** only logs the route to the browser console.
 
 ## Licence
 
