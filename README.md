@@ -111,8 +111,8 @@ Most of the future items were present in the FiveM version but are not yet porte
 Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ✅ = Done  
-⏳ = In Progress (Probably on the `dev` branch)  
-⚙️ = Testing (Probably on the `test` branch)  
+⏳ = In Progress (Could be on the `dev` branch)  
+⚙️ = Testing (Could be on the `test` branch)  
 🚧 = Parked/Paused - Requires work on HogwartsMP itself  
 ⬜ = Not Started  
 
@@ -155,6 +155,7 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Search inside a chat | ✅ |
 | Forward an owl | ✅ |
 | Polls in bulk owls | ✅ |
+| Lock Screens with Optional Passwords | ⚙️ |
 | Voice calls: Opus through the server, mute, call volume | 🚧 |
 | Taking photos | 🚧 |
 | Video calls | 🚧 |
