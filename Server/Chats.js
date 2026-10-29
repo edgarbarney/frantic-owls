@@ -262,6 +262,19 @@ class ChatService
 		const land = () =>
 		{
 			this.#flights.delete(message.id);
+
+			// A letter's text is only handed out when it may be read (see Mail.js), so immersive pages are told that one arrived and nothing more.
+			// Notes about bulk owls mean nothing there and are not sent at all.
+			if (this.#config.mode === "immersive")
+			{
+				if (owlKinds.includes(message.kind))
+				{
+					this.#PushToMembers(audience, "", "mail:arrived", { id: message.id });
+				}
+
+				return;
+			}
+
 			this.#PushToMembers(audience, "", "message:new", { chat: descriptor, message });
 
 			const author = message.deliverAt > 0 ? this.#directory.GetByNumber(message.sender) : null;
@@ -377,7 +390,7 @@ class ChatService
 	/// <returns>True when shared</returns>
 	#IsShared(settings, key)
 	{
-		return this.#config.privacy[key] === true && !!settings && settings[key] !== false;
+		return this.#config.phonemode_privacy[key] === true && !!settings && settings[key] !== false;
 	}
 
 	/// <summary>
@@ -617,7 +630,7 @@ class ChatService
 
 	/// <summary>
 	/// Open the one-to-one chat with an owl by its number: one it already knows (from a call or an earlier chat),
-	/// or, with numbers.dialling on, any live owl whose number was typed in.
+	/// or, with phonemode_numbers.dialling on, any live owl whose number was typed in.
 	/// </summary>
 	/// <param name="entry">Directory entry of the requesting owl</param>
 	/// <param name="data">{ number }</param>
@@ -664,7 +677,7 @@ class ChatService
 	/// <returns>Result carrying the new chat summary</returns>
 	async CreateGroup(entry, data)
 	{
-		const maxOthers = this.#config.groups.maxMembers - 1;
+		const maxOthers = this.#config.phonemode_groups.maxMembers - 1;
 		const requested = Array.isArray(data.contactIds) ? data.contactIds.slice(0, maxOthers + 1).map((id) => this.#ReadId(id)).filter((id) => id > 0) : [];
 
 		if (requested.length > maxOthers)
@@ -698,7 +711,7 @@ class ChatService
 			return Fail("error.bulkTooFew");
 		}
 
-		const title = this.#hmp.text.clean(data.title, this.#config.groups.maxTitleLength).replace(/\s+/g, " ").trim();
+		const title = this.#hmp.text.clean(data.title, this.#config.phonemode_groups.maxTitleLength).replace(/\s+/g, " ").trim();
 		const members = [entry.number, ...numbers];
 		const chatId = await this.#database.CreateChat("group", null, title, entry.number, members);
 		const chat = chatId > 0 ? await this.#database.GetChatForMember(chatId, entry.number) : null;
@@ -783,7 +796,7 @@ class ChatService
 		}
 
 		const chatId = this.#ReadId(data.chatId);
-		const body = this.#CleanBody(data.body, this.#config.messages.maxLength);
+		const body = this.#CleanBody(data.body, this.#config.phonemode_messages.maxLength);
 
 		if (body.length === 0)
 		{
@@ -843,6 +856,57 @@ class ChatService
 
 		// The callback belongs to another resource; whatever it does, it must not break this owl.
 		Promise.resolve().then(() => replyTo.onReply(reply)).catch((error) => Logger.LogError("Chats", `The reply handler of sender "${replyTo.key}" (${replyTo.resource}) failed: ${Logger.Describe(error)}`));
+	}
+
+	/// <summary>
+	/// Send one copy of an immersive-mode letter to one owl, in the one-to-one chat the two share.
+	/// A letter to several owls is one call per recipient, so each copy is an ordinary owl of its own and never a bulk owl.
+	///
+	/// <para>
+	/// NOTE: The body arrives already cleaned by Mail.js, which keeps a letter's spacing; Send's cleaning would squeeze it.
+	/// Blocks, retired owls and system senders are checked exactly as for a phone owl, so a letter cannot reach anyone a phone owl could not.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="entry">Directory entry of the writing owl</param>
+	/// <param name="toNumber">Owl number of the recipient, already checked to be one the writer may address</param>
+	/// <param name="body">Letter text, already cleaned</param>
+	/// <returns>{ error, message } where error is null on success (otherwise a text key) and message the stored record</returns>
+	async SendLetter(entry, toNumber, body)
+	{
+		const chatId = await this.#EnsureDirectChat(entry.number, toNumber);
+		const chat = chatId > 0 ? await this.#database.GetChatForMember(chatId, entry.number) : null;
+
+		if (!chat)
+		{
+			return { error: "error.chatOpenFailed", message: null };
+		}
+
+		const { error, replyTo } = await this.#CheckWritable(entry, chat);
+
+		if (error)
+		{
+			return { error, message: null };
+		}
+
+		// Letters to a system sender go to a callback, not across the map, so they never fly.
+		const deliverAt = replyTo ? 0 : this.#flight.GetDeliverAt(entry, chat);
+		const message = await this.#database.InsertMessage(chatId, entry.number, body, deliverAt, MessageKind.Text);
+
+		if (!message)
+		{
+			return { error: "error.sendFailed", message: null };
+		}
+
+		await this.#Publish(chat, message);
+		this.#Record(chat, message, "player");
+
+		if (replyTo)
+		{
+			this.#PassReply(replyTo, entry, message);
+		}
+
+		return { error: null, message };
 	}
 
 	/// <summary>
@@ -911,7 +975,7 @@ class ChatService
 	/// <returns>Result carrying { messages, chats, failures, serverNow } where failures lists { chatId, contactId, errorKey } for targets that were refused</returns>
 	async Forward(entry, data)
 	{
-		const limit = this.#config.messages.maxForwardTargets;
+		const limit = this.#config.phonemode_messages.maxForwardTargets;
 
 		if (limit === 0)
 		{
@@ -941,7 +1005,7 @@ class ChatService
 			return Fail("error.cannotForward");
 		}
 
-		if (message.kind === MessageKind.Location && !this.#config.locations.enabled)
+		if (message.kind === MessageKind.Location && !this.#config.phonemode_locations.enabled)
 		{
 			return Fail("error.locationsOff");
 		}
@@ -1031,7 +1095,7 @@ class ChatService
 	/// <returns>Result carrying { message, serverNow }</returns>
 	async SendPoll(entry, data)
 	{
-		const polls = this.#config.polls;
+		const polls = this.#config.phonemode_polls;
 
 		if (!polls.enabled)
 		{
@@ -1156,7 +1220,7 @@ class ChatService
 	/// <returns>Result carrying { message, serverNow }</returns>
 	async SendLocation(entry, data)
 	{
-		if (!this.#config.locations.enabled)
+		if (!this.#config.phonemode_locations.enabled)
 		{
 			return Fail("error.locationsOff");
 		}
@@ -1432,7 +1496,7 @@ class ChatService
 	// ========================
 
 	/// <summary>
-	/// Take back an owl you sent, within messages.unsendSeconds of sending it. Its text is wiped for everyone.
+	/// Take back an owl you sent, within phonemode_messages.unsendSeconds of sending it. Its text is wiped for everyone.
 	/// An owl still in flight never lands.
 	/// </summary>
 	/// <param name="entry">Directory entry of the sender</param>
@@ -1440,7 +1504,7 @@ class ChatService
 	/// <returns>Result carrying { chatId, messageId, unsentAt }</returns>
 	async Unsend(entry, data)
 	{
-		const seconds = this.#config.messages.unsendSeconds;
+		const seconds = this.#config.phonemode_messages.unsendSeconds;
 
 		if (seconds <= 0)
 		{
@@ -1562,7 +1626,7 @@ class ChatService
 	{
 		const chatId = this.#ReadId(data.chatId);
 		const pinned = data.pinned === true;
-		const limit = this.#config.messages.maxPinnedChats;
+		const limit = this.#config.phonemode_messages.maxPinnedChats;
 
 		if (pinned)
 		{
@@ -1608,7 +1672,7 @@ class ChatService
 			return Fail(error);
 		}
 
-		const title = this.#hmp.text.clean(data.title, this.#config.groups.maxTitleLength).replace(/\s+/g, " ").trim();
+		const title = this.#hmp.text.clean(data.title, this.#config.phonemode_groups.maxTitleLength).replace(/\s+/g, " ").trim();
 
 		if (title === chat.title)
 		{
@@ -1641,7 +1705,7 @@ class ChatService
 			return Fail(error);
 		}
 
-		const avatar = CheckAvatarUrl(data.avatarUrl, this.#config.avatars);
+		const avatar = CheckAvatarUrl(data.avatarUrl, this.#config.phonemode_avatars);
 
 		if (!avatar.ok)
 		{
@@ -1679,8 +1743,8 @@ class ChatService
 			return Fail(error);
 		}
 
-		const room = this.#config.groups.maxMembers - chat.members.length;
-		const requested = Array.isArray(data.contactIds) ? data.contactIds.slice(0, this.#config.groups.maxMembers).map((id) => this.#ReadId(id)).filter((id) => id > 0) : [];
+		const room = this.#config.phonemode_groups.maxMembers - chat.members.length;
+		const requested = Array.isArray(data.contactIds) ? data.contactIds.slice(0, this.#config.phonemode_groups.maxMembers).map((id) => this.#ReadId(id)).filter((id) => id > 0) : [];
 		const contacts = await this.#database.ListContacts(entry.number);
 
 		if (!contacts)

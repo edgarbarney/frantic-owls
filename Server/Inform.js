@@ -71,7 +71,7 @@ class InformService
 	#hmp;
 
 	/// <summary>
-	/// The "inform" section of the server config.
+	/// The "phonemode_inform" section of the server config.
 	/// </summary>
 	#config;
 
@@ -186,7 +186,7 @@ class InformService
 	/// <summary>
 	/// Constructor.
 	/// </summary>
-	/// <param name="services">{ directory, contacts, profiles, outbox, hmp, config (the "inform" section), blocks, audit }</param>
+	/// <param name="services">{ directory, contacts, profiles, outbox, hmp, config (the "phonemode_inform" section), blocks, audit }</param>
 	constructor(services)
 	{
 		this.#directory = services.directory;

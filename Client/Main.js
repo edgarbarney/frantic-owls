@@ -6,7 +6,15 @@
 // ========================
 
 const resourceName = "frantic-owls";
-const viewUrl = "fw://resources/frantic-owls/UI/Index.html";
+
+/// <summary>
+/// The page of each front end. Only the one the server's mode names is ever loaded.
+/// </summary>
+const viewUrls = Object.freeze
+({
+	phone: "fw://resources/frantic-owls/UI/Index.html",
+	immersive: "fw://resources/frantic-owls/UI/Immersive.html",
+});
 
 /// <summary>
 /// Reference screen height the UI sizes are authored for. Larger screens scale up proportionally.
@@ -39,6 +47,13 @@ const locationCheckMs = 500;
 /// </summary>
 const defaultUi = Object.freeze({ scale: 1.0, widthPx: 360, heightPx: 700, rightMarginPx: 32, allowMove: false });
 
+/// <summary>
+/// Size of the strip at the top of the screen that immersive mode's notices drop into while the desk is closed, in px at scale 1.
+/// Must fit .notice in Immersive.css with its shadow.
+/// </summary>
+const noticeWidthPx = 520;
+const noticeHeightPx = 150;
+
 // ========================
 // State
 // ========================
@@ -59,6 +74,11 @@ const clientStrings = new Map
 /// Web view ID, or -1 while it does not exist.
 /// </summary>
 let view = -1;
+
+/// <summary>
+/// Front end the view was created for ("phone" or "immersive"), so a change of mode replaces it.
+/// </summary>
+let viewMode = "";
 
 /// <summary>
 /// True once the page has registered its listeners and said so.
@@ -182,6 +202,11 @@ function GetGeometry()
 	const screen = Web.getScreenSize() || { width: 1920, height: 1080 };
 	const screenWidth = Math.max(640, Number(screen.width) || 1920);
 	const screenHeight = Math.max(480, Number(screen.height) || 1080);
+
+	if (IsImmersive())
+	{
+		return GetImmersiveGeometry(ui, screenWidth, screenHeight);
+	}
 	const baseScale = ui.scale * (screenHeight / referenceHeight);
 	const layout = ui.allowMove ? savedLayout : null;
 	const multiplier = layout ? layout.scale : 1;
@@ -217,6 +242,42 @@ function GetGeometry()
 }
 
 /// <summary>
+/// Work out where immersive mode's view goes.
+///
+/// <para>
+/// NOTE: The letter desk covers the whole screen while it is open (and while it plays its closing animation), dimming the game behind it.
+/// Closed, the view shrinks to a strip at the top of the screen, just big enough for a notice that an owl has arrived: pages render on the CPU, so a closed desk should not cost a full screen.
+/// </para>
+///
+/// </summary>
+/// <param name="ui">The "ui" part of the client configuration (immersivemode_ui)</param>
+/// <param name="screenWidth">Screen width in pixels</param>
+/// <param name="screenHeight">Screen height in pixels</param>
+/// <returns>{ view: { x, y, width, height }, mode, baseScale }</returns>
+function GetImmersiveGeometry(ui, screenWidth, screenHeight)
+{
+	const baseScale = (Number(ui.scale) || 1) * (screenHeight / referenceHeight);
+
+	if (isOpen || isClosePending)
+	{
+		return { view: { x: 0, y: 0, width: screenWidth, height: screenHeight }, mode: "desk", baseScale };
+	}
+
+	const width = Math.min(screenWidth, Math.ceil(noticeWidthPx * baseScale));
+	const height = Math.ceil(noticeHeightPx * baseScale);
+	return { view: { x: Math.round((screenWidth - width) / 2), y: 0, width, height }, mode: "notice", baseScale };
+}
+
+/// <summary>
+/// Whether the server runs immersive mode's letter desk rather than the phone.
+/// </summary>
+/// <returns>True for immersive mode</returns>
+function IsImmersive()
+{
+	return !!clientConfig && clientConfig.mode === "immersive";
+}
+
+/// <summary>
 /// Move and size the view for the current mode, and tell the page how to lay itself out.
 /// </summary>
 function ApplyGeometry()
@@ -229,6 +290,12 @@ function ApplyGeometry()
 	const geometry = GetGeometry();
 	Web.resizeView(view, geometry.view.width, geometry.view.height);
 	Web.setViewPosition(view, geometry.view.x, geometry.view.y);
+
+	if (isPageReady && IsImmersive())
+	{
+		Web.emit(view, "frantic-owls:layout", { mode: geometry.mode, baseScale: geometry.baseScale });
+		return;
+	}
 
 	if (isPageReady)
 	{
@@ -249,6 +316,22 @@ function ApplyGeometry()
 /// <returns>True if a view exists afterwards</returns>
 function EnsureView()
 {
+	// The front end is only known once the server's configuration has arrived; items wait in pendingItems until then.
+	if (!clientConfig)
+	{
+		return false;
+	}
+
+	const mode = IsImmersive() ? "immersive" : "phone";
+
+	// A server that switched mode (and restarted the resource) gets the other page, which is only loaded now.
+	if (view >= 0 && viewMode !== mode)
+	{
+		Web.destroyView(view);
+		view = -1;
+		isPageReady = false;
+	}
+
 	if (view >= 0)
 	{
 		return true;
@@ -259,14 +342,16 @@ function EnsureView()
 	// createView throws when the browser cannot be created; there is nothing to retry until the next open.
 	try
 	{
-		view = Web.createView(viewUrl, { x: geometry.view.x, y: geometry.view.y, width: geometry.view.width, height: geometry.view.height, zIndex: 150, visible: false, focus: false });
+		view = Web.createView(viewUrls[mode], { x: geometry.view.x, y: geometry.view.y, width: geometry.view.width, height: geometry.view.height, zIndex: 150, visible: false, focus: false });
 	}
 	catch (error)
 	{
-		console.error(`Client: Could not create the phone view: ${error}`);
+		console.error(`Client: Could not create the ${mode} view: ${error}`);
 		view = -1;
 		return false;
 	}
+
+	viewMode = mode;
 
 	Web.on(view, "frantic-owls:ready", () =>
 	{
@@ -292,8 +377,16 @@ function EnsureView()
 
 	Web.on(view, "frantic-owls:overlay", (payload) =>
 	{
+		const wasClosing = isClosePending;
 		isClosePending = false;
 		isOverlayActive = !!(payload && payload.active);
+
+		// The letter desk's closing animation is over, so its view shrinks back to the notice strip.
+		if (wasClosing && IsImmersive())
+		{
+			ApplyGeometry();
+		}
+
 		UpdateVisibility();
 	});
 
@@ -503,6 +596,7 @@ function Close()
 				{
 					isClosePending = false;
 					isOverlayActive = false;
+					ApplyGeometry();
 					UpdateVisibility();
 				}
 			}, closeFallbackMs);
@@ -777,6 +871,7 @@ function OnBatch(payload)
 			}
 			break;
 		case "message:new":
+		case "mail:arrived":
 		case "notify":
 		case "inform:request":
 		case "call:incoming":
@@ -801,7 +896,9 @@ function OnBatch(payload)
 	}
 
 	EnsureView();
-	ForwardItems(items.filter((item) => item && item.type !== "ui:open"));
+
+	// The letter desk needs to know which owl post (if any) it was opened at, so immersive pages get "ui:open" too.
+	ForwardItems(items.filter((item) => item && (item.type !== "ui:open" || IsImmersive())));
 }
 
 Events.on("frantic-owls:batch", OnBatch);
@@ -824,5 +921,4 @@ Events.on("resourceStop", (name) =>
 	}
 });
 
-EnsureView();
 Events.emitServer("frantic-owls:hello", "{}");

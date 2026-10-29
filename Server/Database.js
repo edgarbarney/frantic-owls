@@ -175,6 +175,16 @@ const migrations =
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 		],
 	},
+	{
+		// Immersive mode keeps a whole letter in one owl (immersivemode_letters.maxLength, up to 20000 characters).
+		// TEXT holds 65535 bytes, which four-byte characters (e.g. emoji) would overflow well before that.
+		version: 4,
+		name: "widen owl bodies for letters",
+		statements:
+		[
+			"ALTER TABLE frantic_owls_messages MODIFY body MEDIUMTEXT NOT NULL",
+		],
+	},
 ];
 
 /// <summary>
@@ -1524,6 +1534,123 @@ class OwlDatabase
 
 			return { messages: rows.slice(0, limit).map(MapMessage), hasMore: rows.length > limit };
 		}, null);
+	}
+
+	// ========================
+	// Letters
+	// ========================
+
+	/// <summary>
+	/// One page of an owl's letters across every chat it belongs to, as immersive mode lists them, newest first.
+	/// "inbox" is every owl others wrote that the viewer can see (see VisibleToMember); "sent" is every owl the viewer wrote.
+	/// Notes and unsent owls are left out.
+	///
+	/// <para>
+	/// NOTE: A letter is simply an owl, so both front ends read the same rows and a server can switch mode without losing any.
+	/// Each row carries its chat's kind and the viewer's read marker, so the caller can tell unread letters, announcements and owls from bulk owls apart.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="viewer">Owl number whose letters are listed</param>
+	/// <param name="box">"inbox" or "sent"</param>
+	/// <param name="beforeId">Only letters older than this ID; 0 for the newest page</param>
+	/// <param name="limit">Page size</param>
+	/// <returns>{ letters, hasMore } where each letter is a message record with chatKind, chatTitle, lastRead and (sent box only) members, or null on failure</returns>
+	async ListLetters(viewer, box, beforeId, limit)
+	{
+		return this.#Run("ListLetters", async () =>
+		{
+			const authorCondition = box === "sent" ? "m.sender_number = cm.owl_number" : "m.sender_number <> cm.owl_number";
+			const params = [viewer, Date.now()];
+			let pageCondition = "";
+
+			if (beforeId > 0)
+			{
+				pageCondition = "AND m.id < ?";
+				params.push(beforeId);
+			}
+
+			params.push(limit + 1);
+
+			const rows = await this.#mysql.query(
+				`SELECT ${messageColumns}, c.kind AS chat_kind, c.title AS chat_title, cm.last_read_message_id
+				FROM ${messageSource} JOIN frantic_owls_chat_members cm ON cm.chat_id = m.chat_id AND cm.owl_number = ? JOIN frantic_owls_chats c ON c.id = m.chat_id
+				WHERE ${authorCondition} AND m.kind IN ('text', 'location', 'poll') AND m.unsent_at = 0 AND ${VisibleToMember("m")} ${pageCondition}
+				ORDER BY m.id DESC LIMIT ?`,
+				params);
+
+			const page = rows.slice(0, limit);
+			const letters = page.map((row) => ({ ...MapMessage(row), chatKind: String(row.chat_kind), chatTitle: String(row.chat_title || ""), lastRead: Number(row.last_read_message_id || 0) }));
+
+			// Only the writer needs to know who each letter went to; a reader is never told who else a letter reached.
+			if (box === "sent" && letters.length > 0)
+			{
+				const chatIds = [...new Set(letters.filter((letter) => letter.chatKind !== "channel").map((letter) => letter.chatId))];
+				const members = chatIds.length > 0 ? await this.#mysql.query("SELECT chat_id, owl_number, role FROM frantic_owls_chat_members WHERE chat_id IN (?) ORDER BY joined_at, owl_number", [chatIds]) : [];
+				const membersByChat = GroupMembers(members);
+
+				for (const letter of letters)
+				{
+					const chat = membersByChat.get(letter.chatId);
+					letter.members = chat ? chat.members.filter((number) => number !== viewer) : [];
+				}
+			}
+
+			return { letters, hasMore: rows.length > limit };
+		}, null);
+	}
+
+	/// <summary>
+	/// One letter the viewer can see (see VisibleToMember), wherever it is.
+	/// </summary>
+	/// <param name="viewer">Owl number of the reader</param>
+	/// <param name="messageId">Message row ID</param>
+	/// <returns>Message record with chatKind, chatTitle and lastRead, null when it is not a letter the viewer can see, or undefined on failure</returns>
+	async GetLetter(viewer, messageId)
+	{
+		return this.#Run("GetLetter", async () =>
+		{
+			const row = await this.#mysql.single(
+				`SELECT ${messageColumns}, c.kind AS chat_kind, c.title AS chat_title, cm.last_read_message_id
+				FROM ${messageSource} JOIN frantic_owls_chat_members cm ON cm.chat_id = m.chat_id AND cm.owl_number = ? JOIN frantic_owls_chats c ON c.id = m.chat_id
+				WHERE m.id = ? AND m.kind IN ('text', 'location', 'poll') AND m.unsent_at = 0 AND ${VisibleToMember("m")}`,
+				[viewer, messageId, Date.now()]);
+
+			return row ? { ...MapMessage(row), chatKind: String(row.chat_kind), chatTitle: String(row.chat_title || ""), lastRead: Number(row.last_read_message_id || 0) } : null;
+		}, undefined);
+	}
+
+	/// <summary>
+	/// The IDs of a chat's letters a member has not read yet, oldest first: owls others wrote after the member's read marker.
+	/// </summary>
+	/// <param name="chatId">Chat row ID</param>
+	/// <param name="viewer">Member owl number</param>
+	/// <returns>Message IDs, or null on failure</returns>
+	async ListUnreadLetterIds(chatId, viewer)
+	{
+		return this.#Run("ListUnreadLetterIds", async () =>
+		{
+			const rows = await this.#mysql.query(
+				`SELECT m.id FROM frantic_owls_messages m JOIN frantic_owls_chat_members cm ON cm.chat_id = m.chat_id AND cm.owl_number = ? JOIN frantic_owls_chats c ON c.id = m.chat_id
+				WHERE m.chat_id = ? AND m.id > cm.last_read_message_id AND m.sender_number <> cm.owl_number AND m.kind IN ('text', 'location', 'poll') AND m.unsent_at = 0 AND ${VisibleToMember("m")}
+				ORDER BY m.id`,
+				[viewer, chatId, Date.now()]);
+
+			return rows.map((row) => Number(row.id));
+		}, null);
+	}
+
+	/// <summary>
+	/// How many letters an owl has not read yet, across every chat it belongs to.
+	/// </summary>
+	/// <param name="viewer">Owl number</param>
+	/// <returns>Count, or -1 on failure</returns>
+	async CountUnreadLetters(viewer)
+	{
+		return this.#Run("CountUnreadLetters", async () => Number(await this.#mysql.scalar(
+			`SELECT COUNT(*) FROM frantic_owls_messages m JOIN frantic_owls_chat_members cm ON cm.chat_id = m.chat_id AND cm.owl_number = ? JOIN frantic_owls_chats c ON c.id = m.chat_id
+			WHERE m.id > cm.last_read_message_id AND m.sender_number <> cm.owl_number AND m.kind IN ('text', 'location', 'poll') AND m.unsent_at = 0 AND ${VisibleToMember("m")}`,
+			[viewer, Date.now()]) || 0), -1);
 	}
 
 	// ========================

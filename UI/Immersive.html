@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<!-- FranticDreamer 2026 -->
+<!-- Immersive mode's letter desk. Loaded instead of Index.html (the phone) when the server's mode is "immersive"; the phone's scripts never load here. -->
+<html lang="en-GB">
+<head>
+	<meta charset="utf-8">
+	<title>Frantic's Wizarding Communication</title>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer">
+	<link rel="stylesheet" href="Styles/Immersive.css">
+	<!-- The parchment is large; fetching it with the page means the first letter opened does not draw in from the top. -->
+	<link rel="preload" href="Textures/MailParchment.png" as="image">
+</head>
+<body>
+	<!-- Notice that drops in at the top of the screen while the desk is closed (an owl arrived, unread letters waiting). -->
+	<div id="notice" class="notice" hidden>
+		<span class="notice-seal" aria-hidden="true">
+			<span class="notice-image"></span>
+			<span class="notice-problem"><i class="fa-solid fa-exclamation"></i></span>
+		</span>
+		<span class="notice-text">
+			<span class="notice-title" id="notice-title"></span>
+			<span class="notice-body" id="notice-body"></span>
+		</span>
+	</div>
+
+	<div id="desk" class="desk" hidden>
+		<header class="desk-bar">
+			<span class="desk-title"><i class="fa-solid fa-feather-pointed" aria-hidden="true"></i><span data-lang="mail.title"></span></span>
+			<span class="desk-post" id="desk-post" hidden></span>
+			<span class="desk-actions">
+				<button class="desk-icon" id="desk-settings" data-lang-title="mail.settings.title"><i class="fa-solid fa-gear"></i></button>
+				<button class="desk-icon" id="desk-close" data-lang-title="common.close"><i class="fa-solid fa-xmark"></i></button>
+			</span>
+		</header>
+
+		<main id="desk-view" class="desk-view"></main>
+
+		<!-- Shown over the desk after a letter is sent. -->
+		<div id="dispatch" class="dispatch" hidden>
+			<div class="dispatch-card">
+				<span class="dispatch-corner top-left"></span>
+				<span class="dispatch-corner top-right"></span>
+				<span class="dispatch-corner bottom-left"></span>
+				<span class="dispatch-corner bottom-right"></span>
+				<div class="dispatch-icon" aria-hidden="true"><i class="fa-solid fa-dove"></i></div>
+				<h2 class="dispatch-title" id="dispatch-title"></h2>
+				<p class="dispatch-body" id="dispatch-body"></p>
+				<ul class="dispatch-failures" id="dispatch-failures" hidden></ul>
+				<button class="desk-button" id="dispatch-close" data-lang="mail.dispatch.return"></button>
+			</div>
+		</div>
+	</div>
+
+	<audio id="owl-sound" preload="auto"></audio>
+
+	<script src="Scripts/Lang.js"></script>
+	<script src="Scripts/Util.js"></script>
+	<script src="Scripts/Bridge.js"></script>
+	<script src="Scripts/Immersive/MailStore.js"></script>
+	<script src="Scripts/Immersive/Sheet.js"></script>
+	<script src="Scripts/Immersive/Screens/Letters.js"></script>
+	<script src="Scripts/Immersive/Screens/Reader.js"></script>
+	<script src="Scripts/Immersive/Screens/Compose.js"></script>
+	<script src="Scripts/Immersive/Screens/Settings.js"></script>
+	<script src="Scripts/Immersive/Desk.js"></script>
+</body>
+</html>

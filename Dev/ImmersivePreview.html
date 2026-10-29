@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<!-- FranticDreamer 2026 -->
+<!-- Browser preview of UI/Immersive.html (immersive mode's letter desk) with a mocked client and server. Not shipped to players. -->
+<!-- The real page's markup, stylesheets and scripts are loaded from UI/Immersive.html, so this file never needs updating alongside it. -->
+<html lang="en-GB">
+<head>
+	<meta charset="utf-8">
+	<title>Frantic's Wizarding Communication (Immersive Preview)</title>
+	<style>
+		body.dev-body
+		{
+			min-height: 100vh;
+			background: linear-gradient(160deg, #3c5a3a 0%, #6d7f5a 35%, #b9a77a 60%, #4a3b2a 100%);
+		}
+
+		.dev-controls
+		{
+			position: fixed;
+			right: 16px;
+			bottom: 16px;
+			z-index: 99;
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			opacity: 0.85;
+			transition: opacity 150ms;
+		}
+
+		.dev-controls:hover
+		{
+			opacity: 1;
+		}
+
+		/* Immersive.css makes every button inherit the desk's light text, which vanished on the browser's default light button face. */
+		.dev-controls button
+		{
+			padding: 6px 12px;
+			border: 1px solid #d4b88c;
+			border-radius: 4px;
+			background: #1c1410;
+			font: 13px system-ui, sans-serif;
+			color: #f4e6ce;
+			text-align: left;
+			cursor: pointer;
+		}
+
+		.dev-controls button:hover
+		{
+			background: #8e1b1b;
+			border-color: #e63946;
+			color: #ffffff;
+		}
+	</style>
+</head>
+<body class="dev-body">
+	<div class="dev-controls">
+		<button onclick="OwlsDev.Open()">Open desk (/owl)</button>
+		<button onclick="OwlsDev.Close()">Close desk</button>
+		<button onclick="OwlsDev.Arrive(true)">Letter arrives (signed)</button>
+		<button onclick="OwlsDev.Arrive(false)">Letter arrives (anonymous)</button>
+		<button onclick="OwlsDev.AtPost(true)">Stand at owl post</button>
+		<button onclick="OwlsDev.AtPost(false)">Leave owl post</button>
+		<button onclick="OwlsDev.SetModes('free', 'free')">Modes: free / free</button>
+		<button onclick="OwlsDev.SetModes('postonly_freeunread', 'postonly')">Modes: postonly_freeunread / postonly</button>
+		<button onclick="OwlsDev.SetModes('postonly', 'postonly')">Modes: postonly / postonly</button>
+		<button onclick="OwlsDevBackground.Pick()">Background image…</button>
+		<button onclick="OwlsDevBackground.Reset()">Default background</button>
+	</div>
+	<div id="page"></div>
+
+	<script src="DevBackground.js"></script>
+	<script src="ImmersiveMock.js"></script>
+	<script>
+		(async () =>
+		{
+			const base = new URL("../UI/", location.href);
+			const html = await (await fetch(new URL("Immersive.html", base))).text();
+			const page = new DOMParser().parseFromString(html, "text/html");
+
+			for (const sheet of page.querySelectorAll("link[rel=stylesheet]"))
+			{
+				const link = document.createElement("link");
+				link.rel = "stylesheet";
+				link.href = new URL(sheet.getAttribute("href"), base).href;
+
+				if (sheet.integrity)
+				{
+					link.integrity = sheet.integrity;
+					link.crossOrigin = "anonymous";
+				}
+
+				document.head.prepend(link);
+			}
+
+			const scripts = [...page.querySelectorAll("script[src]")].map((script) => new URL(script.getAttribute("src"), base).href);
+			page.querySelectorAll("script").forEach((script) => script.remove());
+
+			// The page's own markup, from this repository; it holds no player data.
+			document.getElementById("page").replaceWith(...page.body.childNodes);
+
+			for (const source of scripts)
+			{
+				await new Promise((resolve, reject) =>
+				{
+					const script = document.createElement("script");
+					script.src = source;
+					script.onload = resolve;
+					script.onerror = reject;
+					document.body.appendChild(script);
+				});
+			}
+		})();
+	</script>
+</body>
+</html>

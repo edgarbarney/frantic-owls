@@ -159,6 +159,7 @@
 
 	const config =
 	{
+		mode: "phone",
 		callsEnabled: true, callRingSeconds: 15, defaultRingtone: "hoot", voiceEnabled: true, voiceBitrate: 24000,
 		ringtones:
 		[
@@ -181,7 +182,7 @@
 		],
 		effects: { muggle: { keyTap: "../UI/Sounds/Phone/KeyTap.wav", keyEraseTap: "../UI/Sounds/Phone/KeyEraseTap.wav", appTap: "../UI/Sounds/Phone/AppTap.wav", lock: "../UI/Sounds/Phone/Lock.wav", unlock: "../UI/Sounds/Phone/Unlock.wav", messageSent: "../UI/Sounds/Phone/MessageSent.wav", messageReceived: "../UI/Sounds/Phone/MessageReceived.wav" }, parchment: { keyTap: "../UI/Sounds/Parchment/KeyTap.wav", keyEraseTap: "../UI/Sounds/Parchment/KeyEraseTap.wav", appTap: "../UI/Sounds/Parchment/AppTap.wav", lock: "../UI/Sounds/Parchment/Lock.wav", unlock: "../UI/Sounds/Parchment/Unlock.wav", messageSent: "../UI/Sounds/Parchment/MessageSent.wav", messageReceived: "../UI/Sounds/Parchment/MessageReceived.wav" } },
 		defaultSound: "hoot", readReceipts: true, typingIndicators: true, unsendSeconds: 120, maxPinnedChats: 5,
-		nearbyRefreshMs: 1000, requestTimeoutMs: 8000, ui: { scale: 1, widthPx: 360, heightPx: 700, rightMarginPx: 32, defaultTheme: "muggle", defaultLanguage: "en-GB", allowMove: true, lockScreen: true },
+		nearbyRefreshMs: 1000, requestTimeoutMs: 8000, ui: { scale: 1, widthPx: 360, heightPx: 700, rightMarginPx: 32, defaultTheme: "muggle", allowMove: true, lockScreen: true, bannerDurationMs: 4000 },
 		languages: [], quietActivities: true,
 	};
 

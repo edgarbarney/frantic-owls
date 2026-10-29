@@ -19,6 +19,8 @@ const { SenderRegistry } = require("./Senders.js");
 const { AuditLog } = require("./AuditLog.js");
 const { LocationService } = require("./Locations.js");
 const { NumberDialler } = require("./Numbers.js");
+const { PostService } = require("./Posts.js");
+const { MailService } = require("./Mail.js");
 const { CreateApi } = require("./Api.js");
 const { RequestDispatcher } = require("./Requests.js");
 const { Ok } = require("./Result.js");
@@ -81,7 +83,7 @@ const core = Imports.get("hmp-core");
 Logger.Initialise(hmp.logger.create(resourceName));
 
 const config = LoadConfig(hmp);
-Lang.Load(config.ui.defaultLanguage);
+Lang.Load(config.defaultLanguage);
 
 const clientConfig = GetClientConfig(config, Lang.List());
 const database = new OwlDatabase(mysql, config.storage);
@@ -90,16 +92,23 @@ const outbox = new Outbox(config.network.flushIntervalMs, config.network.maxBatc
 const audit = new AuditLog(config.logging);
 const blocks = new BlockService(database);
 const flight = new FlightPlanner(hmp, directory, config.flight);
-const dialler = new NumberDialler(database, hmp, config.numbers);
-const settings = new SettingsService(database, config.ui, directory, config.avatars);
-const contacts = new ContactService(database, hmp, config.contacts, config.avatars, dialler);
-const profiles = new ProfileService(database, directory, outbox, config.avatars);
-const senders = new SenderRegistry(database, hmp, config.avatars, PushSendersToAll);
-const locations = new LocationService(database, outbox, hmp, config.locations, () => ImportOptional("hmp-blips"));
+const dialler = new NumberDialler(database, hmp, config.phonemode_numbers);
+const settings = new SettingsService(database, config.phonemode_ui, directory, config.phonemode_avatars);
+const contacts = new ContactService(database, hmp, config.contacts, config.phonemode_avatars, dialler);
+const profiles = new ProfileService(database, directory, outbox, config.phonemode_avatars);
+const senders = new SenderRegistry(database, hmp, config.phonemode_avatars, PushSendersToAll);
+const locations = new LocationService(database, outbox, hmp, config.phonemode_locations, () => ImportOptional("hmp-blips"));
 const chats = new ChatService({ database, directory, outbox, hmp, config, blocks, senders, flight, audit, locations, settings, dialler, hooks: { Describe, OnSent } });
-const inform = new InformService({ directory, contacts, profiles, outbox, hmp, config: config.inform, blocks, audit });
-const calls = new CallService({ database, directory, outbox, hmp, config: config.calls, blocks, audit, dialler, hooks: { Describe, OnCall } });
+const inform = new InformService({ directory, contacts, profiles, outbox, hmp, config: config.phonemode_inform, blocks, audit });
+const calls = new CallService({ database, directory, outbox, hmp, config: config.phonemode_calls, blocks, audit, dialler, hooks: { Describe, OnCall } });
 const requests = new RequestDispatcher(hmp, directory, outbox, config.network);
+const posts = new PostService(hmp, config.immersivemode_posts, () => ImportOptional("hmp-interact"), OpenAtPost, Lang.Translate("", "mail.post.prompt"));
+const mail = new MailService({ database, directory, chats, contacts, posts, senders, hmp, config });
+
+/// <summary>
+/// True when players get the immersive letter desk instead of the phone (mode "immersive").
+/// </summary>
+const isImmersive = config.mode === "immersive";
 
 /// <summary>
 /// True once the database is migrated. Until then no owl is registered and every request is refused.
@@ -353,6 +362,12 @@ async function CanAnnounce(player)
 /// <param name="entry">Directory entry</param>
 async function SendBootstrap(entry)
 {
+	if (isImmersive)
+	{
+		await SendImmersiveBootstrap(entry);
+		return;
+	}
+
 	const [contactList, chatList, ownAvatar, visibleProfiles, blockList, retired, callLog] = await Promise.all([contacts.List(entry.number), chats.List(entry.number), profiles.GetOwnAvatar(entry.number), profiles.ListVisible(entry.number), blocks.List(entry.number), database.ListRetiredRelated(entry.number), calls.ListLog(entry.number)]);
 
 	// The player may have switched character while the queries ran.
@@ -389,6 +404,60 @@ async function SendBootstrap(entry)
 	outbox.Push(entry.player, "call:current", { call: calls.GetCurrent(entry.number) });
 	outbox.Push(entry.player, "inform:requests", { requests: inform.ListPending(entry.number) });
 	outbox.Push(entry.player, "state:ready", {});
+}
+
+/// <summary>
+/// Send a player the state of immersive mode's letter desk: who they are, their settings, correspondents and how many letters wait unread.
+/// Letters themselves are fetched a page at a time when the desk opens, since only the server may decide which can be read where.
+/// </summary>
+/// <param name="entry">Directory entry</param>
+async function SendImmersiveBootstrap(entry)
+{
+	const [contactList, unread] = await Promise.all([contacts.List(entry.number), mail.CountUnread(entry.number)]);
+
+	// The player may have switched character while the queries ran.
+	if (directory.GetByPlayerId(entry.playerId) !== entry)
+	{
+		return;
+	}
+
+	PushLanguage(entry);
+
+	if (!contactList)
+	{
+		outbox.Push(entry.player, "notify", { kind: "error", titleKey: "app.name", bodyKey: "error.bootstrapFailed" });
+	}
+
+	const quiet = GetQuietActivity(entry.playerId);
+
+	// The owl number stays on the server: immersive pages address owls by name and the server checks every number they send.
+	outbox.Push(entry.player, "state:reset",
+	{
+		me: { name: entry.characterName },
+		settings: entry.settings,
+		config: clientConfig,
+		quiet: { active: !!quiet, label: quiet ? quiet.label : "" },
+		unread,
+		serverNow: Date.now(),
+	});
+	outbox.PushChunked(entry.player, "contacts:chunk", "contacts", (contactList || []).map((contact) => ({ id: contact.id, number: contact.number, name: contact.name })), contactChunkSize);
+	outbox.Push(entry.player, "state:ready", {});
+}
+
+/// <summary>
+/// Open the letter desk for a player who used an owl post's prompt (hmp-interact).
+/// </summary>
+/// <param name="player">Player at the post</param>
+/// <param name="post">Post record</param>
+function OpenAtPost(player, post)
+{
+	if (!isReady || !directory.GetByPlayerId(player.id))
+	{
+		player.sendChat(`[${T(player, "app.name")}] ${T(player, "error.noOwl")}`);
+		return;
+	}
+
+	outbox.Push(player, "ui:open", { post: { id: post.id, label: post.label } });
 }
 
 /// <summary>
@@ -446,6 +515,7 @@ function UnloadOwl(player, notifyClient)
 	if (entry)
 	{
 		calls.Drop(entry.number);
+		mail.Forget(entry.number);
 	}
 
 	if (entry && notifyClient)
@@ -463,45 +533,7 @@ requests.Register("state.refresh", async (entry) =>
 	await SendBootstrap(entry);
 	return Ok();
 });
-requests.Register("contacts.update", (entry, data) => contacts.Update(entry, data));
 requests.Register("contacts.delete", (entry, data) => contacts.Delete(entry, data));
-requests.Register("contacts.saveFromChat", (entry, data) => contacts.SaveFromChat(entry, data));
-requests.Register("contacts.favourite", (entry, data) => contacts.SetFavourite(entry, data));
-requests.Register("contacts.addByNumber", (entry, data) => contacts.AddByNumber(entry, data));
-requests.Register("chats.openDirect", (entry, data) => chats.OpenDirect(entry, data));
-requests.Register("chats.openNumber", (entry, data) => chats.OpenNumber(entry, data));
-requests.Register("chats.search", (entry, data) => chats.Search(entry, data));
-requests.Register("chats.createGroup", (entry, data) => chats.CreateGroup(entry, data));
-requests.Register("chats.history", (entry, data) => chats.History(entry, data));
-requests.Register("chats.read", (entry, data) => chats.MarkRead(entry, data));
-requests.Register("chats.leave", (entry, data) => chats.Leave(entry, data));
-requests.Register("chats.mute", (entry, data) => chats.Mute(entry, data));
-requests.Register("chats.pin", (entry, data) => chats.PinChat(entry, data));
-requests.Register("chats.typing", (entry, data) => chats.Typing(entry, data));
-requests.Register("groups.rename", (entry, data) => chats.Rename(entry, data));
-requests.Register("groups.picture", (entry, data) => chats.SetPicture(entry, data));
-requests.Register("groups.addMembers", (entry, data) => chats.AddMembers(entry, data));
-requests.Register("groups.removeMember", (entry, data) => chats.RemoveMember(entry, data));
-requests.Register("groups.setAdmin", (entry, data) => chats.SetAdmin(entry, data));
-requests.Register("messages.send", (entry, data) => chats.Send(entry, data));
-requests.Register("messages.sendLocation", (entry, data) => chats.SendLocation(entry, data));
-requests.Register("messages.unsend", (entry, data) => chats.Unsend(entry, data));
-requests.Register("messages.hide", (entry, data) => chats.Hide(entry, data));
-requests.Register("messages.pin", (entry, data) => chats.PinMessage(entry, data));
-requests.Register("messages.forward", (entry, data) => chats.Forward(entry, data));
-requests.Register("messages.sendPoll", (entry, data) => chats.SendPoll(entry, data));
-requests.Register("polls.vote", (entry, data) => chats.Vote(entry, data));
-requests.Register("locations.show", (entry, data) => locations.Show(entry, data));
-requests.Register("locations.hide", (entry, data) => locations.Hide(entry, data));
-requests.Register("inform.nearby", (entry) => inform.ListNearby(entry));
-requests.Register("inform.send", (entry, data) => inform.Send(entry, data));
-requests.Register("inform.respond", (entry, data) => inform.Respond(entry, data));
-requests.Register("calls.start", (entry, data) => calls.Start(entry, data));
-requests.Register("calls.answer", (entry, data) => calls.Answer(entry, data));
-requests.Register("calls.hangup", (entry, data) => calls.Hangup(entry, data));
-requests.Register("calls.mute", (entry, data) => calls.SetMuted(entry, data));
-requests.Register("calls.seen", (entry) => calls.MarkSeen(entry));
-requests.Register("calls.clear", (entry, data) => calls.Clear(entry, data));
 requests.Register("settings.update", async (entry, data) =>
 {
 	const before = Lang.Resolve(entry.settings.language);
@@ -514,33 +546,98 @@ requests.Register("settings.update", async (entry, data) =>
 
 	return result;
 });
-requests.Register("profile.update", (entry, data) => profiles.Update(entry, data));
-requests.Register("profiles.lookup", (entry, data) => profiles.Lookup(entry, data));
 
-requests.Register("blocks.add", async (entry, data) =>
+/// <summary>
+/// The phone's requests, registered only in phone mode so an immersive page cannot reach features it does not offer.
+/// </summary>
+function RegisterPhoneRequests()
 {
-	const result = await blocks.Add(entry, data);
+	requests.Register("contacts.update", (entry, data) => contacts.Update(entry, data));
+	requests.Register("contacts.saveFromChat", (entry, data) => contacts.SaveFromChat(entry, data));
+	requests.Register("contacts.favourite", (entry, data) => contacts.SetFavourite(entry, data));
+	requests.Register("contacts.addByNumber", (entry, data) => contacts.AddByNumber(entry, data));
+	requests.Register("chats.openDirect", (entry, data) => chats.OpenDirect(entry, data));
+	requests.Register("chats.openNumber", (entry, data) => chats.OpenNumber(entry, data));
+	requests.Register("chats.search", (entry, data) => chats.Search(entry, data));
+	requests.Register("chats.createGroup", (entry, data) => chats.CreateGroup(entry, data));
+	requests.Register("chats.history", (entry, data) => chats.History(entry, data));
+	requests.Register("chats.read", (entry, data) => chats.MarkRead(entry, data));
+	requests.Register("chats.leave", (entry, data) => chats.Leave(entry, data));
+	requests.Register("chats.mute", (entry, data) => chats.Mute(entry, data));
+	requests.Register("chats.pin", (entry, data) => chats.PinChat(entry, data));
+	requests.Register("chats.typing", (entry, data) => chats.Typing(entry, data));
+	requests.Register("groups.rename", (entry, data) => chats.Rename(entry, data));
+	requests.Register("groups.picture", (entry, data) => chats.SetPicture(entry, data));
+	requests.Register("groups.addMembers", (entry, data) => chats.AddMembers(entry, data));
+	requests.Register("groups.removeMember", (entry, data) => chats.RemoveMember(entry, data));
+	requests.Register("groups.setAdmin", (entry, data) => chats.SetAdmin(entry, data));
+	requests.Register("messages.send", (entry, data) => chats.Send(entry, data));
+	requests.Register("messages.sendLocation", (entry, data) => chats.SendLocation(entry, data));
+	requests.Register("messages.unsend", (entry, data) => chats.Unsend(entry, data));
+	requests.Register("messages.hide", (entry, data) => chats.Hide(entry, data));
+	requests.Register("messages.pin", (entry, data) => chats.PinMessage(entry, data));
+	requests.Register("messages.forward", (entry, data) => chats.Forward(entry, data));
+	requests.Register("messages.sendPoll", (entry, data) => chats.SendPoll(entry, data));
+	requests.Register("polls.vote", (entry, data) => chats.Vote(entry, data));
+	requests.Register("locations.show", (entry, data) => locations.Show(entry, data));
+	requests.Register("locations.hide", (entry, data) => locations.Hide(entry, data));
+	requests.Register("inform.nearby", (entry) => inform.ListNearby(entry));
+	requests.Register("inform.send", (entry, data) => inform.Send(entry, data));
+	requests.Register("inform.respond", (entry, data) => inform.Respond(entry, data));
+	requests.Register("calls.start", (entry, data) => calls.Start(entry, data));
+	requests.Register("calls.answer", (entry, data) => calls.Answer(entry, data));
+	requests.Register("calls.hangup", (entry, data) => calls.Hangup(entry, data));
+	requests.Register("calls.mute", (entry, data) => calls.SetMuted(entry, data));
+	requests.Register("calls.seen", (entry) => calls.MarkSeen(entry));
+	requests.Register("calls.clear", (entry, data) => calls.Clear(entry, data));
+	requests.Register("profile.update", (entry, data) => profiles.Update(entry, data));
+	requests.Register("profiles.lookup", (entry, data) => profiles.Lookup(entry, data));
 
-	if (result.ok)
+	requests.Register("blocks.add", async (entry, data) =>
 	{
-		calls.EndBetween(entry.number, result.data.number);
-		audit.Log("blocks", "Owl blocked", `${Describe(entry.number)} blocked ${Describe(result.data.number)}.`);
-	}
+		const result = await blocks.Add(entry, data);
 
-	return result;
-});
+		if (result.ok)
+		{
+			calls.EndBetween(entry.number, result.data.number);
+			audit.Log("blocks", "Owl blocked", `${Describe(entry.number)} blocked ${Describe(result.data.number)}.`);
+		}
 
-requests.Register("blocks.remove", async (entry, data) =>
+		return result;
+	});
+
+	requests.Register("blocks.remove", async (entry, data) =>
+	{
+		const result = await blocks.Remove(entry, data);
+
+		if (result.ok)
+		{
+			audit.Log("blocks", "Owl unblocked", `${Describe(entry.number)} unblocked ${Describe(result.data.number)}.`);
+		}
+
+		return result;
+	});
+}
+
+/// <summary>
+/// The letter desk's requests, registered only in immersive mode.
+/// </summary>
+function RegisterImmersiveRequests()
 {
-	const result = await blocks.Remove(entry, data);
+	requests.Register("mail.list", (entry, data) => mail.List(entry, data));
+	requests.Register("mail.open", (entry, data) => mail.Open(entry, data));
+	requests.Register("mail.send", (entry, data) => mail.Send(entry, data));
+	requests.Register("mail.recipients", (entry) => mail.ListRecipients(entry));
+}
 
-	if (result.ok)
-	{
-		audit.Log("blocks", "Owl unblocked", `${Describe(entry.number)} unblocked ${Describe(result.data.number)}.`);
-	}
-
-	return result;
-});
+if (isImmersive)
+{
+	RegisterImmersiveRequests();
+}
+else
+{
+	RegisterPhoneRequests();
+}
 
 // ========================
 // Commands
@@ -561,27 +658,32 @@ commands.register(config.command, { description: Lang.Translate("", "command.ope
 		return reply(T(player, "error.noOwl"));
 	}
 
-	outbox.Push(player, "ui:open", {});
+	// Standing at an owl post counts even when the desk is opened with the command rather than the post's prompt.
+	outbox.Push(player, "ui:open", isImmersive ? { post: mail.GetPost(player) } : {});
 	return true;
 });
 
-commands.register(`${config.command}_resetpos`, { description: Lang.Translate("", "command.resetDescription"), usage: `/${config.command}_resetpos` }, async ({ player, reply }) =>
+// The letter desk always sits in the middle of the screen; only the phone can be moved.
+if (!isImmersive)
 {
-	const entry = directory.GetByPlayerId(player.id);
-
-	if (!entry)
+	commands.register(`${config.command}_resetpos`, { description: Lang.Translate("", "command.resetDescription"), usage: `/${config.command}_resetpos` }, async ({ player, reply }) =>
 	{
-		return reply(T(player, "error.noOwl"));
-	}
+		const entry = directory.GetByPlayerId(player.id);
 
-	if (!await settings.ResetLayout(entry))
-	{
-		return reply(T(player, "command.resetFailed"));
-	}
+		if (!entry)
+		{
+			return reply(T(player, "error.noOwl"));
+		}
 
-	outbox.Push(player, "settings:update", { settings: entry.settings });
-	return reply(T(player, "command.resetDone"));
-});
+		if (!await settings.ResetLayout(entry))
+		{
+			return reply(T(player, "command.resetFailed"));
+		}
+
+		outbox.Push(player, "settings:update", { settings: entry.settings });
+		return reply(T(player, "command.resetDone"));
+	});
+}
 
 if (config.announcements.enabled)
 {
@@ -727,6 +829,7 @@ async function Start()
 		inform.Sweep();
 		calls.Sweep();
 		dialler.Sweep();
+		mail.Sweep();
 		requests.Sweep();
 	}, maintenanceIntervalMs);
 
@@ -751,12 +854,24 @@ async function Start()
 		}
 	}
 
-	Logger.LogSuccess("Main", `Owl Post is open with ${directory.GetCount()} owl(s) online. Players use /${config.command}.`);
+	if (isImmersive)
+	{
+		posts.Register();
+	}
+
+	Logger.LogSuccess("Main", `Owl Post is open in ${config.mode} mode with ${directory.GetCount()} owl(s) online. Players use /${config.command}.`);
 	return true;
 }
 
 Events.on("resourceStart", async (name) =>
 {
+	// hmp-interact forgets every prompt when it restarts, so the owl posts are offered again.
+	if (name === "hmp-interact" && isImmersive && isReady)
+	{
+		posts.Register();
+		return;
+	}
+
 	if (name !== resourceName)
 	{
 		return;
@@ -771,6 +886,13 @@ Events.on("resourceStop", (name) =>
 	{
 		// Senders belong to the resource that registered them.
 		senders.UnregisterResource(name);
+
+		// hmp-interact takes its prompts with it when it stops.
+		if (name === "hmp-interact")
+		{
+			posts.Forget();
+		}
+
 		return;
 	}
 
@@ -788,6 +910,7 @@ Events.on("resourceStop", (name) =>
 
 	chats.StopFlights();
 	calls.Stop();
+	posts.Unregister();
 	audit.Stop();
 	outbox.Stop();
 });

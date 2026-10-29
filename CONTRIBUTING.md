@@ -48,6 +48,8 @@ The code follows my coding conventions, translated to JavaScript from C++. Might
 
 ### How things fit together
 
+- **Two front ends** share one server: the phone (`UI/Index.html`) and immersive mode's letter desk (`UI/Immersive.html`, `UI/Scripts/Immersive/`), picked by the server's `mode`. Only one page is ever loaded. Both read and write the same tables, so a feature that stores something should store it the way the other front end can read too.
+- **Config keys** only one front end uses get its prefix (`phonemode_` or `immersivemode_`) and go in `SanitisePhoneMode` or `SanitiseImmersiveMode` in `Server/Config.js`; shared keys stay unprefixed. Requests only one front end uses are registered in `RegisterPhoneRequests` or `RegisterImmersiveRequests` in `Server/Main.js`.
 - **Player-facing text** never lives in code. Add a key to `Lang/en-GB.json` and use `T("your.key")` in the page or `Fail("your.key")` on the server.
 - **New player actions** are registered in `Server/Main.js` through the `RequestDispatcher`, which checks the request's shape, rate and owl before your handler runs. Never trust what the page sends.
 - **Database changes** go in a new migration at the end of `migrations` in `Server/Database.js`, one statement per version. Never edit a version that has been published.
@@ -55,7 +57,7 @@ The code follows my coding conventions, translated to JavaScript from C++. Might
 
 ### Testing
 
-- Serve the resource folder over HTTP (e.g. `python -m http.server` inside it) and open `Dev/Preview.html`. It runs the real phone page against a mock server, with buttons that simulate incoming owls, informs, duels and more. If your change adds something the mock does not know, teach `Dev/DevMock.js` about it.
+- Serve the resource folder over HTTP (e.g. `python -m http.server` inside it) and open `Dev/Preview.html`. It runs the real phone page against a mock server, with buttons that simulate incoming owls, informs, duels and more. If your change adds something the mock does not know, teach `Dev/DevMock.js` about it. `Dev/ImmersivePreview.html` and `Dev/ImmersiveMock.js` do the same for the letter desk.
 - For server changes, run the resource on a local HogwartsMP server with MariaDB or MySQL, and try it with two characters.
 
 ## Licence

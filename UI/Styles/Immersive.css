@@ -1,0 +1,1343 @@
+/* FranticDreamer 2026 */
+/* Immersive mode's letter desk. The phone's Phone.css is never loaded alongside it. */
+
+@font-face
+{
+	font-family: "Cinzel";
+	src: url("../Fonts/Cinzel-Variable.ttf") format("truetype");
+	font-weight: 400 900;
+}
+
+@font-face
+{
+	font-family: "Spectral";
+	src: url("../Fonts/Spectral-Regular.ttf") format("truetype");
+}
+
+/* Every letter is written and read in this one bundled hand, so it looks the same on every player's screen. */
+@font-face
+{
+	font-family: "Caveat";
+	src: url("../Fonts/Caveat-Variable.ttf") format("truetype");
+	font-weight: 400 700;
+}
+
+/* ======================== */
+/* Tokens                   */
+/* ======================== */
+
+/* Chrome sizes are in rem; Desk.js sets --ui-scale from the client script's layout, so 1rem is 16px at scale 1 on a 1080p screen. */
+/* The letter sheet is the exception: it is laid out in fixed design pixels and scaled as a whole (see Sheet.js). */
+:root
+{
+	--ui-scale: 1;
+
+	--backdrop: rgba(9, 6, 4, 0.8);
+	--panel: linear-gradient(180deg, rgba(42, 29, 20, 0.96), rgba(28, 20, 14, 0.96));
+	--panel-line: rgba(176, 141, 87, 0.45);
+	--text: #eadbc0;
+	--text-dim: #a8916c;
+	--gold: #d4b88c;
+	--gold-rgb: 212, 184, 140;
+	--wax: #8e1b1b;
+	--wax-bright: #b52a2a;
+	--letter-ink: #2a1f14;
+	--letter-accent: #4a1c1c;
+	--parchment: #f4e6ce;
+	--danger: #e08a7a;
+
+	--font-heading: "Cinzel", "Times New Roman", serif;
+	--font-body: "Spectral", Georgia, serif;
+	--font-letter: "Caveat", "Segoe Print", cursive;
+
+	font-size: calc(16px * var(--ui-scale));
+}
+
+*
+{
+	box-sizing: border-box;
+}
+
+body
+{
+	margin: 0;
+	overflow: hidden;
+	background: transparent;
+	color: var(--text);
+	font-family: var(--font-body);
+	-webkit-font-smoothing: antialiased;
+	user-select: none;
+}
+
+button,
+input,
+select,
+textarea
+{
+	font: inherit;
+	color: inherit;
+}
+
+button
+{
+	cursor: pointer;
+}
+
+[hidden]
+{
+	display: none !important;
+}
+
+/* ======================== */
+/* Desk                     */
+/* ======================== */
+
+/* Semi-opaque over the game, as if the whole screen were the desk. */
+.desk
+{
+	position: fixed;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	background: rgba(0, 0, 0, 0.55);
+	opacity: 0;
+	transition: opacity 220ms ease;
+}
+
+.desk.is-open
+{
+	opacity: 1;
+}
+
+.desk.is-closing
+{
+	opacity: 0;
+}
+
+.desk-bar
+{
+	display: flex;
+	align-items: center;
+	gap: 1.5rem;
+	height: 4rem;
+	padding: 0 2rem;
+	flex: none;
+}
+
+.desk-title
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-family: var(--font-heading);
+	font-size: 1.35rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	color: var(--gold);
+}
+
+.desk-post
+{
+	padding: 0.3rem 0.9rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 999px;
+	font-size: 0.9rem;
+	color: var(--gold);
+	background: rgba(var(--gold-rgb), 0.08);
+}
+
+.desk-post.is-away
+{
+	color: var(--text-dim);
+	background: transparent;
+}
+
+.desk-actions
+{
+	display: inline-flex;
+	gap: 0.5rem;
+	margin-left: auto;
+}
+
+.desk-view
+{
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	justify-content: center;
+	padding: 0 2rem 1.5rem;
+}
+
+.desk-loading
+{
+	align-self: center;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+/* ======================== */
+/* Buttons                  */
+/* ======================== */
+
+.desk-button
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.55rem;
+	padding: 0.5rem 1.1rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.3rem;
+	background: transparent;
+	font-family: var(--font-heading);
+	font-size: 0.85rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--gold);
+	transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.desk-button:hover:not(:disabled)
+{
+	background: rgba(var(--gold-rgb), 0.14);
+}
+
+.desk-button.is-primary
+{
+	border-color: var(--wax-bright);
+	background: var(--wax);
+	color: var(--parchment);
+}
+
+.desk-button.is-primary:hover:not(:disabled)
+{
+	background: var(--wax-bright);
+}
+
+.desk-button.is-quiet
+{
+	border-color: transparent;
+}
+
+.desk-button.is-active
+{
+	background: var(--gold);
+	color: #1c1410;
+}
+
+.desk-button.is-confirming
+{
+	border-color: var(--wax-bright);
+	background: var(--wax-bright);
+	color: var(--parchment);
+}
+
+.desk-button:disabled,
+.desk-icon:disabled
+{
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.desk-icon
+{
+	display: inline-grid;
+	place-items: center;
+	width: 2.5rem;
+	height: 2.5rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.25);
+	color: var(--gold);
+	font-size: 1rem;
+}
+
+.desk-icon:hover:not(:disabled)
+{
+	background: rgba(var(--gold-rgb), 0.16);
+}
+
+.desk-toolbar
+{
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	width: min(52rem, 100%);
+	margin: 0 auto 0.75rem;
+	flex: none;
+}
+
+.compose-title,
+.reader-details
+{
+	flex: 1;
+	text-align: center;
+	color: var(--text-dim);
+}
+
+.compose-title
+{
+	font-family: var(--font-heading);
+	font-size: 1rem;
+	letter-spacing: 0.06em;
+	color: var(--gold);
+}
+
+.reader-details
+{
+	font-style: italic;
+}
+
+/* ======================== */
+/* Letters                  */
+/* ======================== */
+
+.letters
+{
+	display: flex;
+	flex-direction: column;
+	width: min(56rem, 100%);
+	height: 100%;
+	padding: 1.25rem 1.5rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.5rem;
+	background: var(--panel);
+	box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.55);
+}
+
+.letters-head
+{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid var(--panel-line);
+}
+
+.letters-tabs
+{
+	display: flex;
+	gap: 0.25rem;
+}
+
+.letters-tab
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.5rem 1rem;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	font-family: var(--font-heading);
+	font-size: 1rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.letters-tab.is-active
+{
+	border-bottom-color: var(--gold);
+	color: var(--gold);
+}
+
+.letters-badge
+{
+	min-width: 1.4rem;
+	padding: 0.05rem 0.4rem;
+	border-radius: 999px;
+	background: var(--wax-bright);
+	font-family: var(--font-body);
+	font-size: 0.75rem;
+	color: var(--parchment);
+	text-align: center;
+}
+
+.letters-hint
+{
+	margin: 0.75rem 0 0;
+	font-size: 0.9rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.letters-scroll
+{
+	flex: 1;
+	min-height: 0;
+	margin-top: 0.75rem;
+	overflow-y: auto;
+}
+
+.letters-list
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.letters-empty
+{
+	margin: 3rem 0;
+	text-align: center;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.letters-more
+{
+	display: flex;
+	margin: 0.75rem auto 0;
+}
+
+.letter-button
+{
+	display: grid;
+	grid-template-columns: 5.5rem 1fr auto;
+	align-items: center;
+	gap: 1.25rem;
+	width: 100%;
+	min-height: 5.5rem;
+	padding: 0.85rem 1.25rem;
+	border: 1px solid transparent;
+	border-left: 3px solid transparent;
+	border-radius: 0.35rem;
+	background: rgba(var(--gold-rgb), 0.05);
+	text-align: left;
+	transition: background-color 150ms, border-color 150ms;
+}
+
+.letter-button:hover
+{
+	border-color: var(--panel-line);
+	background: rgba(var(--gold-rgb), 0.11);
+}
+
+.letter-row.is-unread .letter-button
+{
+	border-left-color: var(--wax-bright);
+}
+
+.letter-icon
+{
+	position: relative;
+	width: 5.5rem;
+	height: 4.25rem;
+	background: url("../Textures/LetterRead.png") center / contain no-repeat;
+	filter: drop-shadow(0 0.3rem 0.4rem rgba(0, 0, 0, 0.5));
+}
+
+/* Still sealed: the closed envelope. */
+.letter-row.is-unread .letter-icon
+{
+	background-image: url("../Textures/LetterUnread.png");
+}
+
+/* Cannot be read here: the envelope fades and a padlock sits on it. */
+.letter-row.is-locked .letter-icon
+{
+	filter: grayscale(0.85) brightness(0.7) drop-shadow(0 0.3rem 0.4rem rgba(0, 0, 0, 0.5));
+}
+
+.letter-row.is-locked .letter-icon::after
+{
+	content: "\f023";
+	position: absolute;
+	right: 0.1rem;
+	bottom: 0.1rem;
+	display: grid;
+	place-items: center;
+	width: 1.6rem;
+	height: 1.6rem;
+	border-radius: 50%;
+	background: #34302b;
+	font-family: "Font Awesome 6 Free";
+	font-size: 0.8rem;
+	font-weight: 900;
+	color: #e3d6c2;
+}
+
+.letter-lines
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	min-width: 0;
+}
+
+.letter-from,
+.letter-preview
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.letter-from
+{
+	font-family: var(--font-letter);
+	font-size: 1.75rem;
+	line-height: 1.1;
+	color: var(--parchment);
+}
+
+.letter-row.is-official .letter-from
+{
+	font-family: var(--font-heading);
+	font-size: 1.1rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	color: var(--gold);
+}
+
+.letter-row.is-unread .letter-from
+{
+	font-weight: 700;
+}
+
+.letter-preview
+{
+	font-size: 1rem;
+	color: var(--text-dim);
+}
+
+.letter-row.is-locked .letter-preview
+{
+	font-style: italic;
+}
+
+.letter-meta
+{
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 0.3rem;
+	font-size: 0.9rem;
+	color: var(--text-dim);
+}
+
+.letter-tag
+{
+	max-width: 10rem;
+	padding: 0.05rem 0.5rem;
+	overflow: hidden;
+	border: 1px solid var(--panel-line);
+	border-radius: 999px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: 0.75rem;
+}
+
+/* ======================== */
+/* Sheet                    */
+/* ======================== */
+
+/* The slot takes whatever space the screen leaves; Sheet.js scales the sheet to the largest size that fits it. */
+.sheet-slot
+{
+	position: relative;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+}
+
+.sheet-frame
+{
+	position: relative;
+	flex: none;
+	width: calc(760px * var(--sheet-scale, 1));
+	height: calc(916px * var(--sheet-scale, 1));
+}
+
+/* Fixed design size matching the texture's proportions; must match sheetWidth and sheetHeight in Sheet.js. */
+.sheet
+{
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 760px;
+	height: 916px;
+	transform: scale(var(--sheet-scale, 1));
+	transform-origin: top left;
+	background: url("../Textures/MailParchment.png") center / 100% 100% no-repeat;
+	filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.55));
+	user-select: text;
+}
+
+/* Inside the parchment's ragged edge. */
+.sheet-area
+{
+	position: absolute;
+	inset: 72px 62px 80px 76px;
+	display: flex;
+	flex-direction: column;
+}
+
+/* The writing box and the reading box share every rule that decides where a line breaks, so a letter wraps the same as it was written. */
+/* Both keep room for a scrollbar whether or not one is showing, for the same reason. */
+.sheet-text
+{
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	margin: 0;
+	padding: 0 6px 0 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	font-family: var(--font-letter);
+	font-size: 27px;
+	font-weight: 500;
+	line-height: 34px;
+	letter-spacing: 0;
+	font-kerning: normal;
+	color: var(--letter-ink);
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	word-break: normal;
+	tab-size: 4;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	resize: none;
+}
+
+.sheet-text::placeholder
+{
+	color: rgba(43, 37, 32, 0.4);
+}
+
+.sheet-text::-webkit-scrollbar
+{
+	width: 8px;
+}
+
+.sheet-text::-webkit-scrollbar-track
+{
+	background: transparent;
+}
+
+.sheet-text::-webkit-scrollbar-thumb
+{
+	border-radius: 4px;
+	background: rgba(139, 90, 43, 0.4);
+}
+
+.sheet-text::-webkit-scrollbar-thumb:hover
+{
+	background: rgba(139, 90, 43, 0.7);
+}
+
+.sheet-text:focus
+{
+	background: rgba(255, 255, 255, 0.12);
+}
+
+.sheet-text.is-reading:focus
+{
+	background: transparent;
+}
+
+/* ======================== */
+/* Reader                   */
+/* ======================== */
+
+.reader,
+.compose,
+.settings
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+	height: 100%;
+}
+
+.reader-stage,
+.compose-stage
+{
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+	display: flex;
+	justify-content: center;
+}
+
+/* ======================== */
+/* Compose                  */
+/* ======================== */
+
+/* Template mode lays out greeting, body and sign-off on the sheet's own 34px lines, one blank line between each. */
+.sheet.is-template .compose-body
+{
+	margin-top: 34px;
+}
+
+/* Only the height differs from the reading box (never the width, which decides wrapping): the seal needs the bottom corner. */
+.compose-full
+{
+	margin-bottom: 120px;
+}
+
+.compose-closing
+{
+	flex: none;
+	margin-top: 34px;
+	padding-right: 140px;
+}
+
+.compose-line
+{
+	font-family: var(--font-letter);
+	font-size: 27px;
+	font-weight: 500;
+	line-height: 34px;
+	color: var(--letter-ink);
+	white-space: pre-wrap;
+}
+
+.compose-signature
+{
+	color: var(--letter-accent);
+}
+
+.compose-address
+{
+	width: min(52rem, 100%);
+	margin: 0 auto 0.75rem;
+	padding: 0.5rem 1rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.35rem;
+	background: rgba(var(--gold-rgb), 0.06);
+}
+
+.compose-footer
+{
+	display: flex;
+	justify-content: space-between;
+	width: min(52rem, 100%);
+	margin-top: 0.5rem;
+	font-size: 0.85rem;
+	color: var(--text-dim);
+}
+
+.compose-counter.is-over
+{
+	color: var(--danger);
+}
+
+/* The seal sits on the sheet itself, so it scales with it. */
+.compose-seal
+{
+	position: absolute;
+	right: 48px;
+	bottom: 40px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+/* ======================== */
+/* Recipient Picker         */
+/* ======================== */
+
+.picker
+{
+	position: relative;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	column-gap: 0;
+}
+
+.picker.is-greeting
+{
+	flex: none;
+	font-family: var(--font-letter);
+	font-size: 27px;
+	font-weight: 500;
+	line-height: 34px;
+	color: var(--letter-ink);
+	cursor: text;
+}
+
+.picker-before,
+.picker-literal,
+.picker-after
+{
+	white-space: pre;
+}
+
+.picker.is-address .picker-before
+{
+	margin-right: 0.6rem;
+	font-family: var(--font-heading);
+	font-size: 0.85rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.picker.is-address
+{
+	font-family: var(--font-letter);
+	font-size: 1.5rem;
+	line-height: 1.6;
+	color: var(--parchment);
+}
+
+.picker-name
+{
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--letter-accent);
+	text-decoration-thickness: 2px;
+}
+
+.picker.is-address .picker-name
+{
+	color: var(--gold);
+}
+
+.picker-name:hover
+{
+	text-decoration: line-through;
+}
+
+.picker-name.is-reply
+{
+	font-style: italic;
+}
+
+.picker-field
+{
+	position: relative;
+	display: inline-block;
+}
+
+/* Room between the last name and the box for the next one, while it is in use. */
+.picker-names:not(:empty) + .picker-field:focus-within
+{
+	margin-left: 0.3em;
+}
+
+/* Once someone is picked, the empty box folds away so the line reads like the finished greeting. */
+.picker-names:not(:empty) + .picker-field:not(:focus-within) .picker-input:placeholder-shown
+{
+	width: 0 !important;
+	min-width: 0;
+	border-bottom-color: transparent;
+}
+
+.picker-input
+{
+	min-width: 6ch;
+	padding: 0;
+	border: 0;
+	border-bottom: 1px dashed rgba(139, 90, 43, 0.45);
+	outline: none;
+	background: transparent;
+	color: var(--letter-accent);
+	user-select: text;
+}
+
+.picker.is-address .picker-input
+{
+	border-bottom-color: var(--panel-line);
+	color: var(--parchment);
+}
+
+.picker-input::placeholder
+{
+	color: rgba(139, 90, 43, 0.55);
+}
+
+.picker.is-address .picker-input::placeholder
+{
+	color: var(--text-dim);
+}
+
+.picker-dropdown
+{
+	position: absolute;
+	top: 100%;
+	left: 0;
+	z-index: 5;
+	min-width: 280px;
+	max-width: 420px;
+	max-height: 320px;
+	margin-top: 4px;
+	overflow-y: auto;
+	border: 1px solid rgba(139, 90, 43, 0.35);
+	border-radius: 3px;
+	background: var(--parchment);
+	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(-8px);
+	transition: opacity 200ms, transform 200ms, visibility 200ms;
+}
+
+.picker.is-open .picker-dropdown
+{
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
+}
+
+.picker.is-address .picker-dropdown
+{
+	min-width: 18rem;
+	max-width: 26rem;
+	max-height: 20rem;
+}
+
+.picker-list
+{
+	margin: 0;
+	padding: 6px 0;
+	list-style: none;
+}
+
+.picker-heading
+{
+	padding: 8px 16px 2px;
+	font-family: var(--font-heading);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: #8b5a2b;
+}
+
+.picker-option,
+.picker-none
+{
+	padding: 4px 16px 4px 36px;
+	font-family: var(--font-letter);
+	font-size: 25px;
+	line-height: 32px;
+	color: var(--letter-ink);
+}
+
+.picker-option
+{
+	position: relative;
+	cursor: pointer;
+}
+
+.picker-option:hover
+{
+	background: rgba(139, 90, 43, 0.15);
+}
+
+.picker-option:hover::before
+{
+	content: "\f56b";
+	position: absolute;
+	left: 12px;
+	font-family: "Font Awesome 6 Free";
+	font-size: 14px;
+	font-weight: 900;
+	color: #8b5a2b;
+}
+
+.picker-none
+{
+	font-style: italic;
+	color: rgba(139, 90, 43, 0.75);
+}
+
+/* ======================== */
+/* Wax Seal                 */
+/* ======================== */
+
+.seal
+{
+	width: 108px;
+	height: 103px;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: url("../Textures/SealStamp.png") center / contain no-repeat;
+	filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.45));
+	transition: transform 300ms cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 300ms;
+}
+
+.seal:hover:not(:disabled)
+{
+	transform: scale(1.08) rotate(4deg);
+	filter: drop-shadow(0 0 14px rgba(230, 57, 70, 0.6)) drop-shadow(0 12px 12px rgba(0, 0, 0, 0.5));
+}
+
+.seal:active:not(:disabled)
+{
+	transform: scale(0.95);
+}
+
+.seal:disabled
+{
+	filter: grayscale(0.7) drop-shadow(0 8px 10px rgba(0, 0, 0, 0.45));
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+/* Out of the flow and drawn above the stamp: the hovered stamp is scaled and tilted, which lifts it onto its own layer and grows it into the space below. */
+.seal-hint
+{
+	position: absolute;
+	top: calc(100% + 12px);
+	left: 50%;
+	z-index: 1;
+	transform: translateX(-50%);
+	padding: 2px 8px;
+	border-radius: 3px;
+	background: var(--parchment);
+	font-family: var(--font-heading);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	color: #5c0f0f;
+	white-space: nowrap;
+	opacity: 0;
+	transition: opacity 300ms;
+	pointer-events: none;
+}
+
+.seal:hover + .seal-hint
+{
+	opacity: 1;
+}
+
+/* ======================== */
+/* Dispatch                 */
+/* ======================== */
+
+.dispatch
+{
+	position: fixed;
+	inset: 0;
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.6);
+	opacity: 0;
+	transition: opacity 300ms;
+}
+
+.dispatch.is-showing
+{
+	opacity: 1;
+}
+
+.dispatch-card
+{
+	position: relative;
+	width: min(28rem, 92vw);
+	padding: 2.5rem 3rem;
+	border: 2px solid #8b5a2b;
+	border-radius: 2px;
+	background: #1c1815;
+	text-align: center;
+	color: var(--gold);
+	box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.6);
+	transform: translateY(1.25rem) scale(0.95);
+	transition: transform 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.dispatch.is-showing .dispatch-card
+{
+	transform: none;
+}
+
+.dispatch-corner
+{
+	position: absolute;
+	width: 1rem;
+	height: 1rem;
+	border-color: #8b5a2b;
+	border-style: solid;
+	border-width: 0;
+}
+
+.dispatch-corner.top-left
+{
+	top: 0.5rem;
+	left: 0.5rem;
+	border-top-width: 2px;
+	border-left-width: 2px;
+}
+
+.dispatch-corner.top-right
+{
+	top: 0.5rem;
+	right: 0.5rem;
+	border-top-width: 2px;
+	border-right-width: 2px;
+}
+
+.dispatch-corner.bottom-left
+{
+	bottom: 0.5rem;
+	left: 0.5rem;
+	border-bottom-width: 2px;
+	border-left-width: 2px;
+}
+
+.dispatch-corner.bottom-right
+{
+	right: 0.5rem;
+	bottom: 0.5rem;
+	border-right-width: 2px;
+	border-bottom-width: 2px;
+}
+
+.dispatch-icon
+{
+	margin-bottom: 1.25rem;
+	font-size: 3.5rem;
+}
+
+.dispatch-title
+{
+	margin: 0 0 1rem;
+	font-family: var(--font-heading);
+	font-size: 1.6rem;
+	letter-spacing: 0.08em;
+}
+
+.dispatch-body
+{
+	margin: 0 0 1.5rem;
+	font-family: var(--font-letter);
+	font-size: 1.5rem;
+	line-height: 1.3;
+	color: #e3ceab;
+}
+
+.dispatch-failures
+{
+	margin: 0 0 1.5rem;
+	padding: 0;
+	list-style: none;
+	font-size: 0.9rem;
+	color: var(--danger);
+}
+
+/* ======================== */
+/* Settings                 */
+/* ======================== */
+
+.settings-body
+{
+	display: flex;
+	flex-direction: column;
+	width: min(40rem, 100%);
+	padding: 0.5rem 1.5rem;
+	overflow-y: auto;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.5rem;
+	background: var(--panel);
+}
+
+.settings-row
+{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.5rem;
+	padding: 1rem 0;
+	border-bottom: 1px solid rgba(176, 141, 87, 0.2);
+}
+
+.settings-row:last-child
+{
+	border-bottom: 0;
+}
+
+.settings-text
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+}
+
+.settings-label
+{
+	font-family: var(--font-heading);
+	font-size: 0.95rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	color: var(--gold);
+}
+
+.settings-hint
+{
+	font-size: 0.85rem;
+	color: var(--text-dim);
+}
+
+.settings-inline
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.settings-select
+{
+	min-width: 12rem;
+	padding: 0.4rem 0.6rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.3rem;
+	background: #1c1410;
+}
+
+.settings-range
+{
+	width: 12rem;
+	accent-color: var(--gold);
+}
+
+.settings-toggle
+{
+	position: relative;
+	flex: none;
+	width: 2.75rem;
+	height: 1.5rem;
+	margin: 0;
+	border: 1px solid var(--panel-line);
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.35);
+	appearance: none;
+	cursor: pointer;
+	transition: background-color 150ms;
+}
+
+.settings-toggle::after
+{
+	content: "";
+	position: absolute;
+	top: 0.15rem;
+	left: 0.15rem;
+	width: 1.1rem;
+	height: 1.1rem;
+	border-radius: 50%;
+	background: var(--text-dim);
+	transition: transform 150ms, background-color 150ms;
+}
+
+.settings-toggle:checked
+{
+	background: var(--wax);
+}
+
+.settings-toggle:checked::after
+{
+	background: var(--parchment);
+	transform: translateX(1.25rem);
+}
+
+/* ======================== */
+/* Notice                   */
+/* ======================== */
+
+/* Drops in at the top centre. While the desk is closed the view is only a strip this fits in (noticeWidthPx x noticeHeightPx in Client/Main.js). */
+.notice
+{
+	position: fixed;
+	top: 1rem;
+	left: 50%;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	width: 30rem;
+	max-width: calc(100vw - 1rem);
+	padding: 0.85rem 1.25rem;
+	border-radius: 0.25rem;
+	background: url("../Textures/MailParchment.png") center / cover no-repeat, var(--parchment);
+	box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.5);
+	color: var(--letter-ink);
+	transform: translate(-50%, -150%);
+	transition: transform 300ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.notice.is-showing
+{
+	transform: translate(-50%, 0);
+}
+
+.notice-seal
+{
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 3.75rem;
+	height: 3.25rem;
+}
+
+/* A background rather than an <img>, so the path resolves against this stylesheet wherever the page is loaded from. */
+.notice-image
+{
+	width: 100%;
+	height: 100%;
+	background: url("../Textures/MailArrived.png") center / contain no-repeat;
+	filter: drop-shadow(0 0.2rem 0.3rem rgba(0, 0, 0, 0.35));
+}
+
+/* Problems get a plain warning instead of the arriving letter. */
+.notice-problem
+{
+	display: none;
+	place-items: center;
+	width: 2.8rem;
+	height: 2.8rem;
+	border-radius: 50%;
+	background: radial-gradient(circle at 35% 30%, #6b6157, #34302b 75%);
+	color: var(--parchment);
+	font-size: 1.1rem;
+}
+
+.notice.is-error .notice-image
+{
+	display: none;
+}
+
+.notice.is-error .notice-problem
+{
+	display: grid;
+}
+
+.notice-text
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.1rem;
+	min-width: 0;
+}
+
+.notice-title
+{
+	font-family: var(--font-heading);
+	font-size: 1rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+
+.notice-body
+{
+	font-size: 0.9rem;
+	color: #4b3b28;
+}

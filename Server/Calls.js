@@ -73,7 +73,7 @@ class CallService
 	#outbox;
 
 	/// <summary>
-	/// The "calls" section of the server config.
+	/// The "phonemode_calls" section of the server config.
 	/// </summary>
 	#config;
 
@@ -258,7 +258,7 @@ class CallService
 
 	/// <summary>
 	/// Find who an owl wants to call: one of their contacts, or an owl number they already know (to call back from the log or a chat).
-	/// With numbers.dialling on, any live owl's number typed in will do as well.
+	/// With phonemode_numbers.dialling on, any live owl's number typed in will do as well.
 	/// </summary>
 	/// <param name="entry">Directory entry of the caller</param>
 	/// <param name="data">{ contactId } or { number }</param>
@@ -305,7 +305,7 @@ class CallService
 	/// <summary>
 	/// Constructor.
 	/// </summary>
-	/// <param name="services">{ database, directory, outbox, hmp, config (the "calls" section), blocks, audit, hooks, dialler }</param>
+	/// <param name="services">{ database, directory, outbox, hmp, config (the "phonemode_calls" section), blocks, audit, hooks, dialler }</param>
 	constructor(services)
 	{
 		this.#database = services.database;

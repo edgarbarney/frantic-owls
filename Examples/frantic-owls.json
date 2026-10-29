@@ -1,89 +1,20 @@
 {
+	"mode": "phone",
 	"command": "owl",
 	"openKey": "up",
-	"numbers": {
-		"visible": false,
-		"dialling": false,
-		"rateLimitCount": 10,
-		"rateLimitWindowMs": 60000
-	},
+	"defaultLanguage": "en-GB",
 	"contacts": {
 		"maxContacts": 250,
 		"maxNameLength": 40
 	},
-	"avatars": {
-		"maxUrlLength": 512,
-		"allowedHosts": [],
-		"allowInsecure": false
-	},
 	"messages": {
-		"maxLength": 500,
 		"pageSize": 40,
 		"maxChatsListed": 100,
 		"rateLimitCount": 8,
-		"rateLimitWindowMs": 5000,
-		"unsendSeconds": 120,
-		"maxPinnedChats": 5,
-		"maxForwardTargets": 5
-	},
-	"polls": {
-		"enabled": true,
-		"maxOptions": 10,
-		"maxQuestionLength": 200,
-		"maxOptionLength": 100
-	},
-	"privacy": {
-		"readReceipts": true,
-		"typingIndicators": true
-	},
-	"groups": {
-		"maxMembers": 12,
-		"maxTitleLength": 40
-	},
-	"inform": {
-		"rangeMetres": 5,
-		"rangeToleranceMetres": 2,
-		"cooldownSeconds": 30,
-		"revealNames": true,
-		"requireConsent": true,
-		"allowExchange": true,
-		"requestSeconds": 60
-	},
-	"locations": {
-		"enabled": true,
-		"markerSeconds": 0,
-		"arrivalMetres": 10
-	},
-	"calls": {
-		"enabled": false,
-		"ringSeconds": 30,
-		"logSize": 50,
-		"rateLimitCount": 4,
-		"rateLimitWindowMs": 30000,
-		"ringtones": [
-			{
-				"id": "hoot",
-				"label": "Owl Hoot",
-				"file": "Sounds/OwlHoot.wav"
-			},
-			{
-				"id": "chime",
-				"label": "Bell Chime",
-				"file": "Sounds/BellChime.wav"
-			},
-			{
-				"id": "harp",
-				"label": "Enchanted Harp",
-				"file": "Sounds/EnchantedHarp.wav"
-			}
-		],
-		"defaultRingtone": "hoot",
-		"voiceEnabled": true,
-		"voiceBitrate": 24000
+		"rateLimitWindowMs": 5000
 	},
 	"notifications": {
 		"toastDurationMs": 3000,
-		"bannerDurationMs": 4000,
 		"soundMode": "file",
 		"sounds": [
 			{
@@ -122,27 +53,6 @@
 		"quietActivities": [
 			"duel:standard"
 		]
-	},
-	"effects": {
-		"enabled": true,
-		"muggle": {
-			"keyTap": "Sounds/Phone/KeyTap.wav",
-			"keyEraseTap": "Sounds/Phone/KeyEraseTap.wav",
-			"appTap": "Sounds/Phone/AppTap.wav",
-			"lock": "Sounds/Phone/Lock.wav",
-			"unlock": "Sounds/Phone/Unlock.wav",
-			"messageSent": "Sounds/Phone/MessageSent.wav",
-			"messageReceived": "Sounds/Phone/MessageReceived.wav"
-		},
-		"parchment": {
-			"keyTap": "Sounds/Parchment/KeyTap.wav",
-			"keyEraseTap": "Sounds/Parchment/KeyEraseTap.wav",
-			"appTap": "Sounds/Parchment/AppTap.wav",
-			"lock": "Sounds/Parchment/Lock.wav",
-			"unlock": "Sounds/Parchment/Unlock.wav",
-			"messageSent": "Sounds/Parchment/MessageSent.wav",
-			"messageReceived": "Sounds/Parchment/MessageReceived.wav"
-		}
 	},
 	"storage": {
 		"disableSoftDelete": false,
@@ -191,14 +101,118 @@
 		"requestRateLimitWindowMs": 3000,
 		"maxBatchBytes": 24000
 	},
-	"ui": {
+	"phonemode_numbers": {
+		"visible": false,
+		"dialling": false,
+		"rateLimitCount": 10,
+		"rateLimitWindowMs": 60000
+	},
+	"phonemode_avatars": {
+		"maxUrlLength": 512,
+		"allowedHosts": [],
+		"allowInsecure": false
+	},
+	"phonemode_messages": {
+		"maxLength": 500,
+		"unsendSeconds": 120,
+		"maxPinnedChats": 5,
+		"maxForwardTargets": 5
+	},
+	"phonemode_polls": {
+		"enabled": true,
+		"maxOptions": 10,
+		"maxQuestionLength": 200,
+		"maxOptionLength": 100
+	},
+	"phonemode_privacy": {
+		"readReceipts": true,
+		"typingIndicators": true
+	},
+	"phonemode_groups": {
+		"maxMembers": 12,
+		"maxTitleLength": 40
+	},
+	"phonemode_inform": {
+		"rangeMetres": 5,
+		"rangeToleranceMetres": 2,
+		"cooldownSeconds": 30,
+		"revealNames": true,
+		"requireConsent": true,
+		"allowExchange": true,
+		"requestSeconds": 60
+	},
+	"phonemode_locations": {
+		"enabled": true,
+		"markerSeconds": 0,
+		"arrivalMetres": 10
+	},
+	"phonemode_calls": {
+		"enabled": false,
+		"ringSeconds": 30,
+		"logSize": 50,
+		"rateLimitCount": 4,
+		"rateLimitWindowMs": 30000,
+		"ringtones": [
+			{
+				"id": "hoot",
+				"label": "Owl Hoot",
+				"file": "Sounds/OwlHoot.wav"
+			},
+			{
+				"id": "chime",
+				"label": "Bell Chime",
+				"file": "Sounds/BellChime.wav"
+			},
+			{
+				"id": "harp",
+				"label": "Enchanted Harp",
+				"file": "Sounds/EnchantedHarp.wav"
+			}
+		],
+		"defaultRingtone": "hoot",
+		"voiceEnabled": true,
+		"voiceBitrate": 24000
+	},
+	"phonemode_effects": {
+		"enabled": true,
+		"muggle": {
+			"keyTap": "Sounds/Phone/KeyTap.wav",
+			"keyEraseTap": "Sounds/Phone/KeyEraseTap.wav",
+			"appTap": "Sounds/Phone/AppTap.wav",
+			"lock": "Sounds/Phone/Lock.wav",
+			"unlock": "Sounds/Phone/Unlock.wav",
+			"messageSent": "Sounds/Phone/MessageSent.wav",
+			"messageReceived": "Sounds/Phone/MessageReceived.wav"
+		},
+		"parchment": {
+			"keyTap": "Sounds/Parchment/KeyTap.wav",
+			"keyEraseTap": "Sounds/Parchment/KeyEraseTap.wav",
+			"appTap": "Sounds/Parchment/AppTap.wav",
+			"lock": "Sounds/Parchment/Lock.wav",
+			"unlock": "Sounds/Parchment/Unlock.wav",
+			"messageSent": "Sounds/Parchment/MessageSent.wav",
+			"messageReceived": "Sounds/Parchment/MessageReceived.wav"
+		}
+	},
+	"phonemode_ui": {
 		"scale": 1.0,
 		"widthPx": 360,
 		"heightPx": 700,
 		"rightMarginPx": 32,
 		"defaultTheme": "muggle",
-		"defaultLanguage": "en-GB",
 		"allowMove": true,
-		"lockScreen": true
+		"lockScreen": true,
+		"bannerDurationMs": 4000
+	},
+	"immersivemode_readmode": "free",
+	"immersivemode_writemode": "free",
+	"immersivemode_letters": {
+		"maxLength": 4000,
+		"maxLines": 150,
+		"maxRecipients": 8
+	},
+	"immersivemode_posts": [],
+	"immersivemode_ui": {
+		"scale": 1.0
 	}
 }

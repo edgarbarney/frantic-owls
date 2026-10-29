@@ -1,0 +1,29 @@
+{
+	"mode": "immersive",
+	"immersivemode_readmode": "postonly_freeunread",
+	"immersivemode_writemode": "postonly",
+	"immersivemode_letters": {
+		"maxLength": 4000,
+		"maxLines": 150,
+		"maxRecipients": 8
+	},
+	"immersivemode_posts": [
+		{
+			"id": "example",
+			"label": "Example Owl Post",
+			"position": {
+				"x": 0,
+				"y": 0,
+				"z": 0
+			},
+			"areaId": "Overland",
+			"regionId": "",
+			"radiusMetres": 3,
+			"model": "",
+			"yaw": 0
+		}
+	],
+	"immersivemode_ui": {
+		"scale": 1.0
+	}
+}

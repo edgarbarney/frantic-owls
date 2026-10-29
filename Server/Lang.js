@@ -42,7 +42,7 @@ const maxStringLength = 2000;
 const languages = new Map();
 
 /// <summary>
-/// Language of players who have not picked one (ui.defaultLanguage), and of server logs and API errors.
+/// Language of players who have not picked one (defaultLanguage), and of server logs and API errors.
 /// </summary>
 let defaultLanguage = baseLanguage;
 
@@ -128,7 +128,7 @@ function ReadLanguage(file)
 /// <summary>
 /// Load every language in Lang/. Call once, after the logger is ready.
 /// </summary>
-/// <param name="preferredDefault">ui.defaultLanguage; falls back to en-GB when no such language was loaded</param>
+/// <param name="preferredDefault">defaultLanguage; falls back to en-GB when no such language was loaded</param>
 function Load(preferredDefault)
 {
 	languages.clear();
@@ -165,7 +165,7 @@ function Load(preferredDefault)
 
 	if (preferredDefault && preferredDefault !== defaultLanguage)
 	{
-		Logger.LogWarning("Lang", `ui.defaultLanguage "${preferredDefault}" has no file in Lang/; using ${defaultLanguage}.`);
+		Logger.LogWarning("Lang", `defaultLanguage "${preferredDefault}" has no file in Lang/; using ${defaultLanguage}.`);
 	}
 
 	Logger.LogMessage("Lang", `Languages: ${[...languages.keys()].join(", ")} (default ${defaultLanguage}).`);

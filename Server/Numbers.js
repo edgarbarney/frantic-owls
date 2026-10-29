@@ -8,7 +8,7 @@ const { IsSenderNumber } = require("./Database.js");
 // ========================
 
 /// <summary>
-/// Reaching an owl by typing in its number: saving it as a contact, owling it or Floo-Calling it, when numbers.dialling is on.
+/// Reaching an owl by typing in its number: saving it as a contact, owling it or Floo-Calling it, when phonemode_numbers.dialling is on.
 ///
 /// <para>
 /// NOTE: Every number typed in is checked against the database, so a typed number either reaches a real owl or is refused.
@@ -25,7 +25,7 @@ class NumberDialler
 	#database;
 
 	/// <summary>
-	/// The "numbers" section of the server config.
+	/// The "phonemode_numbers" section of the server config.
 	/// </summary>
 	#config;
 
@@ -39,7 +39,7 @@ class NumberDialler
 	/// </summary>
 	/// <param name="database">OwlDatabase instance</param>
 	/// <param name="hmp">hmp-lib server import, for rate limiting</param>
-	/// <param name="numbersConfig">The "numbers" section of the server config</param>
+	/// <param name="numbersConfig">The "phonemode_numbers" section of the server config</param>
 	constructor(database, hmp, numbersConfig)
 	{
 		this.#database = database;
@@ -50,7 +50,7 @@ class NumberDialler
 	/// <summary>
 	/// Whether players may type numbers in on this server.
 	/// </summary>
-	/// <returns>True when numbers.dialling is on</returns>
+	/// <returns>True when phonemode_numbers.dialling is on</returns>
 	IsEnabled()
 	{
 		return this.#config.dialling;

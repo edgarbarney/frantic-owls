@@ -51,7 +51,7 @@ class ContactService
 	#config;
 
 	/// <summary>
-	/// The "avatars" section of the server config.
+	/// The "phonemode_avatars" section of the server config.
 	/// </summary>
 	#avatarsConfig;
 
@@ -77,7 +77,7 @@ class ContactService
 	/// <param name="database">OwlDatabase instance</param>
 	/// <param name="hmp">hmp-lib server import</param>
 	/// <param name="contactsConfig">The "contacts" section of the server config</param>
-	/// <param name="avatarsConfig">The "avatars" section of the server config</param>
+	/// <param name="avatarsConfig">The "phonemode_avatars" section of the server config</param>
 	/// <param name="dialler">NumberDialler instance</param>
 	constructor(database, hmp, contactsConfig, avatarsConfig, dialler)
 	{
@@ -121,7 +121,7 @@ class ContactService
 	}
 
 	/// <summary>
-	/// Rename a contact, change their picture override (an empty link clears the override) and, with numbers.dialling on, their owl number.
+	/// Rename a contact, change their picture override (an empty link clears the override) and, with phonemode_numbers.dialling on, their owl number.
 	/// </summary>
 	/// <param name="entry">Directory entry of the requesting owl</param>
 	/// <param name="data">{ contactId, name, avatarUrl, number } where number is optional and keeps the current one when missing</param>
@@ -290,7 +290,7 @@ class ContactService
 	}
 
 	/// <summary>
-	/// Save an owl as a contact by typing in its number (numbers.dialling).
+	/// Save an owl as a contact by typing in its number (phonemode_numbers.dialling).
 	/// </summary>
 	/// <param name="entry">Directory entry of the requesting owl</param>
 	/// <param name="data">{ number, name }</param>

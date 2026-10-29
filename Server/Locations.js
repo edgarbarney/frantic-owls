@@ -127,7 +127,7 @@ class LocationService
 	#hmp;
 
 	/// <summary>
-	/// The "locations" section of the server config.
+	/// The "phonemode_locations" section of the server config.
 	/// </summary>
 	#config;
 
@@ -210,7 +210,7 @@ class LocationService
 	/// <param name="database">OwlDatabase instance</param>
 	/// <param name="outbox">Outbox instance</param>
 	/// <param name="hmp">hmp-lib server import</param>
-	/// <param name="locationsConfig">The "locations" section of the server config</param>
+	/// <param name="locationsConfig">The "phonemode_locations" section of the server config</param>
 	/// <param name="GetBlips">Function returning the hmp-blips import or null</param>
 	constructor(database, outbox, hmp, locationsConfig, GetBlips)
 	{
@@ -395,4 +395,4 @@ class LocationService
 	}
 }
 
-module.exports = { LocationService, ParseLocation, DescribePlace };
+module.exports = { LocationService, ParseLocation, DescribePlace, ReadArea };

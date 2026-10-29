@@ -21,17 +21,17 @@ const maxLayoutScale = 1.6;
 /// Only these keys are ever stored; anything else a client sends is dropped.
 ///
 /// <para>
-/// theme is "" until the player picks one, so a server that changes ui.defaultTheme also changes it for everyone who never chose.
+/// theme is "" until the player picks one, so a server that changes phonemode_ui.defaultTheme also changes it for everyone who never chose.
 /// layout is null while the phone sits in its default place; otherwise { x, y } is the phone's centre as a fraction of the screen
 /// (so it survives resolution changes) and scale multiplies the server's ui.scale.
 /// sound is "" for the server's default notification sound, otherwise the ID of one of notifications.sounds.
 /// ringtone is the same for Floo-Calls ringing: "" for calls.defaultRingtone, otherwise the ID of one of calls.ringtones; ringtoneVolume is its own volume.
 /// callVolume is how loud the other owl's voice plays during a Floo-Call.
-/// language is "" for the server's default language (ui.defaultLanguage), otherwise the ID of a file in Lang/.
+/// language is "" for the server's default language (defaultLanguage), otherwise the ID of a file in Lang/.
 /// doNotDisturb silences every pop-up, banner and sound; quietDuringActivities does the same only while a notifications.quietActivities activity (e.g. a duel) runs.
 /// colourScheme picks the Muggle Phone theme's colours ("default" or one of the four houses); Parchment ignores it.
 /// animations turns the Muggle Phone's motion on or off: icons falling into place, and apps opening from and closing into their icons.
-/// lockScreen shows the lock screen each time the phone is taken out (a clock on Muggle Phone, a sealed letter on Parchment), when the server allows it (ui.lockScreen).
+/// lockScreen shows the lock screen each time the phone is taken out (a clock on Muggle Phone, a sealed letter on Parchment), when the server allows it (phonemode_ui.lockScreen).
 /// soundEffects plays the phone's own sounds (key taps, app taps, locking, owls sent and arriving in the chat on screen) at effectsVolume, when the server has any (effects).
 /// wallpaperUrl is the home screen's picture ("" for none). Only its owner's page ever loads it, so unlike profile pictures it shows nobody else's IP address to the image host.
 /// </para>
@@ -162,7 +162,7 @@ class SettingsService
 	#database;
 
 	/// <summary>
-	/// The "ui" section of the server config.
+	/// The "phonemode_ui" section of the server config.
 	/// </summary>
 	#uiConfig;
 
@@ -172,7 +172,7 @@ class SettingsService
 	#directory;
 
 	/// <summary>
-	/// The "avatars" section of the server config, whose link rules the wallpaper follows too.
+	/// The "phonemode_avatars" section of the server config, whose link rules the wallpaper follows too.
 	/// </summary>
 	#avatarsConfig;
 
@@ -180,9 +180,9 @@ class SettingsService
 	/// Constructor.
 	/// </summary>
 	/// <param name="database">OwlDatabase instance</param>
-	/// <param name="uiConfig">The "ui" section of the server config</param>
+	/// <param name="uiConfig">The "phonemode_ui" section of the server config</param>
 	/// <param name="directory">OwlDirectory instance</param>
-	/// <param name="avatarsConfig">The "avatars" section of the server config</param>
+	/// <param name="avatarsConfig">The "phonemode_avatars" section of the server config</param>
 	constructor(database, uiConfig, directory, avatarsConfig)
 	{
 		this.#database = database;
