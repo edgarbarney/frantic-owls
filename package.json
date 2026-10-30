@@ -19,7 +19,8 @@
 		],
 		"exports": [
 			"status",
-			"api"
+			"api",
+			"client"
 		],
 		"resourceDependencies": [
 			{

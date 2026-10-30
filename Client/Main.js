@@ -126,6 +126,33 @@ let controlLease = null;
 let unregisterShortcut = null;
 
 /// <summary>
+/// Key the open shortcut is bound to right now, or an empty string when none is.
+/// </summary>
+let boundKey = "";
+
+/// <summary>
+/// Open key another client resource chose through the "client" export, or null to use the server's openKey.
+/// An empty string means that resource wants no key at all.
+///
+/// <para>
+/// NOTE: It lives here, not in clientConfig, so the configuration the server sends again on every state reset never undoes a player's own choice.
+/// It is kept in memory only: the resource that set it owns saving it, and sets it again when either resource restarts.
+/// </para>
+///
+/// </summary>
+let openKeyOverride = null;
+
+/// <summary>
+/// Resource that set openKeyOverride, so the server's key comes back when that resource stops. Empty when none was named.
+/// </summary>
+let openKeyOwner = "";
+
+/// <summary>
+/// Handlers told whenever the bound open key changes, each with the resource that added it (empty when none was named).
+/// </summary>
+const openKeyListeners = new Set();
+
+/// <summary>
 /// Last configuration received from the server.
 /// </summary>
 let clientConfig = null;
@@ -489,33 +516,121 @@ function PlayWwiseSound()
 }
 
 /// <summary>
-/// Bind (or unbind) the optional key that opens the phone, as configured on the server.
+/// The key that should open the phone: another resource's choice when one was made, otherwise the server's openKey.
 /// </summary>
-function UpdateShortcut()
+/// <returns>Key name, or an empty string for none</returns>
+function GetWantedOpenKey()
 {
+	if (openKeyOverride !== null)
+	{
+		return openKeyOverride;
+	}
+
+	return clientConfig ? clientConfig.openKey : "";
+}
+
+/// <summary>
+/// Tell every open key listener the key changed. A listener that throws is logged and skipped.
+/// </summary>
+function NotifyOpenKeyChanged()
+{
+	for (const listener of [...openKeyListeners])
+	{
+		// Listeners belong to other resources; one that breaks must not stop the rest, or this resource.
+		try
+		{
+			listener.handler(boundKey);
+		}
+		catch (error)
+		{
+			console.error(`Client: An open key listener${listener.resource ? ` of ${listener.resource}` : ""} failed: ${error}`);
+		}
+	}
+}
+
+/// <summary>
+/// Bind (or unbind) the optional key that opens the phone: another resource's choice, or the one configured on the server.
+/// Listeners hear about it when the bound key changes.
+/// </summary>
+/// <param name="shouldNotify">False to leave telling the listeners to the caller, which may still change the key again</param>
+/// <returns>True when the wanted key is bound (or none is wanted), false when the game refused the key name</returns>
+function UpdateShortcut(shouldNotify = true)
+{
+	const previousKey = boundKey;
+
 	if (unregisterShortcut)
 	{
 		unregisterShortcut();
 		unregisterShortcut = null;
 	}
 
-	const key = clientConfig ? clientConfig.openKey : "";
+	boundKey = "";
+	const key = GetWantedOpenKey();
+	let isBound = true;
 
-	if (!key)
+	if (key)
 	{
-		return;
+		// An unknown key name throws inside the binding; a bad config value or a bad request should not stop the resource.
+		try
+		{
+			unregisterShortcut = input.shortcuts.register({ resource: resourceName, id: "open-phone", key, state: "down", priority: 10, when: () => hasState && !isOpen, handler: () => Open() });
+			boundKey = key;
+		}
+		catch (error)
+		{
+			console.error(`Client: Could not bind the open key "${key}": ${error}`);
+			unregisterShortcut = null;
+			isBound = false;
+		}
 	}
 
-	// An unknown key name throws inside the binding; a bad config value should not stop the resource.
-	try
+	if (shouldNotify && boundKey !== previousKey)
 	{
-		unregisterShortcut = input.shortcuts.register({ resource: resourceName, id: "open-phone", key, state: "down", priority: 10, when: () => hasState && !isOpen, handler: () => Open() });
+		NotifyOpenKeyChanged();
 	}
-	catch (error)
+
+	return isBound;
+}
+
+/// <summary>
+/// Choose the key that opens the phone (or the letter desk) on this client, in place of the server's openKey.
+///
+/// <para>
+/// NOTE: A key the game refuses leaves the previous key bound, so a failed rebind never leaves the player without a way in.
+/// </para>
+///
+/// </summary>
+/// <param name="key">HogwartsMP key name (e.g. "k", "f6", "mouse4"), an empty string for no key, or null to go back to the server's openKey</param>
+/// <param name="resource">Name of the calling resource; when it stops, the server's openKey comes back. Optional.</param>
+/// <returns>{ ok, error, key } where key is the key bound afterwards ("" for none)</returns>
+function SetOpenKey(key, resource)
+{
+	if (key !== null && key !== undefined && typeof key !== "string")
 	{
-		console.error(`Client: Could not bind the open key "${key}": ${error}`);
-		unregisterShortcut = null;
+		return { ok: false, error: "The open key must be a key name, an empty string or null.", key: boundKey };
 	}
+
+	const previousKey = boundKey;
+	const previousOverride = openKeyOverride;
+	const previousOwner = openKeyOwner;
+	openKeyOverride = key === null || key === undefined ? null : key.trim().toLowerCase();
+	openKeyOwner = openKeyOverride === null ? "" : String(resource || "");
+	const refused = openKeyOverride;
+	const isBound = UpdateShortcut(false);
+
+	if (!isBound)
+	{
+		openKeyOverride = previousOverride;
+		openKeyOwner = previousOwner;
+		UpdateShortcut(false);
+	}
+
+	if (boundKey !== previousKey)
+	{
+		NotifyOpenKeyChanged();
+	}
+
+	return isBound ? { ok: true, error: "", key: boundKey } : { ok: false, error: `The game refused the key "${refused}".`, key: boundKey };
 }
 
 // ========================
@@ -918,7 +1033,98 @@ Events.on("resourceStop", (name) =>
 	{
 		ClearLocation();
 		Close();
+		return;
+	}
+
+	for (const listener of [...openKeyListeners])
+	{
+		if (listener.resource === name)
+		{
+			openKeyListeners.delete(listener);
+		}
+	}
+
+	// A resource that chose the open key and stopped can no longer save or change it, so the server's key comes back.
+	if (name && openKeyOwner === name)
+	{
+		SetOpenKey(null);
 	}
 });
+
+// ========================
+// Client API
+// ========================
+
+/// <summary>
+/// The "client" export other client resources use, e.g. to let players rebind the open key in their own settings menu.
+///
+/// <para>
+/// Usage from another resource's client script (declare frantic-owls as a dependency first):
+///   const Owls = Imports.get("frantic-owls").client;
+///   Owls.SetOpenKey("k", "my-resource");
+///   const stop = Owls.OnOpenKeyChanged((key) => RefreshMyControlsTab(key), "my-resource");
+/// Nothing here throws: SetOpenKey reports a refused key in its result.
+/// </para>
+///
+/// </summary>
+const clientApi = Object.freeze
+({
+	/// <summary>
+	/// The key that opens the owl post right now.
+	/// </summary>
+	/// <returns>Key name, or an empty string when no key is bound</returns>
+	GetOpenKey()
+	{
+		return boundKey;
+	},
+
+	/// <summary>
+	/// The key the server's configuration names (openKey), whatever another resource chose since.
+	/// </summary>
+	/// <returns>Key name, or an empty string for none (or before the server's configuration arrived)</returns>
+	GetDefaultOpenKey()
+	{
+		return clientConfig ? clientConfig.openKey : "";
+	},
+
+	SetOpenKey,
+
+	/// <summary>
+	/// Be told whenever the key that opens the owl post changes, including when the server's configuration changes it.
+	/// </summary>
+	/// <param name="handler">Called with the new key name ("" for none)</param>
+	/// <param name="resource">Name of the calling resource; its handlers are dropped when it stops. Optional.</param>
+	/// <returns>Function that removes the handler again</returns>
+	OnOpenKeyChanged(handler, resource)
+	{
+		if (typeof handler !== "function")
+		{
+			return () => false;
+		}
+
+		const listener = { handler, resource: String(resource || "") };
+		openKeyListeners.add(listener);
+		return () => openKeyListeners.delete(listener);
+	},
+
+	/// <summary>
+	/// Open the owl post as its key would. Shows "Your owl has not arrived yet." while the character's owl is still loading.
+	/// </summary>
+	Open()
+	{
+		Open();
+	},
+
+	/// <summary>
+	/// Whether the owl post is open on this client.
+	/// </summary>
+	/// <returns>True while open</returns>
+	IsOpen()
+	{
+		return isOpen;
+	},
+});
+
+Exports.register("client", clientApi);
 
 Events.emitServer("frantic-owls:hello", "{}");

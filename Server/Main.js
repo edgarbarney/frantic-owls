@@ -1129,10 +1129,10 @@ Events.on("resourceStop", (name) =>
 /// <summary>
 /// Report the resource's state, for admin tooling and health checks.
 /// </summary>
-/// <returns>{ ready, owlsOnline }</returns>
+/// <returns>{ ready, owlsOnline, mode } where mode is the front end players get ("phone" or "immersive")</returns>
 function GetStatus()
 {
-	return { ready: isReady, owlsOnline: directory.GetCount() };
+	return { ready: isReady, owlsOnline: directory.GetCount(), mode: config.mode };
 }
 
 Exports.register("status", GetStatus);

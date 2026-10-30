@@ -432,6 +432,25 @@ await Owls.AddContact({ owner: { characterId: 42 }, contact: { characterId: 7 },
 
 `AddContact` takes the same kinds of `owner` and `contact`. A `characterId` must belong to an active hmp-core character; an unknown or deleted one is refused rather than given a number (the same goes for `SendOwl`). It resolves with `{ ok, error, contactId, added }`. `name` defaults to the contact's character name. `revealName` (on unless `false`) says the owner knows which character it is, so **Show original names** can show it; leave it off for a contact that should stay a mystery. A contact the owner already has is left as it is (`added: false`), and an owner online sees the new contact straight away. Resources that would rather not import the API can raise the server event `frantic-owls:addContact` with the same object instead (a refused one is logged as a warning). Each sender gets a permanent owl number of its own, so its chats survive restarts; its name and picture stay known to players even while your resource is stopped.
 
+The `status` export reports `{ ready, owlsOnline, mode }`, where `mode` is `"phone"` or `"immersive"`, so a resource can call contacts what the players see them as (correspondents, in immersive mode).
+
+Client scripts get a `client` export too. A gamemode with its own settings menu can let players choose the key that opens the owl post there, in place of the server's `openKey`:
+
+```js
+const Owls = Imports.get("frantic-owls").client;
+
+const result = Owls.SetOpenKey("k", "my-gamemode"); // { ok, error, key }; a key the game refuses leaves the old one bound
+Owls.SetOpenKey(null, "my-gamemode");               // back to the server's openKey; "" binds no key at all
+const stop = Owls.OnOpenKeyChanged((key) => RefreshControls(key), "my-gamemode");
+
+Owls.GetOpenKey();        // the key bound now, "" for none
+Owls.GetDefaultOpenKey(); // the server's openKey
+Owls.Open();
+Owls.IsOpen();
+```
+
+The chosen key is kept only in memory on that client, so the server's configuration arriving again never undoes it. The resource that chose it saves the player's choice itself and sets it again when either resource restarts; when it stops, the server's `openKey` comes back and its listeners are dropped.
+
 To follow calls, listen for the server event `frantic-owls:call`. It fires when a call starts ringing (`state: "ringing"`), is answered (`"active"`) and ends (`"ended"`), with `{ callId, state, outcome, caller, callee, callerPlayerId, calleePlayerId, startedAt, answeredAt }`. `caller` and `callee` are owl numbers, a player ID is `-1` when that owl is offline, and `outcome` is set once it ended: `"answered"`, `"missed"`, `"declined"` or `"cancelled"`.
 
 To react to owls instead of sending them, listen for the server event `frantic-owls:sent`. It carries `{ chatId, chatKind, messageId, kind, sender, origin, recipients, body, forwarded, sentAt, deliverAt }` for every owl sent (not for group notes), where `origin` is `"player"`, `"system"` or `"announcement"` and `forwarded` is `true` for a forwarded copy. `kind` is `"text"`, `"location"` for a location owl, whose `body` is then JSON: `{ x, y, z, areaId, regionId, world, place }` (centimetres, as `player.position`), or `"poll"` for a poll, whose `body` is JSON too: `{ question, options, multiple }`. Votes raise no event.
@@ -448,7 +467,7 @@ Settings only one front end uses carry its prefix (`phonemode_` or `immersivemod
 | `backfillNumbers` | `true` | Give every hmp-core character without an owl number one when the resource starts, so it can be found by name and written to before it ever loads (see [Finding characters by name](#finding-characters-by-name)). |
 | `defaultLanguage` | `"en-GB"` | Language for players who have not picked one, and for the server log and command descriptions. Must have a file in `Lang/`. |
 | `command` | `"owl"` | Chat command that opens the phone. |
-| `openKey` | `"up"` | Key that also opens the phone (the up arrow by default; any HogwartsMP key name such as `"f3"` works), registered through hmp-lib shortcuts. `""` turns it off. |
+| `openKey` | `"up"` | Key that also opens the phone (the up arrow by default; any HogwartsMP key name such as `"f3"` works), registered through hmp-lib shortcuts. `""` turns it off. Another client resource can change it per player (see [For other resources](#for-other-resources)). |
 | `contacts.maxContacts` | `250` | Contacts per character. |
 | `contacts.maxNameLength` | `40` | Longest contact name. |
 | `avatars.maxUrlLength` | `512` | Longest picture link (profile pictures, overrides, wallpapers and correspondents' pictures). |
