@@ -23,6 +23,7 @@
 			"yaw": 0
 		}
 	],
+	"immersivemode_avatars": false,
 	"immersivemode_ui": {
 		"scale": 1.0
 	}

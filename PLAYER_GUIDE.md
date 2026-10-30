@@ -59,6 +59,7 @@ Your home screen holds five apps with these icons:
 
 - **Phone sounds** (Settings, Notifications) are the little taps and clicks your slab makes as you use it. Turn them down or off there.
 - **Do Not Disturb** (Settings) silences every hoot, ring and pop-up. It switches on by itself during duels if you let it.
+- **Show original names** (Settings, Appearance) adds a contact's own name in parentheses after the name you saved them as, such as "Nat (Natsai Onai)". Only for wizards you know: someone you saved from a number or a chat stays as you named them.
 - **Move & Resize Phone** (Settings, if your server allows it) lets you put the phone anywhere on screen. Lost it? `/owl_resetpos` summons it back.
 
 *Not every owlery offers every service. If an app or button is missing, your server has turned it off.*

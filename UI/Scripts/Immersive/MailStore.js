@@ -11,6 +11,11 @@ window.Owls = window.Owls || {};
 /// Everything the letter desk knows: the player, their settings, their correspondents and the letters listed so far.
 ///
 /// <para>
+/// NOTE: Correspondents are kept by contact ID, not owl number. One saved without knowing who they are (first reached by answering an unsigned letter) arrives without a number,
+/// so the desk cannot match them to a character found by name; only correspondents with a number are matched, and left out of the names a search finds.
+/// </para>
+///
+/// <para>
 /// NOTE: Letters are fetched a page at a time and only as the server allows. A letter that may not be read where the player stands
 /// arrives without its excerpt (isReadable false), and its text never arrives at all until it may be read.
 /// The store therefore never guesses what a letter says; it shows what the server sent.
@@ -22,7 +27,7 @@ Owls.MailStore = (() =>
 	/// <summary>
 	/// Player settings used until the server sends the saved ones. Same keys as the phone's, so both front ends share one row.
 	/// </summary>
-	const defaultSettings = Object.freeze({ notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true });
+	const defaultSettings = Object.freeze({ notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true, showOriginalNames: false });
 
 	/// <summary>
 	/// localStorage key of the letters being written, so a closed desk (or a reconnect) does not lose them, and how many are kept.
@@ -34,7 +39,7 @@ Owls.MailStore = (() =>
 	const state =
 	{
 		isReady: false,
-		me: { name: "" },
+		me: { name: "", canPostOfficial: false },
 		settings: { ...defaultSettings },
 		config: {},
 		quiet: { active: false, label: "" },
@@ -79,8 +84,9 @@ Owls.MailStore = (() =>
 	/// <param name="data">{ me, settings, config, quiet, unread }</param>
 	function Reset(data)
 	{
+		const me = data.me || {};
 		state.isReady = false;
-		state.me = { name: String(data.me && data.me.name || "") };
+		state.me = { name: String(me.name || ""), canPostOfficial: me.canPostOfficial === true };
 		state.settings = { ...defaultSettings, ...(data.settings || {}) };
 		state.config = data.config || {};
 		state.quiet = data.quiet || { active: false, label: "" };
@@ -113,7 +119,7 @@ Owls.MailStore = (() =>
 	/// <summary>
 	/// Take one chunk of the correspondent list.
 	/// </summary>
-	/// <param name="data">{ reset, contacts: [{ id, number, name }] }</param>
+	/// <param name="data">{ reset, contacts: [{ id, number, name, originalName, avatarUrl, profileAvatarUrl, favourite }] }</param>
 	function ApplyContactsChunk(data)
 	{
 		if (data.reset)
@@ -130,18 +136,37 @@ Owls.MailStore = (() =>
 	}
 
 	/// <summary>
+	/// Order correspondents for every list: favourites first, then by name.
+	/// </summary>
+	function SortContacts()
+	{
+		state.contacts.sort((first, second) => Number(second.favourite) - Number(first.favourite) || Owls.Util.CompareNames(first.name, second.name));
+	}
+
+	/// <summary>
 	/// Add or replace one correspondent.
 	/// </summary>
-	/// <param name="contact">{ id, number, name }</param>
+	/// <param name="contact">{ id, number, name, originalName, avatarUrl, profileAvatarUrl, favourite } where number is "" for a correspondent saved without knowing who they are</param>
 	function UpsertContact(contact)
 	{
-		if (!contact || !contact.number)
+		const id = Number(contact && contact.id) || 0;
+
+		if (id <= 0)
 		{
 			return;
 		}
 
-		const clean = { id: Number(contact.id) || 0, number: String(contact.number), name: String(contact.name || "") };
-		const index = state.contacts.findIndex((entry) => entry.number === clean.number);
+		const clean =
+		{
+			id,
+			number: String(contact.number || ""),
+			name: String(contact.name || ""),
+			originalName: String(contact.originalName || ""),
+			avatarUrl: String(contact.avatarUrl || ""),
+			profileAvatarUrl: String(contact.profileAvatarUrl || ""),
+			favourite: contact.favourite === true,
+		};
+		const index = state.contacts.findIndex((entry) => entry.id === id);
 
 		if (index >= 0)
 		{
@@ -152,7 +177,17 @@ Owls.MailStore = (() =>
 			state.contacts.push(clean);
 		}
 
-		state.contacts.sort((first, second) => Owls.Util.CompareNames(first.name, second.name));
+		SortContacts();
+	}
+
+	/// <summary>
+	/// Add or replace one correspondent and tell the screens.
+	/// </summary>
+	/// <param name="contact">Correspondent, as for UpsertContact</param>
+	function SaveContact(contact)
+	{
+		UpsertContact(contact);
+		Notify("contacts");
 	}
 
 	/// <summary>
@@ -166,14 +201,43 @@ Owls.MailStore = (() =>
 	}
 
 	/// <summary>
-	/// The name the player knows an owl number by, if it is one of their correspondents.
+	/// Find a correspondent by contact ID.
 	/// </summary>
-	/// <param name="number">Owl number</param>
-	/// <returns>Name, or ""</returns>
-	function GetContactName(number)
+	/// <param name="contactId">Contact ID</param>
+	/// <returns>Correspondent, or null</returns>
+	function GetContact(contactId)
 	{
-		const contact = state.contacts.find((entry) => entry.number === number);
-		return contact ? contact.name : "";
+		return state.contacts.find((contact) => contact.id === contactId) || null;
+	}
+
+	/// <summary>
+	/// The owl numbers of correspondents whose characters the player knows, so a search can leave them out.
+	/// </summary>
+	/// <returns>Set of owl numbers</returns>
+	function GetKnownNumbers()
+	{
+		return new Set(state.contacts.filter((contact) => contact.number).map((contact) => contact.number));
+	}
+
+	/// <summary>
+	/// The name a correspondent is listed by: the name the player gave them, and, with showOriginalNames on, their character's own name in parentheses where it differs.
+	/// </summary>
+	/// <param name="contact">Correspondent</param>
+	/// <returns>Label</returns>
+	function GetContactLabel(contact)
+	{
+		const original = contact.originalName;
+		return state.settings.showOriginalNames && original && original !== contact.name ? `${contact.name} (${original})` : contact.name;
+	}
+
+	/// <summary>
+	/// The picture of a correspondent: the one the player set, otherwise the one they set for themselves, when the server allows pictures (immersivemode_avatars).
+	/// </summary>
+	/// <param name="contact">Correspondent</param>
+	/// <returns>Picture link, or ""</returns>
+	function GetContactPicture(contact)
+	{
+		return state.config.avatars ? contact.avatarUrl || contact.profileAvatarUrl : "";
 	}
 
 	/// <summary>
@@ -312,7 +376,7 @@ Owls.MailStore = (() =>
 	/// <summary>
 	/// A letter being written, as last saved.
 	/// </summary>
-	/// <param name="key">"new" for a new letter, "reply:{id}" for an answer to a letter</param>
+	/// <param name="key">"new" for a new letter, "reply:{id}" for an answer to a letter, "official:{number}" for an official letter from that sender</param>
 	/// <returns>Draft object, or null</returns>
 	function LoadDraft(key)
 	{
@@ -351,5 +415,5 @@ Owls.MailStore = (() =>
 		}
 	}
 
-	return { state, Subscribe, Reset, Clear, SetReady, ApplyContactsChunk, UpsertContact, RemoveContact, GetContactName, ApplyPage, ApplyOpened, NoteArrival, NoteSent, SetPost, SetSettings, SetQuiet, CanWrite, UsesPosts, LoadDraft, SaveDraft };
+	return { state, Subscribe, Reset, Clear, SetReady, ApplyContactsChunk, UpsertContact, SaveContact, RemoveContact, GetContact, GetKnownNumbers, GetContactLabel, GetContactPicture, ApplyPage, ApplyOpened, NoteArrival, NoteSent, SetPost, SetSettings, SetQuiet, CanWrite, UsesPosts, LoadDraft, SaveDraft };
 })();

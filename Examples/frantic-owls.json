@@ -3,6 +3,7 @@
 	"command": "owl",
 	"openKey": "up",
 	"defaultLanguage": "en-GB",
+	"backfillNumbers": true,
 	"contacts": {
 		"maxContacts": 250,
 		"maxNameLength": 40
@@ -101,16 +102,16 @@
 		"requestRateLimitWindowMs": 3000,
 		"maxBatchBytes": 24000
 	},
+	"avatars": {
+		"maxUrlLength": 512,
+		"allowedHosts": [],
+		"allowInsecure": false
+	},
 	"phonemode_numbers": {
 		"visible": false,
 		"dialling": false,
 		"rateLimitCount": 10,
 		"rateLimitWindowMs": 60000
-	},
-	"phonemode_avatars": {
-		"maxUrlLength": 512,
-		"allowedHosts": [],
-		"allowInsecure": false
 	},
 	"phonemode_messages": {
 		"maxLength": 500,
@@ -212,6 +213,7 @@
 		"maxRecipients": 8
 	},
 	"immersivemode_posts": [],
+	"immersivemode_avatars": false,
 	"immersivemode_ui": {
 		"scale": 1.0
 	}

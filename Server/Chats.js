@@ -1705,7 +1705,7 @@ class ChatService
 			return Fail(error);
 		}
 
-		const avatar = CheckAvatarUrl(data.avatarUrl, this.#config.phonemode_avatars);
+		const avatar = CheckAvatarUrl(data.avatarUrl, this.#config.avatars);
 
 		if (!avatar.ok)
 		{
@@ -1916,8 +1916,19 @@ class ChatService
 	/// <returns>{ ok, error, chatId, messageId }</returns>
 	async SendFromSender(sender, toNumber, rawBody, delaySeconds)
 	{
-		const body = this.#CleanBody(rawBody, this.#config.announcements.maxLength);
+		return this.DeliverFromSender(sender, toNumber, this.#CleanBody(rawBody, this.#config.announcements.maxLength), delaySeconds);
+	}
 
+	/// <summary>
+	/// Send an owl from a system sender whose text is already cleaned, such as an official letter from immersive mode (see Mail.CleanLetter).
+	/// </summary>
+	/// <param name="sender">Live sender registration</param>
+	/// <param name="toNumber">Recipient's owl number</param>
+	/// <param name="body">Cleaned message text</param>
+	/// <param name="delaySeconds">Flight time in seconds; 0 lands at once</param>
+	/// <returns>{ ok, error, chatId, messageId }</returns>
+	async DeliverFromSender(sender, toNumber, body, delaySeconds)
+	{
 		if (body.length === 0)
 		{
 			return { ok: false, error: "An owl needs a message.", chatId: 0, messageId: 0 };
@@ -1962,8 +1973,17 @@ class ChatService
 	/// <returns>{ ok, error, chatId, messageId }</returns>
 	async Broadcast(sender, rawBody)
 	{
-		const body = this.#CleanBody(rawBody, this.#config.announcements.maxLength);
+		return this.DeliverAnnouncement(sender, this.#CleanBody(rawBody, this.#config.announcements.maxLength));
+	}
 
+	/// <summary>
+	/// Post an announcement whose text is already cleaned, such as an official letter to everyone from immersive mode.
+	/// </summary>
+	/// <param name="sender">Live sender registration</param>
+	/// <param name="body">Cleaned message text</param>
+	/// <returns>{ ok, error, chatId, messageId }</returns>
+	async DeliverAnnouncement(sender, body)
+	{
 		if (body.length === 0)
 		{
 			return { ok: false, error: "An announcement needs a message.", chatId: 0, messageId: 0 };

@@ -24,11 +24,11 @@
 
 	const contacts =
 	[
-		{ id: 1, number: "20000001", name: "Ambrose Swott", avatarUrl: "", updatedAt: now },
-		{ id: 2, number: "20000002", name: "Natsai Onai", avatarUrl: "", profileAvatarUrl: sampleAvatar, favourite: true, updatedAt: now },
-		{ id: 3, number: "20000003", name: "Sebastian Sallow", avatarUrl: "", updatedAt: now },
-		{ id: 4, number: "20000004", name: "Poppy Sweeting", avatarUrl: "", updatedAt: now },
-		{ id: 5, number: "20000005", name: "Everett Clopton", avatarUrl: "", updatedAt: now },
+		{ id: 1, number: "20000001", name: "Ambrose Swott", originalName: "", identityKnown: false, avatarUrl: "", updatedAt: now },
+		{ id: 2, number: "20000002", name: "Nat", originalName: "Natsai Onai", identityKnown: true, avatarUrl: "", profileAvatarUrl: sampleAvatar, favourite: true, updatedAt: now },
+		{ id: 3, number: "20000003", name: "Sebastian Sallow", originalName: "Sebastian Sallow", identityKnown: true, avatarUrl: "", updatedAt: now },
+		{ id: 4, number: "20000004", name: "Poppy Sweeting", originalName: "Poppy Sweeting", identityKnown: true, avatarUrl: "", updatedAt: now },
+		{ id: 5, number: "20000005", name: "Professor Clopton", originalName: "Everett Clopton", identityKnown: true, avatarUrl: "", updatedAt: now },
 	];
 
 	const messages =
@@ -186,7 +186,7 @@
 		languages: [], quietActivities: true,
 	};
 
-	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", ringtone: "", ringtoneVolume: 0.8, callVolume: 1, readReceipts: true, typingIndicators: true, theme: "", layout: null, language: "", doNotDisturb: false, quietDuringActivities: true, wallpaperUrl: "", colourScheme: "default", animations: true, lockScreen: true, soundEffects: true, effectsVolume: 0.5 };
+	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", ringtone: "", ringtoneVolume: 0.8, callVolume: 1, readReceipts: true, typingIndicators: true, theme: "", layout: null, language: "", doNotDisturb: false, quietDuringActivities: true, wallpaperUrl: "", colourScheme: "default", animations: true, lockScreen: true, soundEffects: true, effectsVolume: 0.5, showOriginalNames: true };
 
 	/// <summary>
 	/// Read the language files once, the way the server reads Lang/ at start.

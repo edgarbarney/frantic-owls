@@ -37,13 +37,15 @@ The phone makes small sounds of its own as well, as the Frantic_Phone resource f
 
 Set `"mode": "immersive"` and players get a writing desk instead of the phone. The desk is its own page (`UI/Immersive.html` with `UI/Scripts/Immersive/` and `UI/Styles/Immersive.css`); the phone's page is never loaded on such a server, and the other way round. Players have their own guide: [PLAYER_GUIDE_IMMERSIVE.md](PLAYER_GUIDE_IMMERSIVE.md).
 
-- **The desk** opens in the middle of the screen over a semi-opaque backdrop, as if the whole screen were the desk. It lists letters like an e-mail inbox: **Letters** (received) and **Sent**, newest first, unread ones under a red wax seal.
+- **The desk** opens in the middle of the screen over a semi-opaque backdrop, as if the whole screen were the desk. It lists letters like an e-mail inbox: **Letters** (received) and **Sent**, newest first, unread ones under a red wax seal, then **Correspondents** and, for those allowed to announce, **Official Post**.
 - **Letters** are written and read on a sheet of parchment (`UI/Textures/MailParchment.png`) in one bundled handwriting font (Caveat). The sheet is laid out at one fixed size and only then scaled to the screen, so a letter breaks its lines in exactly the same places on every player's screen, with its spaces, indents and blank lines kept.
 - **Writing**: The greeting ("Dear Ominis and Natsai,") is filled in from the recipients picked right in it, and the sign-off and the writer's name below the body. The quill button (**Edit Whole Letter**) turns all of it into one page of text so the greeting and signature can be reworded or dropped. Either way the database stores the finished letter as one text, nothing else.
-- **Recipients** are picked from the characters online now or from the writer's **correspondents**: Everyone a character writes to becomes their contact (not the other way round). Under the hood owl numbers still identify everyone; players never see them.
+- **Recipients** can be any character with an owl, online or not. Typing a name shows one list: the writer's matching **correspondents** first, then every other character by that name, with a dot on those online. A character already among the writer's correspondents is only listed once, as that correspondent. Everyone a character writes to becomes their contact (not the other way round). Under the hood owl numbers still identify everyone; players never see them.
+- **Correspondents** is the desk's address book: Star, rename, write to or forget each one, give them a picture where `immersivemode_avatars` allows it, and **Add Correspondent** to save any character by name without writing first.
 - **Several recipients** do not make a bulk owl. Each gets a copy of their own, in the one-to-one chat they share with the writer, and answers only to the writer.
 - **Anonymity**: Readers are never told who wrote a letter (official senders aside); they see what the letter says, and the list of letters shows its first and last lines (usually the greeting and signature). A writer who drops their name in full edit sends it unsigned. The database still records the sender of every owl, as always, so staff can look it up and the Discord log names them.
-- **Answering** a letter names the letter, not its writer: The server works out who wrote it, so an anonymous writer stays anonymous to the one answering. The writer is saved among the answerer's correspondents under the name they signed with.
+- **Answering** a letter names the letter, not its writer: The server works out who wrote it, so an anonymous writer stays anonymous to the one answering. The writer is saved among the answerer's correspondents under the name they signed with, as a correspondent whose identity is unknown: The page gets no owl number, character name or profile picture for them, so it cannot match them to a character found by name. Two gaps remain by design: Adding that same character again by name is refused (without naming the correspondent), and a letter later written to them by name is listed in the sent box under the correspondent's name.
+- **Official Post** is for whoever may announce (the same permission as `/owl_announce`, while `announcements.enabled`): They write as the Ministry, or as any other resource's sender that is running, to **Everyone** (an announcement) or to up to 50 characters by name, one copy each. Official letters keep the letter's length and layout, are not tied to owl posts, and are logged under `logging.events.announcements`.
 - **Where** letters can be read and written is up to the server (`immersivemode_readmode` and `immersivemode_writemode`, both `"free"` by default):
   - `"free"`: Anywhere.
   - `"postonly"`: Only at an owl post.
@@ -52,7 +54,7 @@ Set `"mode": "immersive"` and players get a writing desk instead of the phone. T
   The server checks every read and write against where the character stands, and a letter's text never leaves the server while it may not be read there.
 - **Owl posts** are listed in `immersivemode_posts` (see `Examples/frantic-owls.immersive.json`; stand where a post should be and read your position from an admin tool). With **hmp-interact** running each one is an interaction zone ("Use the owl post"), optionally with a prop of your choice, that opens the desk; without it, players open the desk with `/owl` while standing at one.
 - **Notices**: While the desk is closed, a slip of parchment drops in at the top of the screen when an owl arrives (and once on loading in, if letters are waiting), with the player's notification sound. Do Not Disturb and Quiet during duels apply as on the phone.
-- **Settings** on the desk: Language, the arrival sound and its volume, notices, Do Not Disturb and Quiet during duels. They are the same stored settings as the phone's.
+- **Settings** on the desk: Language, the arrival sound and its volume, notices, Do Not Disturb, Quiet during duels and Show original names. They are the same stored settings as the phone's.
 
 Owls from phone mode show as letters too: A bulk owl's owls arrive as letters from their sender (tagged with the bulk owl's name; answering goes to the sender alone), announcements as official letters, and location owls and polls written out in words. Owl flight, blocks, retired characters, announcements, the `api` export, the `frantic-owls:sent` event and Discord logging work as in phone mode.
 
@@ -201,6 +203,9 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Social Media apps | ⬜ |
 | Dark Owling: Anonymous chat rooms (see below) | ⬜ |
 | Immersive mode: A letter desk with parchment letters, e-mail-like letters and sent boxes, owl posts | ⚙️ |
+| Immersive mode: Letters to any character by name, a correspondents address book, official letters for staff | ⚙️ |
+| Show original names beside contacts' saved names (both modes) | ⚙️ |
+| `api` and event for other resources to add contacts | ⚙️ |
 
 ### Dark Owling (planned)
 
@@ -363,11 +368,23 @@ Delivery:
 
 Each player sets their own owl profile picture in Settings. It is shown to every owl related to it (anyone who has it as a contact, anyone it has as a contact, and anyone it shares a chat with), and only to them: The server refuses to hand out pictures of unrelated owls. A picture a player sets on a contact overrides the owl's own picture for that player only.
 
-Pictures load straight from each viewer's machine, so the image host sees the IP address of everyone who looks at them. That is why `phonemode_avatars.allowedHosts` exists to limit them to hosts you trust, just in case.
+In immersive mode pictures are off unless `immersivemode_avatars` is on. Then correspondents show the picture the player set on them, or else the one the character set for themselves in phone mode (never for a correspondent whose identity is unknown). The same `avatars` link rules apply in both modes.
+
+Pictures load straight from each viewer's machine, so the image host sees the IP address of everyone who looks at them. That is why `avatars.allowedHosts` exists to limit them to hosts you trust, just in case.
+
+## Original names
+
+Players can turn on **Show original names** (Settings, in both modes) to see a contact's character name in parentheses after the name they saved, where the two differ: "Nat (Natsai Onai)". It only applies to contacts whose character the player knows: Contacts saved through an Inform, picked by name in immersive mode, or added by another resource with `revealName`. Contacts saved from a typed-in number or a chat, first reached by answering an unsigned letter, or saved before this setting existed show the saved name only. A contact moved to another number loses its original name too.
+
+## Finding characters by name
+
+Immersive mode lets letters go to any character by name, so the server keeps every named owl in memory (`Server/Roster.js`). It is read from `frantic_owls_numbers` once when the resource starts, and kept current as characters load, are renamed and are deleted. Searching it costs no database query, and the page keeps the number of searches down too: It waits for a short pause in typing, only searches from 2 letters, remembers answers for a minute, and narrows a longer search itself when the server said the shorter one held every match ("seb", "seba", "sebastian" is one search). Searches also count against the request limit (`network.requestRateLimitCount`). A few megabytes hold tens of thousands of characters, and a search walks them in well under a millisecond.
+
+With `backfillNumbers` (on by default), every active hmp-core character that has no owl number yet gets one when the resource starts, so characters that have not logged in since the owl post was installed can be found and written to too; their letters wait for them. It numbers 500 characters per query, so even a large server is caught up in a moment, and later starts only number characters created since. Turned off, characters get their number when they first load, as before.
 
 ## Owl numbers
 
-Every character is given a random 8-digit owl number the first time it loads in the backend. Contacts, chats and messages are all keyed by that number rather than by character ID. Numbers are not shown to players unless `phonemode_numbers.visible` or `phonemode_numbers.dialling` is enabled. They do travel to the client (that is how a chat knows which contact a member is), so treat them as "unlisted", not secret.
+Every character is given a random 8-digit owl number the first time it loads in the backend (or, with `backfillNumbers`, when the resource starts, if it has none yet), and its name is kept next to the number (refreshed on every load, and caught up from hmp-core's characters when the resource starts, so renames made while it was stopped are not missed). Contacts, chats and messages are all keyed by that number rather than by character ID. Numbers are not shown to players unless `phonemode_numbers.visible` or `phonemode_numbers.dialling` is enabled. They do travel to the client (that is how a chat knows which contact a member is), so treat them as "unlisted", not secret.
 
 With `phonemode_numbers.dialling` (off by default), players can reach an owl by typing in its number, the way phone numbers work:
 
@@ -399,9 +416,14 @@ await Owls.RegisterSender({
 await Owls.SendOwl({ sender: "gringotts", to: { characterId: 42 }, body: "Your vault is ready.", delaySeconds: 0 });
 await Owls.SendAnnouncement({ sender: "gringotts", body: "The bank closes early tonight." });
 const number = await Owls.GetOwlNumber(42);
+
+// Give character 42 the owl of character 7, as if they had been handed it (e.g. a business card from a shop).
+await Owls.AddContact({ owner: { characterId: 42 }, contact: { characterId: 7 }, name: "Madam Malkin", revealName: true });
 ```
 
-`to` may be `{ characterId }`, `{ number }` (an owl number) or `{ playerId }` (a connected player with a character loaded). Every call resolves with `{ ok, error, ... }` and never rejects. Each sender gets a permanent owl number of its own, so its chats survive restarts; its name and picture stay known to players even while your resource is stopped.
+`to` may be `{ characterId }`, `{ number }` (an owl number) or `{ playerId }` (a connected player with a character loaded). Every call resolves with `{ ok, error, ... }` and never rejects.
+
+`AddContact` takes the same kinds of `owner` and `contact`. A `characterId` must belong to an active hmp-core character; an unknown or deleted one is refused rather than given a number (the same goes for `SendOwl`). It resolves with `{ ok, error, contactId, added }`. `name` defaults to the contact's character name. `revealName` (on unless `false`) says the owner knows which character it is, so **Show original names** can show it; leave it off for a contact that should stay a mystery. A contact the owner already has is left as it is (`added: false`), and an owner online sees the new contact straight away. Resources that would rather not import the API can raise the server event `frantic-owls:addContact` with the same object instead (a refused one is logged as a warning). Each sender gets a permanent owl number of its own, so its chats survive restarts; its name and picture stay known to players even while your resource is stopped.
 
 To follow calls, listen for the server event `frantic-owls:call`. It fires when a call starts ringing (`state: "ringing"`), is answered (`"active"`) and ends (`"ended"`), with `{ callId, state, outcome, caller, callee, callerPlayerId, calleePlayerId, startedAt, answeredAt }`. `caller` and `callee` are owl numbers, a player ID is `-1` when that owl is offline, and `outcome` is set once it ended: `"answered"`, `"missed"`, `"declined"` or `"cancelled"`.
 
@@ -411,16 +433,20 @@ To react to owls instead of sending them, listen for the server event `frantic-o
 
 Edit `data/frantic-owls.json` in the server directory (set `FRANTIC_OWLS_CONFIG` to use another path). Missing keys fall back to their defaults and every value is clamped to a safe range. Restart the resource after changing it.
 
-Settings only one front end uses carry its prefix (`phonemode_` or `immersivemode_`); everything unprefixed is shared. Configs written before immersive mode used the same sections without the prefix (e.g. `calls` is now `phonemode_calls`, `ui.defaultLanguage` is now `defaultLanguage`); unprefixed old sections are ignored, so rename them when updating.
+Settings only one front end uses carry its prefix (`phonemode_` or `immersivemode_`); everything unprefixed is shared. Configs written before immersive mode used the same sections without the prefix (e.g. `calls` is now `phonemode_calls`, `ui.defaultLanguage` is now `defaultLanguage`); unprefixed old sections are ignored, so rename them when updating. `avatars` went the other way: It was `phonemode_avatars` for a while and is shared again.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `mode` | `"phone"` | `"phone"` for the phone, `"immersive"` for the letter desk (see [Immersive mode](#immersive-mode)). Owls, contacts and settings carry over when it changes. |
+| `backfillNumbers` | `true` | Give every hmp-core character without an owl number one when the resource starts, so it can be found by name and written to before it ever loads (see [Finding characters by name](#finding-characters-by-name)). |
 | `defaultLanguage` | `"en-GB"` | Language for players who have not picked one, and for the server log and command descriptions. Must have a file in `Lang/`. |
 | `command` | `"owl"` | Chat command that opens the phone. |
 | `openKey` | `"up"` | Key that also opens the phone (the up arrow by default; any HogwartsMP key name such as `"f3"` works), registered through hmp-lib shortcuts. `""` turns it off. |
 | `contacts.maxContacts` | `250` | Contacts per character. |
 | `contacts.maxNameLength` | `40` | Longest contact name. |
+| `avatars.maxUrlLength` | `512` | Longest picture link (profile pictures, overrides, wallpapers and correspondents' pictures). |
+| `avatars.allowedHosts` | `[]` | If not empty, picture links (wallpapers too) must be on one of these hosts (subdomains included), e.g. `["imgur.com", "giphy.com"]`. |
+| `avatars.allowInsecure` | `false` | Also accept `http://` picture links. |
 | `messages.pageSize` | `40` | Owls fetched per history page. |
 | `messages.maxChatsListed` | `100` | Chats sent in the chat list. |
 | `messages.rateLimitCount` / `rateLimitWindowMs` | `8` / `5000` | At most this many owls per window, per character. |
@@ -442,7 +468,7 @@ Settings only one front end uses carry its prefix (`phonemode_` or `immersivemod
 | `logging.username` | `"Owl Post"` | Name the log posts under. |
 | `logging.includeBodies` | `false` | Include message text in the log. |
 | `logging.flushIntervalMs` | `5000` | How often direct posting sends batched entries. |
-| `logging.events.*` | all `true` | Per category: `messages`, `phonemode_groups`, `informs`, `phonemode_calls`, `blocks`, `announcements`, `system`. |
+| `logging.events.*` | all `true` | Per category: `messages`, `groups`, `informs`, `calls`, `blocks`, `announcements` (official letters too), `system`. |
 | `notifications.toastDurationMs` | `3000` | How long the closed-phone pop-up stays. |
 | `notifications.soundMode` | `"file"` | `"file"` plays the player's chosen sound from the page, `"wwise"` plays `wwiseEvent` through the game's audio, `"none"` is silent. |
 | `notifications.sounds` | the six shipped sounds | Sounds players can choose from: `[{ "id", "label", "file" }]`, where `file` is inside `UI/` (`.wav`, `.mp3` or `.ogg`) and `id` is 1-24 of a-z, 0-9, `_` or `-`. At most 16. Add your own by dropping a file into `UI/Sounds/` and listing it. |
@@ -459,9 +485,6 @@ Only the phone reads these.
 | `phonemode_numbers.visible` | `false` | Show owl numbers in the UI (contact details, unknown senders). |
 | `phonemode_numbers.dialling` | `false` | Let players add contacts, owl and Floo-Call by typing in an owl number (see [Owl numbers](#owl-numbers)). Shows numbers too. |
 | `phonemode_numbers.rateLimitCount` / `rateLimitWindowMs` | `10` / `60000` | At most this many unknown numbers typed in per window, per character. |
-| `phonemode_avatars.maxUrlLength` | `512` | Longest picture link (profile pictures, overrides and wallpapers). |
-| `phonemode_avatars.allowedHosts` | `[]` | If not empty, picture links (wallpapers too) must be on one of these hosts (subdomains included), e.g. `["imgur.com", "giphy.com"]`. |
-| `phonemode_avatars.allowInsecure` | `false` | Also accept `http://` picture links. |
 | `phonemode_messages.maxLength` | `500` | Longest owl, in characters. |
 | `phonemode_messages.unsendSeconds` | `120` | How long after sending an owl can be unsent. `0` turns unsending off. |
 | `phonemode_messages.maxPinnedChats` | `5` | Chats each player can pin to the top of their list. `0` hides chat pinning. |
@@ -511,6 +534,7 @@ Only the letter desk reads these.
 | `immersivemode_letters.maxLines` | `150` | Most lines in a letter (10 - 1000). |
 | `immersivemode_letters.maxRecipients` | `8` | Most recipients of one letter (1 - 50). Each gets a copy of their own. |
 | `immersivemode_posts` | `[]` | The owl posts: `[{ "id", "label", "position": { "x", "y", "z" }, "areaId", "regionId", "radiusMetres", "model", "yaw" }]`. `id` is 1-32 of a-z, 0-9, `_` or `-`; `position` is in centimetres, as `player.position`; `areaId` and `regionId` (optional) tie it to one map; `radiusMetres` defaults to 3; `model` (optional) is a StaticMesh path for hmp-interact to place there. At most 64. |
+| `immersivemode_avatars` | `false` | Give correspondents pictures (see [Profile pictures](#profile-pictures)). Off keeps the desk to initials. |
 | `immersivemode_ui.scale` | `1.0` | Extra scale of the desk on top of the automatic resolution scaling (sizes are authored for 1080p). |
 
 ### Network and lag compensation
@@ -545,7 +569,8 @@ frantic-owls/
 │   ├── Api.js       the "api" export for other resources
 │   ├── Calls.js     Floo-Calls in progress and the call log
 │   ├── Contacts.js, Inform.js, Profiles.js, Settings.js
-│   ├── Mail.js      immersive mode's letters: listing, reading where allowed, one copy per recipient
+│   ├── Mail.js      immersive mode's letters: listing, reading where allowed, one copy per recipient, official letters
+│   ├── Roster.js    every named owl in memory, for finding characters by name
 │   ├── Posts.js     immersive mode's owl posts (hmp-interact zones and the position check)
 │   └── Requests.js  validated single entry point for client requests
 ├── Client/Main.js   loads the page of the server's mode; view placement and size, focus, pop-ups, close animation, open key
@@ -559,7 +584,7 @@ I also created a preview thingy for working on the UI without running the game.
 
 Just feed the resource root to a web server (e.g. `python -m http.server` inside it) and open `Dev/Preview.html`. It loads the real `UI/Index.html` and the real language files, and some buttons on the left simulate opening, closing, incoming owls, inform requests (and an inform without consent), `/owl_resetpos`, someone leaving a group, people typing, being removed from a group, a Ministry announcement, a duel starting and ending, a contact's character being deleted, an incoming call, the other side hanging up or muting, and a call missed while busy. During a call the other player is an echo: Your own voice comes back a quarter of a second later. Calling Natsai is answered after 3 seconds, Sebastian is busy, Poppy cannot be reached, and anyone else rings out after 15 seconds. Dialling is on in the preview: Numbers starting with 2, 3 or 4 belong to an owl, any other is unknown. Beast Club has a poll, and a poll you send there gets a vote from Ambrose 2.5 seconds later. Owls you send in the preview fly for 5 seconds and are read 2.5 seconds after landing, and **Show on map** only logs the route to the browser console.
 
-`Dev/ImmersivePreview.html` does the same for immersive mode's letter desk with `Dev/ImmersiveMock.js`: Its buttons (bottom right) open and close the desk, deliver a signed or anonymous letter, step onto and off an owl post, and switch between the read and write modes. Poppy has blocked you there, so a letter to her shows how a partly delivered letter looks.
+`Dev/ImmersivePreview.html` does the same for immersive mode's letter desk with `Dev/ImmersiveMock.js`: Its buttons (bottom right) open and close the desk, deliver a signed or anonymous letter, step onto and off an owl post, switch between the read and write modes, allow or refuse the Official Post, turn correspondents' pictures on and off, and have another resource add a contact. The mock's roster has two dozen characters to search (try "se", then "seb": The browser console logs each search that reaches the mock server). Poppy has blocked you there, so a letter to her shows how a partly delivered letter looks, and "Midnight Writer" is a correspondent whose identity is unknown (really Ominous Stranger).
 
 Both previews have **Background image…**, which puts a picture from your computer (a game screenshot works best) behind the page so translucent parts can be judged against something like the real world, and **Default background** to take it away. The picture stays in the browser and is remembered across reloads (`Dev/DevBackground.js`).
 

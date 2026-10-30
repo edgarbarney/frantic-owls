@@ -9,7 +9,7 @@ Owls.DeskScreens = Owls.DeskScreens || {};
 // ========================
 
 /// <summary>
-/// Writing a letter.
+/// Writing a letter, or an official letter as a system sender (the Ministry) for those allowed to.
 ///
 /// <para>
 /// NOTE: By default the player writes only the middle of the letter: the greeting ("Dear Ominis and Natsai,") follows the recipients they pick,
@@ -18,22 +18,23 @@ Owls.DeskScreens = Owls.DeskScreens || {};
 /// </para>
 ///
 /// <para>
-/// NOTE: Recipients come from two lists kept apart on purpose: owls online now, and the player's correspondents (everyone they have written to).
-/// Merging them by owl number would show which correspondent is which online character, which an anonymous letter's reader is not meant to learn.
+/// NOTE: A letter can go to any character with an owl. Typing a name shows one list: the player's correspondents that match first, then every other character by that name the server finds.
+/// A character the player already has as a correspondent is only listed as that correspondent; one saved without knowing who they are has no number on the page, so it cannot be matched and both show.
 /// Answering a letter adds its writer as a recipient by the letter, not by name; the server finds who wrote it.
 /// </para>
 ///
 /// </summary>
 Owls.DeskScreens.Compose = (() =>
 {
-	const { Element, Matches, NewKey } = Owls.Util;
+	const { Element, NewKey } = Owls.Util;
 	const T = Owls.Lang.T;
 	const Store = Owls.MailStore;
+	const Search = Owls.MailSearch;
 
 	/// <summary>
-	/// Most suggestions shown under the recipient field at once.
+	/// Most correspondents suggested at once; the server's names come after them.
 	/// </summary>
-	const maxSuggestions = 30;
+	const maxContactSuggestions = 6;
 
 	/// <summary>
 	/// How long a button waits for its confirming second click.
@@ -46,26 +47,44 @@ Owls.DeskScreens.Compose = (() =>
 	const draftSaveDelayMs = 400;
 
 	/// <summary>
+	/// Recipient kinds a saved draft may hold. Drafts from before recipients could be anyone are dropped down to these.
+	/// </summary>
+	const recipientKinds = Object.freeze(["contact", "owl", "reply"]);
+
+	/// <summary>
+	/// Keep the recipients of a saved draft that this version can still send to.
+	/// </summary>
+	/// <param name="list">Saved recipients</param>
+	/// <returns>Usable recipients</returns>
+	function ReadSavedRecipients(list)
+	{
+		return (Array.isArray(list) ? list : []).filter((recipient) => recipient && recipientKinds.includes(recipient.kind) && (recipient.kind !== "contact" || Number(recipient.contactId) > 0) && (recipient.kind !== "owl" || /^\d{8}$/.test(String(recipient.number))));
+	}
+
+	/// <summary>
 	/// Build the screen.
 	/// </summary>
 	/// <param name="desk">Owls.Desk, for navigation and messages</param>
-	/// <param name="params">{ replyTo } with the opened letter being answered (optional)</param>
+	/// <param name="params">{ replyTo } with the opened letter being answered, { to } with a correspondent to write to, or { official: { number, name } } to write as that sender (all optional)</param>
 	/// <returns>{ element, OnStore(reason), Destroy() }</returns>
 	function Create(desk, params = {})
 	{
 		const replyTo = params.replyTo || null;
-		const draftKey = replyTo ? `reply:${replyTo.id}` : "new";
+		const official = params.official || null;
+		const draftKey = official ? `official:${official.number}` : replyTo ? `reply:${replyTo.id}` : "new";
 		const config = Store.state.config;
 		const maxLength = Number(config.maxLetterLength) || 4000;
-		const maxRecipients = Number(config.maxRecipients) || 8;
+		const maxRecipients = official ? Number(config.maxOfficialRecipients) || 50 : Number(config.maxRecipients) || 8;
+		const signature = official ? official.name : Store.state.me.name;
 		const saved = Store.LoadDraft(draftKey);
 
 		const draft =
 		{
-			recipients: saved && Array.isArray(saved.recipients) ? saved.recipients : [],
+			recipients: ReadSavedRecipients(saved && saved.recipients),
 			body: saved ? String(saved.body || "") : "",
 			isFull: !!(saved && saved.isFull),
 			fullText: saved ? String(saved.fullText || "") : "",
+			everyone: !!(official && saved && saved.everyone),
 		};
 
 		// Answering adds the letter's writer, named the way they signed (or as the official sender they are).
@@ -75,7 +94,12 @@ Owls.DeskScreens.Compose = (() =>
 			draft.recipients.unshift({ key: `reply:${replyTo.id}`, kind: "reply", replyToId: replyTo.id, name: label });
 		}
 
-		let online = [];
+		// Writing from the correspondents adds that correspondent, unless the draft already has them.
+		if (params.to && !draft.recipients.some((recipient) => recipient.key === `contact:${params.to.id}`) && draft.recipients.length < maxRecipients)
+		{
+			draft.recipients.push({ key: `contact:${params.to.id}`, kind: "contact", contactId: params.to.id, name: params.to.name });
+		}
+
 		let isSending = false;
 		let saveTimer = null;
 		let confirmTimer = null;
@@ -94,6 +118,11 @@ Owls.DeskScreens.Compose = (() =>
 		/// <returns>Names</returns>
 		function GetNames()
 		{
+			if (draft.everyone)
+			{
+				return [T("mail.official.everyone")];
+			}
+
 			return draft.recipients.map((recipient) => recipient.name || T("mail.letter.noName"));
 		}
 
@@ -103,7 +132,7 @@ Owls.DeskScreens.Compose = (() =>
 		/// <returns>Text</returns>
 		function GetLetterText()
 		{
-			return draft.isFull ? draft.fullText : Owls.Sheet.Compose(GetNames(), draft.body, Store.state.me.name);
+			return draft.isFull ? draft.fullText : Owls.Sheet.Compose(GetNames(), draft.body, signature);
 		}
 
 		/// <summary>
@@ -122,8 +151,17 @@ Owls.DeskScreens.Compose = (() =>
 		{
 			clearTimeout(saveTimer);
 			saveTimer = null;
-			const isEmpty = draft.body.trim().length === 0 && (!draft.isFull || draft.fullText.trim().length === 0) && draft.recipients.every((recipient) => recipient.kind === "reply");
+			const isEmpty = draft.body.trim().length === 0 && (!draft.isFull || draft.fullText.trim().length === 0) && draft.recipients.every((recipient) => recipient.kind === "reply") && !draft.everyone;
 			Store.SaveDraft(draftKey, isEmpty ? null : { ...draft, savedAt: Date.now() });
+		}
+
+		/// <summary>
+		/// Whether the letter may be sent from where the player stands. Official letters are not tied to owl posts.
+		/// </summary>
+		/// <returns>True when writing is allowed</returns>
+		function CanWrite()
+		{
+			return !!official || Store.CanWrite();
 		}
 
 		/// <summary>
@@ -134,7 +172,7 @@ Owls.DeskScreens.Compose = (() =>
 			const length = GetLetterText().length;
 			counter.textContent = T("mail.compose.counter", { count: length, max: maxLength });
 			counter.classList.toggle("is-over", length > maxLength);
-			sealButton.disabled = isSending || !Store.CanWrite();
+			sealButton.disabled = isSending || !CanWrite();
 		}
 
 		/// <summary>
@@ -177,7 +215,7 @@ Owls.DeskScreens.Compose = (() =>
 		/// In template mode it is the greeting line itself ("Dear [names],"); in full mode it sits above the sheet ("To: [names]").
 		/// </summary>
 		/// <param name="isGreeting">True for the greeting line on the sheet</param>
-		/// <returns>{ element, Render(), Refresh(), Focus() }</returns>
+		/// <returns>{ element, Render(), Focus(), Destroy() }</returns>
 		function CreatePicker(isGreeting)
 		{
 			// The greeting's words come from the language file around {names}, so the field reads exactly like the line it becomes.
@@ -196,6 +234,16 @@ Owls.DeskScreens.Compose = (() =>
 			]);
 
 			/// <summary>
+			/// The server's latest answer for what is typed: { query, owls, isPending }.
+			/// </summary>
+			let found = { query: "", owls: [], isPending: false };
+			const searcher = Search.CreateSearcher((answer) =>
+			{
+				found = answer;
+				RenderSuggestions();
+			});
+
+			/// <summary>
 			/// Clicking anywhere on the line (but not on a name, which crosses it out) puts the cursor in the text box.
 			/// </summary>
 			/// <param name="event">Click event</param>
@@ -208,28 +256,31 @@ Owls.DeskScreens.Compose = (() =>
 			}
 
 			/// <summary>
-			/// The suggestions matching what is typed: owls online, then correspondents, leaving out anyone already picked from the same list.
+			/// The suggestions for what is typed: matching correspondents, then the other characters the server found by that name.
 			/// </summary>
-			/// <returns>[{ heading } | { recipient }]</returns>
+			/// <returns>{ contacts: [recipient], owls: [recipient] }</returns>
 			function GetSuggestions()
 			{
 				const query = input.value.trim();
+
+				if (query.length === 0)
+				{
+					return { contacts: [], owls: [] };
+				}
+
 				const picked = new Set(draft.recipients.map((recipient) => recipient.key));
-				const onlineMatches = online.filter((entry) => Matches(entry.name, query)).map((entry) => ({ key: `online:${entry.number}`, kind: "online", number: entry.number, name: entry.name })).filter((entry) => !picked.has(entry.key));
-				const contactMatches = Store.state.contacts.filter((contact) => Matches(contact.name, query)).map((contact) => ({ key: `contact:${contact.number}`, kind: "contact", number: contact.number, name: contact.name })).filter((entry) => !picked.has(entry.key));
-				const rows = [];
+				const known = Store.GetKnownNumbers();
+				const contacts = Store.state.contacts
+					.filter((contact) => Search.Matches(contact.name, query) || Search.Matches(contact.originalName, query))
+					.map((contact) => ({ key: `contact:${contact.id}`, kind: "contact", contactId: contact.id, name: contact.name, label: Store.GetContactLabel(contact) }))
+					.filter((recipient) => !picked.has(recipient.key))
+					.slice(0, maxContactSuggestions);
+				const owls = found.query === Search.Fold(query) ? found.owls
+					.filter((owl) => !known.has(owl.number))
+					.map((owl) => ({ key: `owl:${owl.number}`, kind: "owl", number: owl.number, name: owl.name, label: owl.name, online: owl.online }))
+					.filter((recipient) => !picked.has(recipient.key)) : [];
 
-				if (onlineMatches.length > 0)
-				{
-					rows.push({ heading: T("mail.compose.online") }, ...onlineMatches.slice(0, maxSuggestions).map((recipient) => ({ recipient })));
-				}
-
-				if (contactMatches.length > 0)
-				{
-					rows.push({ heading: T("mail.compose.correspondents") }, ...contactMatches.slice(0, maxSuggestions).map((recipient) => ({ recipient })));
-				}
-
-				return rows;
+				return { contacts, owls };
 			}
 
 			/// <summary>
@@ -237,15 +288,35 @@ Owls.DeskScreens.Compose = (() =>
 			/// </summary>
 			function RenderSuggestions()
 			{
-				const rows = GetSuggestions();
+				const query = input.value.trim();
+				const { contacts, owls } = GetSuggestions();
+				const rows = contacts.map(CreateOption);
 
-				if (rows.length === 0)
+				if (contacts.length > 0 && owls.length > 0)
 				{
-					list.replaceChildren(Element("li", { className: "picker-none", text: T(draft.recipients.length >= maxRecipients ? "mail.compose.recipientsFull" : "mail.compose.noMatches") }));
-					return;
+					rows.push(Element("li", { className: "picker-divider", attributes: { role: "separator" } }));
 				}
 
-				list.replaceChildren(...rows.map((row) => (row.heading ? Element("li", { className: "picker-heading", text: row.heading }) : CreateOption(row.recipient))));
+				rows.push(...owls.map(CreateOption));
+
+				if (draft.recipients.length >= maxRecipients)
+				{
+					rows.splice(0, rows.length, Element("li", { className: "picker-none", text: T("mail.compose.recipientsFull") }));
+				}
+				else if (query.length === 0)
+				{
+					rows.push(Element("li", { className: "picker-none", text: T("mail.compose.typeName") }));
+				}
+				else if (found.isPending && found.query === Search.Fold(query))
+				{
+					rows.push(Element("li", { className: "picker-none", text: T("mail.compose.searching") }));
+				}
+				else if (rows.length === 0)
+				{
+					rows.push(Element("li", { className: "picker-none", text: T(Search.Fold(query).length < Search.minQueryLength ? "mail.compose.typeMore" : "mail.compose.noMatches") }));
+				}
+
+				list.replaceChildren(...rows);
 			}
 
 			/// <summary>
@@ -255,7 +326,12 @@ Owls.DeskScreens.Compose = (() =>
 			/// <returns>List item</returns>
 			function CreateOption(recipient)
 			{
-				const option = Element("li", { className: "picker-option", text: recipient.name });
+				const option = Element("li", { className: `picker-option is-${recipient.kind}` },
+				[
+					Element("span", { className: "picker-option-name", text: recipient.label }),
+					recipient.kind === "contact" ? Element("i", { className: "fa-solid fa-address-book picker-option-mark", title: T("mail.compose.isCorrespondent") }) : null,
+					recipient.kind === "owl" && recipient.online ? Element("span", { className: "picker-online", title: T("mail.compose.online") }) : null,
+				]);
 
 				option.addEventListener("mousedown", (event) =>
 				{
@@ -278,8 +354,11 @@ Owls.DeskScreens.Compose = (() =>
 					return;
 				}
 
-				draft.recipients.push(recipient);
+				const { label, online, ...kept } = recipient;
+				draft.recipients.push(kept);
 				input.value = "";
+				searcher.Cancel();
+				found = { query: "", owls: [], isPending: false };
 				OnRecipientsChanged();
 				RenderSuggestions();
 			}
@@ -321,10 +400,17 @@ Owls.DeskScreens.Compose = (() =>
 						return Element("span", { className: "picker-literal", text: part.value });
 					}
 
+					// Writing to everyone is turned off with its own button, so its name cannot be crossed out here.
+					if (draft.everyone)
+					{
+						return Element("span", { className: "picker-name is-everyone", text: part.value });
+					}
+
 					const recipient = draft.recipients[index++];
 					return Element("button", { className: `picker-name is-${recipient.kind}`, text: part.value, title: T("mail.compose.remove"), on: { click: () => Unpick(recipient.key) } });
 				}));
 
+				field.hidden = draft.everyone;
 				input.placeholder = T(draft.recipients.length === 0 ? "mail.compose.namePlaceholder" : "mail.compose.morePlaceholder");
 				input.style.width = `${Math.max(6, (input.value || input.placeholder).length + 1)}ch`;
 			}
@@ -337,6 +423,7 @@ Owls.DeskScreens.Compose = (() =>
 			input.addEventListener("blur", () => pickerElement.classList.remove("is-open"));
 			input.addEventListener("input", () =>
 			{
+				searcher.Find(input.value);
 				RenderSuggestions();
 				input.style.width = `${Math.max(6, (input.value || input.placeholder).length + 1)}ch`;
 			});
@@ -349,28 +436,18 @@ Owls.DeskScreens.Compose = (() =>
 				else if (event.key === "Enter")
 				{
 					event.preventDefault();
-					const first = GetSuggestions().find((row) => row.recipient);
+					const { contacts, owls } = GetSuggestions();
+					const first = contacts[0] || owls[0];
 
 					if (first)
 					{
-						Pick(first.recipient);
+						Pick(first);
 					}
 				}
 			});
 
-			/// <summary>
-			/// Draw the suggestions again if they are showing, e.g. once the owls online have arrived.
-			/// </summary>
-			function Refresh()
-			{
-				if (pickerElement.classList.contains("is-open"))
-				{
-					RenderSuggestions();
-				}
-			}
-
 			Render();
-			return { element: pickerElement, Render, Refresh, Focus: () => input.focus() };
+			return { element: pickerElement, Render, Focus: () => input.focus(), Destroy: () => searcher.Cancel() };
 		}
 
 		/// <summary>
@@ -392,14 +469,29 @@ Owls.DeskScreens.Compose = (() =>
 		// ========================
 
 		/// <summary>
+		/// Leave the composer for the screen it was opened from.
+		/// </summary>
+		function GoBack()
+		{
+			if (official)
+			{
+				desk.ShowOfficial();
+			}
+			else
+			{
+				desk.ShowLetters({});
+			}
+		}
+
+		/// <summary>
 		/// Lay the screen out for the current mode.
 		/// </summary>
 		function Build()
 		{
-			const backButton = Element("button", { className: "desk-button is-quiet", on: { click: () => { SaveNow(); desk.ShowLetters({}); } } },
+			const backButton = Element("button", { className: "desk-button is-quiet", on: { click: () => { SaveNow(); GoBack(); } } },
 			[
 				Element("i", { className: "fa-solid fa-arrow-left", attributes: { "aria-hidden": "true" } }),
-				Element("span", { text: T("mail.compose.back") }),
+				Element("span", { text: T(official ? "mail.official.tab" : "mail.compose.back") }),
 			]);
 			const modeButton = Element("button", { className: `desk-button ${draft.isFull ? "is-active" : ""}`, title: T(draft.isFull ? "mail.compose.templateHint" : "mail.compose.fullHint") },
 			[
@@ -411,6 +503,11 @@ Owls.DeskScreens.Compose = (() =>
 				Element("i", { className: "fa-solid fa-trash-can", attributes: { "aria-hidden": "true" } }),
 				Element("span", { text: T("mail.compose.discard") }),
 			]);
+			const everyoneButton = official ? Element("button", { className: `desk-button ${draft.everyone ? "is-active" : ""}`, title: T("mail.official.everyoneHint") },
+			[
+				Element("i", { className: "fa-solid fa-users", attributes: { "aria-hidden": "true" } }),
+				Element("span", { text: T("mail.official.everyoneButton") }),
+			]) : null;
 
 			modeButton.addEventListener("click", () =>
 			{
@@ -431,7 +528,7 @@ Owls.DeskScreens.Compose = (() =>
 				}
 
 				SaveNow();
-				Build();
+				Rebuild();
 			});
 
 			discardButton.addEventListener("click", () =>
@@ -441,12 +538,24 @@ Owls.DeskScreens.Compose = (() =>
 					clearTimeout(saveTimer);
 					saveTimer = null;
 					Store.SaveDraft(draftKey, null);
-					desk.ShowLetters({});
+					GoBack();
 				}
 			});
 
-			const title = Element("span", { className: "compose-title", text: T(replyTo ? "mail.compose.titleReply" : "mail.compose.title") });
-			const toolbar = Element("div", { className: "desk-toolbar" }, [backButton, title, modeButton, discardButton]);
+			if (everyoneButton)
+			{
+				everyoneButton.addEventListener("click", () =>
+				{
+					draft.everyone = !draft.everyone;
+					SaveNow();
+					Rebuild();
+				});
+			}
+
+			// An official letter's sender is already named in its signature, so the title stays short enough for the extra button.
+			const titleText = T(official ? "mail.official.composeTitle" : replyTo ? "mail.compose.titleReply" : "mail.compose.title");
+			const title = Element("span", { className: "compose-title", text: titleText });
+			const toolbar = Element("div", { className: "desk-toolbar" }, [backButton, title, everyoneButton, modeButton, discardButton].filter(Boolean));
 			let sheet = null;
 			let focusTarget = null;
 			picker = CreatePicker(!draft.isFull);
@@ -478,11 +587,11 @@ Owls.DeskScreens.Compose = (() =>
 				const closing = Element("div", { className: "compose-closing" },
 				[
 					Element("div", { className: "compose-line", text: T("mail.letter.closing") }),
-					Element("div", { className: "compose-line compose-signature", text: Store.state.me.name }),
+					Element("div", { className: "compose-line compose-signature", text: signature }),
 				]);
 
 				sheet = Owls.Sheet.Create([picker.element, body, closing], "is-writing is-template");
-				focusTarget = draft.recipients.length === 0 ? null : body;
+				focusTarget = draft.recipients.length === 0 && !draft.everyone ? null : body;
 			}
 
 			// The seal is pressed onto the sheet itself, so it scales with it.
@@ -503,12 +612,34 @@ Owls.DeskScreens.Compose = (() =>
 			requestAnimationFrame(() => (focusTarget ? focusTarget.focus() : picker.Focus()));
 		}
 
+		/// <summary>
+		/// Lay the screen out again, after a mode change.
+		/// </summary>
+		function Rebuild()
+		{
+			if (picker)
+			{
+				picker.Destroy();
+			}
+
+			Build();
+		}
+
 		// ========================
 		// Sending
 		// ========================
 
 		/// <summary>
-		/// Seal the letter and send it, one copy per recipient.
+		/// The recipients as the server takes them: correspondents by contact ID, anyone else by owl number. The writer of an answered letter goes separately.
+		/// </summary>
+		/// <returns>[{ contactId } | { number }]</returns>
+		function GetRecipientsToSend()
+		{
+			return draft.recipients.filter((recipient) => recipient.kind !== "reply").map((recipient) => (recipient.kind === "contact" ? { contactId: recipient.contactId } : { number: recipient.number }));
+		}
+
+		/// <summary>
+		/// Seal the letter and send it, one copy per recipient (or, for an official letter to everyone, one announcement).
 		/// </summary>
 		async function Send()
 		{
@@ -519,9 +650,8 @@ Owls.DeskScreens.Compose = (() =>
 
 			const text = GetLetterText();
 			const reply = draft.recipients.find((recipient) => recipient.kind === "reply");
-			const numbers = draft.recipients.filter((recipient) => recipient.kind !== "reply").map((recipient) => recipient.number);
 
-			if (draft.recipients.length === 0)
+			if (draft.recipients.length === 0 && !draft.everyone)
 			{
 				desk.ShowError(T("error.mail.noRecipients"));
 				picker.Focus();
@@ -544,7 +674,9 @@ Owls.DeskScreens.Compose = (() =>
 			status.textContent = T("mail.compose.sending");
 			UpdateCounter();
 
-			const result = await Owls.Bridge.Request("mail.send", { recipients: numbers, replyToId: reply ? reply.replyToId : 0, replyLabel: reply ? reply.name : "", body: text, clientKey: NewKey() });
+			const result = official
+				? await Owls.Bridge.Request("mail.sendOfficial", { sender: official.number, everyone: draft.everyone, recipients: draft.everyone ? [] : GetRecipientsToSend(), body: text, clientKey: NewKey() })
+				: await Owls.Bridge.Request("mail.send", { recipients: GetRecipientsToSend(), replyToId: reply ? reply.replyToId : 0, replyLabel: reply ? reply.name : "", body: text, clientKey: NewKey() });
 
 			isSending = false;
 			status.textContent = "";
@@ -558,7 +690,7 @@ Owls.DeskScreens.Compose = (() =>
 
 			for (const contact of result.data.contacts || [])
 			{
-				Store.UpsertContact(contact);
+				Store.SaveContact(contact);
 			}
 
 			clearTimeout(saveTimer);
@@ -566,33 +698,38 @@ Owls.DeskScreens.Compose = (() =>
 			Store.SaveDraft(draftKey, null);
 			Store.NoteSent();
 
-			const failed = (result.data.failed || []).map((failure) =>
-			{
-				const recipient = draft.recipients.find((entry) => entry.number === failure.number) || reply;
-				return { name: recipient && recipient.name ? recipient.name : T("mail.list.unknownRecipient"), error: T(failure.errorKey) };
-			});
+			const failed = (result.data.failed || []).map((failure) => ({ name: failure.name || T("mail.list.unknownRecipient"), error: T(failure.errorKey) }));
+			desk.ShowDispatch(Number(result.data.sent) || 0, failed, !!result.data.everyone);
 
-			desk.ShowDispatch((result.data.sent || []).length, failed);
-			desk.ShowLetters({ box: "sent" });
+			if (official)
+			{
+				desk.ShowOfficial();
+			}
+			else
+			{
+				desk.ShowLetters({ box: "sent" });
+			}
 		}
 
 		/// <summary>
-		/// Fetch the owls online to suggest as recipients.
+		/// Ask where the player stands, which decides whether a letter may be written here.
 		/// </summary>
-		async function LoadOnline()
+		async function LoadPlace()
 		{
-			const result = await Owls.Bridge.Request("mail.recipients", {});
+			const result = await Owls.Bridge.Request("mail.place", {});
 
 			if (result.ok)
 			{
-				online = Array.isArray(result.data.online) ? result.data.online : [];
 				Store.SetPost(result.data.post || null);
-				picker.Refresh();
 			}
 		}
 
 		Build();
-		LoadOnline();
+
+		if (!official)
+		{
+			LoadPlace();
+		}
 
 		return {
 			element,
@@ -606,6 +743,11 @@ Owls.DeskScreens.Compose = (() =>
 			Destroy: () =>
 			{
 				clearTimeout(confirmTimer);
+
+				if (picker)
+				{
+					picker.Destroy();
+				}
 
 				if (saveTimer !== null)
 				{

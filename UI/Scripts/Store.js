@@ -19,7 +19,7 @@ Owls.Store = (() =>
 	/// <summary>
 	/// Default settings, used until the server's arrive.
 	/// </summary>
-	const defaultSettings = Object.freeze({ notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", ringtone: "", ringtoneVolume: 0.8, callVolume: 1, readReceipts: true, typingIndicators: true, theme: "", layout: null, language: "", doNotDisturb: false, quietDuringActivities: true, wallpaperUrl: "", colourScheme: "default", animations: true, lockScreen: true, soundEffects: true, effectsVolume: 0.5 });
+	const defaultSettings = Object.freeze({ notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", ringtone: "", ringtoneVolume: 0.8, callVolume: 1, readReceipts: true, typingIndicators: true, theme: "", layout: null, language: "", doNotDisturb: false, quietDuringActivities: true, wallpaperUrl: "", colourScheme: "default", animations: true, lockScreen: true, soundEffects: true, effectsVolume: 0.5, showOriginalNames: false });
 
 	/// <summary>
 	/// Delay that gathers unknown chat members into one profile lookup.
@@ -1177,7 +1177,19 @@ Owls.Store = (() =>
 	/// <returns>Contact records</returns>
 	function GetSortedContacts(query = "")
 	{
-		return [...state.contacts.values()].filter((contact) => Owls.Util.Matches(contact.name, query)).sort((first, second) => Owls.Util.CompareNames(first.name, second.name));
+		return [...state.contacts.values()].filter((contact) => Owls.Util.Matches(contact.name, query) || (!!contact.originalName && Owls.Util.Matches(contact.originalName, query))).sort((first, second) => Owls.Util.CompareNames(first.name, second.name));
+	}
+
+	/// <summary>
+	/// The name a contact is shown by: the name the player saved, and, with showOriginalNames on, the character's own name in parentheses where it differs.
+	/// The server only sends originalName for contacts whose character the player knows (an Inform, or another resource introducing them), never for a typed-in number.
+	/// </summary>
+	/// <param name="contact">Contact record</param>
+	/// <returns>Label</returns>
+	function GetContactLabel(contact)
+	{
+		const original = contact.originalName;
+		return state.settings.showOriginalNames && original && original !== contact.name ? `${contact.name} (${original})` : contact.name;
 	}
 
 	/// <summary>
@@ -1454,7 +1466,7 @@ Owls.Store = (() =>
 
 		if (contact)
 		{
-			return contact.name;
+			return GetContactLabel(contact);
 		}
 
 		return state.config.numbersVisible ? T("owl.numbered", { number: FormatNumber(number) }) : T("owl.unknown");
@@ -1732,7 +1744,7 @@ Owls.Store = (() =>
 		SetInformRequests, AddInformRequest, RemoveInformRequest, GetInformRequests,
 		SetCall, EndCall, ApplyCallsChunk, AddCallEntry, RemoveCallEntries, MarkCallsSeen, GetMissedCallCount, GetCallState,
 		IsBlocked, SetBlocked, IsRetired, SetRetired, SetQuiet, IsQuiet, SetSenders, GetSender, IsMuted, SetMuted, GetWriteState,
-		ApplyContactsChunk, UpsertContact, RemoveContact, GetSortedContacts, GetFavouriteContacts,
+		ApplyContactsChunk, UpsertContact, RemoveContact, GetSortedContacts, GetFavouriteContacts, GetContactLabel,
 		ApplyChatsChunk, UpsertChat, RemoveChat, SetChatPinned, IsAdmin, GetNoteText, GetSortedChats, FindDirectChat, GetTotalUnread, SetUnread,
 		FormatNumber, GetDisplayName, GetOtherMember, GetChatTitle, CreateChatAvatar,
 		GetHistory, AddMessage, ApplyHistoryPage, MarkUnsent, RemoveMessage, AddPending, RemovePending, FailPending,

@@ -9,7 +9,7 @@ Owls.DeskScreens = Owls.DeskScreens || {};
 // ========================
 
 /// <summary>
-/// The letter desk's few settings: language, the sound an arriving owl makes, notices and Do Not Disturb.
+/// The letter desk's few settings: language, the sound an arriving owl makes, notices, Do Not Disturb and how correspondents are named.
 /// They are the same stored settings the phone uses, so a server switching mode keeps every player's choices.
 /// </summary>
 Owls.DeskScreens.Settings = (() =>
@@ -133,6 +133,7 @@ Owls.DeskScreens.Settings = (() =>
 				Row(T("mail.settings.notices"), T("mail.settings.noticesHint"), Toggle("popups")),
 				Row(T("settings.doNotDisturb"), T("mail.settings.doNotDisturbHint"), Toggle("doNotDisturb")),
 				config.quietActivities ? Row(T("settings.quietActivities"), T("settings.quietActivitiesHint"), Toggle("quietDuringActivities")) : null,
+				Row(T("settings.showOriginalNames"), T("mail.settings.showOriginalNamesHint"), Toggle("showOriginalNames")),
 			];
 
 			body.replaceChildren(...rows.filter(Boolean));

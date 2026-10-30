@@ -19,7 +19,7 @@ const { Problem } = require("./Lang.js");
 ///
 /// </summary>
 /// <param name="raw">Client-supplied URL (may be empty to clear the picture)</param>
-/// <param name="avatarsConfig">The "phonemode_avatars" section of the server config</param>
+/// <param name="avatarsConfig">The "avatars" section of the server config</param>
 /// <returns>{ ok, url, error } where error is a Lang.Problem (null when ok)</returns>
 function CheckAvatarUrl(raw, avatarsConfig)
 {

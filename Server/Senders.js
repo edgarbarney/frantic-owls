@@ -43,7 +43,7 @@ class SenderRegistry
 	#hmp;
 
 	/// <summary>
-	/// The "phonemode_avatars" section of the server config.
+	/// The "avatars" section of the server config.
 	/// </summary>
 	#avatarsConfig;
 
@@ -67,7 +67,7 @@ class SenderRegistry
 	/// </summary>
 	/// <param name="database">OwlDatabase instance</param>
 	/// <param name="hmp">hmp-lib server import</param>
-	/// <param name="avatarsConfig">The "phonemode_avatars" section of the server config</param>
+	/// <param name="avatarsConfig">The "avatars" section of the server config</param>
 	/// <param name="onChanged">Called whenever the sender list changes</param>
 	constructor(database, hmp, avatarsConfig, onChanged)
 	{

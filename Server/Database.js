@@ -185,6 +185,25 @@ const migrations =
 			"ALTER TABLE frantic_owls_messages MODIFY body MEDIUMTEXT NOT NULL",
 		],
 	},
+	{
+		// Letters can be addressed to any character by name, so every owl keeps its character's name next to its number.
+		// hmp-core owns the real name; this copy is refreshed whenever the character loads and when the resource starts.
+		version: 5,
+		name: "name owl numbers",
+		statements:
+		[
+			"ALTER TABLE frantic_owls_numbers ADD COLUMN character_name VARCHAR(80) NOT NULL DEFAULT ''",
+		],
+	},
+	{
+		// Whether the owner knows who a contact really is (see MapContact). Contacts saved before this are treated as unknown.
+		version: 6,
+		name: "mark known contacts",
+		statements:
+		[
+			"ALTER TABLE frantic_owls_contacts ADD COLUMN identity_known TINYINT(1) NOT NULL DEFAULT 0",
+		],
+	},
 ];
 
 /// <summary>
@@ -346,10 +365,10 @@ const ContactWrite = Object.freeze
 const callColumns = "id, caller_number, callee_number, outcome, started_at, answered_at, ended_at, callee_seen_at";
 
 /// <summary>
-/// Column list and join shared by every contact read, so each record also carries the contact's own profile picture.
+/// Column list and join shared by every contact read, so each record also carries the contact's own profile picture and character name.
 /// </summary>
-const contactColumns = "c.id, c.contact_number, c.display_name, c.avatar_url, c.favourite, c.updated_at, p.avatar_url AS profile_avatar_url";
-const contactSource = "frantic_owls_contacts c LEFT JOIN frantic_owls_profiles p ON p.owl_number = c.contact_number";
+const contactColumns = "c.id, c.contact_number, c.display_name, c.avatar_url, c.favourite, c.updated_at, c.identity_known, p.avatar_url AS profile_avatar_url, n.character_name AS original_name";
+const contactSource = "frantic_owls_contacts c LEFT JOIN frantic_owls_profiles p ON p.owl_number = c.contact_number LEFT JOIN frantic_owls_numbers n ON n.owl_number = c.contact_number";
 
 // ========================
 // Row Mapping
@@ -357,15 +376,25 @@ const contactSource = "frantic_owls_contacts c LEFT JOIN frantic_owls_profiles p
 
 /// <summary>
 /// Convert a contacts row into the shape the rest of the server uses.
+///
+/// <para>
+/// NOTE: originalName (the contact's character name) is only filled in when the owner knows who the contact is (identityKnown).
+/// A contact first reached by answering an unsigned letter, or saved from a number, must not name the character behind it; leaving the name out here means nothing downstream can show it by mistake.
+/// </para>
+///
 /// </summary>
 /// <param name="row">Raw database row</param>
 /// <returns>Contact record</returns>
 function MapContact(row)
 {
+	const identityKnown = Number(row.identity_known) === 1;
+
 	return {
 		id: Number(row.id),
 		number: String(row.contact_number),
 		name: String(row.display_name),
+		originalName: identityKnown ? String(row.original_name || "") : "",
+		identityKnown,
 		avatarUrl: String(row.avatar_url || ""),
 		profileAvatarUrl: String(row.profile_avatar_url || ""),
 		favourite: Number(row.favourite) === 1,
@@ -695,6 +724,142 @@ class OwlDatabase
 		}
 	}
 
+	/// <summary>
+	/// Keep a character's name next to its owl number, so letters can be addressed to it by name while it is offline.
+	/// </summary>
+	/// <param name="characterId">hmp-core character ID</param>
+	/// <param name="name">Character's full name</param>
+	/// <returns>True on success</returns>
+	async SetNumberName(characterId, name)
+	{
+		return this.#Run("SetNumberName", async () =>
+		{
+			await this.#mysql.update("UPDATE frantic_owls_numbers SET character_name = ? WHERE character_id = ? AND character_name <> ?", [name, characterId, name]);
+			return true;
+		}, false);
+	}
+
+	/// <summary>
+	/// Copy every character's current name from hmp-core next to its owl number, catching up on names changed (or never stored) while the owl post was closed.
+	/// </summary>
+	/// <returns>Rows changed, or -1 when hmp-core's table cannot be read</returns>
+	async SyncNumberNames()
+	{
+		// Same best-effort read of hmp-core's table as ListDeletedCharacters; names stored by earlier loads stay usable when it fails.
+		// The comparison is binary because the two tables need not share a collation, and a rename that only changes case still counts.
+		try
+		{
+			return Number(await this.#mysql.update("UPDATE frantic_owls_numbers n JOIN hmp_characters c ON c.id = n.character_id SET n.character_name = c.name WHERE c.status = 'active' AND n.character_name <> c.name COLLATE utf8mb4_bin"));
+		}
+		catch (error)
+		{
+			Logger.LogWarning("Database", `Could not read character names from hmp-core: ${Logger.Describe(error)}`);
+			return -1;
+		}
+	}
+
+	/// <summary>
+	/// Give an owl number to every active hmp-core character that has none yet, so characters that have not loaded since the owl post was installed can be found and written to too.
+	///
+	/// <para>
+	/// NOTE: Characters are numbered a batch at a time, with one insert per batch rather than one per character, so a server with thousands of characters is caught up in a few dozen queries.
+	/// A candidate that collides with a live number is simply skipped by INSERT IGNORE and that character gets another try in the next round; retired numbers are left out before inserting.
+	/// It stops when every character has a number, or when a round numbers nobody (which only happens if something is wrong), so it can never loop forever.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="CreateCandidate">Function returning a random 8-digit candidate number</param>
+	/// <param name="batchSize">Characters per round</param>
+	/// <returns>Characters numbered, or -1 when hmp-core's table cannot be read</returns>
+	async BackfillNumbers(CreateCandidate, batchSize)
+	{
+		// Same best-effort read of hmp-core's table as SyncNumberNames; characters left out simply get their number when they first load.
+		try
+		{
+			let numbered = 0;
+
+			for (;;)
+			{
+				const rows = await this.#mysql.query("SELECT c.id, c.name FROM hmp_characters c LEFT JOIN frantic_owls_numbers n ON n.character_id = c.id WHERE c.status = 'active' AND n.character_id IS NULL ORDER BY c.id LIMIT ?", [batchSize]);
+
+				if (rows.length === 0)
+				{
+					return numbered;
+				}
+
+				const candidates = rows.map((row) => ({ characterId: Number(row.id), name: String(row.name || ""), number: CreateCandidate() }));
+				const retired = new Set((await this.#mysql.query("SELECT owl_number FROM frantic_owls_retired_numbers WHERE owl_number IN (?)", [candidates.map((candidate) => candidate.number)])).map((row) => String(row.owl_number)));
+				const usable = candidates.filter((candidate) => !retired.has(candidate.number));
+
+				if (usable.length === 0)
+				{
+					continue;
+				}
+
+				const now = Date.now();
+				const placeholders = usable.map(() => "(?, ?, ?, ?)").join(", ");
+				const values = usable.flatMap((candidate) => [candidate.characterId, candidate.number, now, candidate.name]);
+				const affected = Number(await this.#mysql.update(`INSERT IGNORE INTO frantic_owls_numbers (character_id, owl_number, created_at, character_name) VALUES ${placeholders}`, values));
+
+				if (affected <= 0)
+				{
+					Logger.LogWarning("Database", `Backfilling owl numbers stopped after ${numbered}: a round of ${usable.length} could not number anyone.`);
+					return numbered;
+				}
+
+				numbered += affected;
+			}
+		}
+		catch (error)
+		{
+			Logger.LogWarning("Database", `Could not give owl numbers to characters that never loaded: ${Logger.Describe(error)}`);
+			return -1;
+		}
+	}
+
+	/// <summary>
+	/// Every named owl number, for the roster letters are addressed from.
+	/// </summary>
+	/// <returns>[{ number, name }], or null on failure</returns>
+	async ListNamedNumbers()
+	{
+		return this.#Run("ListNamedNumbers", async () =>
+		{
+			const rows = await this.#mysql.query("SELECT owl_number, character_name FROM frantic_owls_numbers WHERE character_name <> ''");
+			return rows.map((row) => ({ number: String(row.owl_number), name: String(row.character_name) }));
+		}, null);
+	}
+
+	/// <summary>
+	/// The character name of an owl number: the one kept next to it, or, for a number given out before its character ever loaded (e.g. by another resource), hmp-core's, which is kept from then on.
+	/// </summary>
+	/// <param name="number">Owl number</param>
+	/// <returns>Name, "" when the number is unknown or unnamed, or null on failure</returns>
+	async GetNumberName(number)
+	{
+		return this.#Run("GetNumberName", async () =>
+		{
+			const kept = await this.#mysql.scalar("SELECT character_name FROM frantic_owls_numbers WHERE owl_number = ?", [number]);
+
+			if (kept)
+			{
+				return String(kept);
+			}
+
+			// Best effort, as in SyncNumberNames: a number with no name kept simply has none when hmp-core's table cannot be read.
+			try
+			{
+				await this.#mysql.update("UPDATE frantic_owls_numbers n JOIN hmp_characters c ON c.id = n.character_id SET n.character_name = c.name WHERE n.owl_number = ? AND n.character_name = ''", [number]);
+			}
+			catch (error)
+			{
+				return "";
+			}
+
+			return String(await this.#mysql.scalar("SELECT character_name FROM frantic_owls_numbers WHERE owl_number = ?", [number]) || "");
+		}, null);
+	}
+
 	// ========================
 	// Contacts
 	// ========================
@@ -760,15 +925,16 @@ class OwlDatabase
 	/// <param name="contactNumber">Owl number the contact points at</param>
 	/// <param name="name">Display name, already validated</param>
 	/// <param name="avatarUrl">Avatar URL, already validated (may be empty)</param>
+	/// <param name="identityKnown">Whether the owner knows which character the contact is (see MapContact)</param>
 	/// <returns>New contact record, or null on failure (including a duplicate pair)</returns>
-	async InsertContact(ownerNumber, contactNumber, name, avatarUrl)
+	async InsertContact(ownerNumber, contactNumber, name, avatarUrl, identityKnown)
 	{
 		return this.#Run("InsertContact", async () =>
 		{
 			const now = Date.now();
-			const id = await this.#mysql.insert("INSERT INTO frantic_owls_contacts (owner_number, contact_number, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", [ownerNumber, contactNumber, name, avatarUrl, now, now]);
-			const profileAvatarUrl = await this.#mysql.scalar("SELECT avatar_url FROM frantic_owls_profiles WHERE owl_number = ?", [contactNumber]);
-			return { id: Number(id), number: contactNumber, name, avatarUrl, profileAvatarUrl: String(profileAvatarUrl || ""), updatedAt: now };
+			const id = await this.#mysql.insert("INSERT INTO frantic_owls_contacts (owner_number, contact_number, display_name, avatar_url, created_at, updated_at, identity_known) VALUES (?, ?, ?, ?, ?, ?, ?)", [ownerNumber, contactNumber, name, avatarUrl, now, now, identityKnown ? 1 : 0]);
+			const row = await this.#mysql.single(`SELECT ${contactColumns} FROM ${contactSource} WHERE c.id = ?`, [id]);
+			return row ? MapContact(row) : null;
 		}, null);
 	}
 
@@ -793,7 +959,8 @@ class OwlDatabase
 				return ContactWrite.Missing;
 			}
 
-			await this.#mysql.update("UPDATE frantic_owls_contacts SET display_name = ?, avatar_url = ?, contact_number = ?, updated_at = ? WHERE owner_number = ? AND id = ?", [name, avatarUrl, contactNumber, Date.now(), ownerNumber, contactId]);
+			// identity_known is set first, while contact_number still holds the old number: a contact moved to another owl no longer names its character.
+			await this.#mysql.update("UPDATE frantic_owls_contacts SET identity_known = IF(contact_number = ?, identity_known, 0), display_name = ?, avatar_url = ?, contact_number = ?, updated_at = ? WHERE owner_number = ? AND id = ?", [contactNumber, name, avatarUrl, contactNumber, Date.now(), ownerNumber, contactId]);
 			return ContactWrite.Saved;
 		}
 		catch (error)
@@ -1983,6 +2150,16 @@ class OwlDatabase
 	async GetCharacterForNumber(number)
 	{
 		return this.#Run("GetCharacterForNumber", async () => Number(await this.#mysql.scalar("SELECT character_id FROM frantic_owls_numbers WHERE owl_number = ?", [number]) || 0), -1);
+	}
+
+	/// <summary>
+	/// Whether a character exists in hmp-core and has not been deleted.
+	/// </summary>
+	/// <param name="characterId">hmp-core character ID</param>
+	/// <returns>True if active, false if missing or deleted, or null when hmp-core's table cannot be read</returns>
+	async IsActiveCharacter(characterId)
+	{
+		return this.#Run("IsActiveCharacter", async () => Number(await this.#mysql.scalar("SELECT COUNT(*) FROM hmp_characters WHERE id = ? AND status = 'active'", [characterId])) > 0, null);
 	}
 
 	/// <summary>

@@ -39,7 +39,6 @@ Owls.DeskScreens.Letters = (() =>
 	{
 		currentBox = params.box === "sent" ? "sent" : params.box === "inbox" ? "inbox" : currentBox;
 
-		const tabs = Element("div", { className: "letters-tabs", attributes: { role: "tablist" } });
 		const writeButton = Element("button", { className: "desk-button is-primary", on: { click: () => desk.Compose({}) } },
 		[
 			Element("i", { className: "fa-solid fa-feather-pointed", attributes: { "aria-hidden": "true" } }),
@@ -49,9 +48,10 @@ Owls.DeskScreens.Letters = (() =>
 		const list = Element("ul", { className: "letters-list" });
 		const empty = Element("p", { className: "letters-empty" });
 		const moreButton = Element("button", { className: "desk-button is-quiet letters-more", text: T("mail.list.older"), on: { click: () => Load(true) } });
+		const head = Owls.DeskTabs.Create(desk, { active: currentBox, onBox: ShowBox, action: writeButton });
 		const element = Element("section", { className: "letters" },
 		[
-			Element("div", { className: "letters-head" }, [tabs, writeButton]),
+			head.element,
 			hint,
 			Element("div", { className: "letters-scroll" }, [list, empty, moreButton]),
 		]);
@@ -99,7 +99,7 @@ Owls.DeskScreens.Letters = (() =>
 		}
 
 		/// <summary>
-		/// The names a sent letter went to, as the writer knows them.
+		/// The names a sent letter went to, as the writer knows them (the server names them from the writer's correspondents).
 		/// </summary>
 		/// <param name="letter">Sent letter</param>
 		/// <returns>Phrase such as "To Ominis and Natsai"</returns>
@@ -110,7 +110,7 @@ Owls.DeskScreens.Letters = (() =>
 				return T("mail.list.toGroup", { title: letter.groupTitle });
 			}
 
-			const names = letter.recipients.map((number) => Store.GetContactName(number) || T("mail.list.unknownRecipient"));
+			const names = letter.recipients.map((name) => name || T("mail.list.unknownRecipient"));
 			return T("mail.list.to", { names: names.length > 0 ? Owls.Sheet.JoinNames(names) : T("mail.list.unknownRecipient") });
 		}
 
@@ -194,17 +194,7 @@ Owls.DeskScreens.Letters = (() =>
 		function Render()
 		{
 			const box = Store.state.boxes[currentBox];
-			const unread = Store.state.unread;
-
-			tabs.replaceChildren
-			(
-				Element("button", { className: `letters-tab ${currentBox === "inbox" ? "is-active" : ""}`, attributes: { role: "tab" }, on: { click: () => ShowBox("inbox") } },
-				[
-					Element("span", { text: T("mail.list.inbox") }),
-					unread > 0 ? Element("span", { className: "letters-badge", text: unread > 99 ? "99+" : String(unread) }) : null,
-				]),
-				Element("button", { className: `letters-tab ${currentBox === "sent" ? "is-active" : ""}`, attributes: { role: "tab" }, text: T("mail.list.sent"), on: { click: () => ShowBox("sent") } }),
-			);
+			head.Render(currentBox);
 
 			const canWrite = Store.CanWrite();
 			writeButton.disabled = !canWrite;

@@ -24,6 +24,7 @@ const defaultConfig = Object.freeze
 	command: "owl",
 	openKey: "up",
 	defaultLanguage: "en-GB",
+	backfillNumbers: true,
 	contacts:
 	{
 		maxContacts: 250,
@@ -106,18 +107,18 @@ const defaultConfig = Object.freeze
 		requestRateLimitWindowMs: 3000,
 		maxBatchBytes: 24000,
 	},
+	avatars:
+	{
+		maxUrlLength: 512,
+		allowedHosts: [],
+		allowInsecure: false,
+	},
 	phonemode_numbers:
 	{
 		visible: false,
 		dialling: false,
 		rateLimitCount: 10,
 		rateLimitWindowMs: 60000,
-	},
-	phonemode_avatars:
-	{
-		maxUrlLength: 512,
-		allowedHosts: [],
-		allowInsecure: false,
 	},
 	phonemode_messages:
 	{
@@ -220,6 +221,7 @@ const defaultConfig = Object.freeze
 		maxRecipients: 8,
 	},
 	immersivemode_posts: [],
+	immersivemode_avatars: false,
 	immersivemode_ui:
 	{
 		scale: 1.0,
@@ -245,6 +247,11 @@ const writeModes = Object.freeze(["free", "postonly"]);
 /// Most owl posts a server can list, and the shape of a post's ID.
 /// </summary>
 const maxPosts = 64;
+
+/// <summary>
+/// Most characters an official letter can be addressed to by name. Anything wider goes to everyone as an announcement.
+/// </summary>
+const maxOfficialRecipients = 50;
 const postIdPattern = /^[a-z0-9_-]{1,32}$/;
 
 /// <summary>
@@ -436,6 +443,7 @@ function Sanitise(config)
 	config.command = String(config.command || fallback.command).trim().replace(/^\//, "").toLowerCase() || fallback.command;
 	config.openKey = String(config.openKey || "").trim().toLowerCase();
 	config.defaultLanguage = String(config.defaultLanguage || fallback.defaultLanguage).trim();
+	config.backfillNumbers = config.backfillNumbers !== false;
 
 	// The crest is worded by the language files now; an old config's branding section is simply ignored.
 	delete config.branding;
@@ -494,6 +502,12 @@ function Sanitise(config)
 		logging.events[category] = typeof logging.events[category] === "boolean" ? logging.events[category] : enabled;
 	}
 
+	// Picture links follow the same rules in both front ends: the phone's profile pictures, overrides and wallpapers, and immersive mode's correspondents (immersivemode_avatars).
+	const avatars = config.avatars;
+	avatars.maxUrlLength = ClampInteger(avatars.maxUrlLength, 32, 2048, fallback.avatars.maxUrlLength);
+	avatars.allowedHosts = Array.isArray(avatars.allowedHosts) ? avatars.allowedHosts.map((host) => String(host).trim().toLowerCase()).filter((host) => host.length > 0) : [];
+	avatars.allowInsecure = avatars.allowInsecure === true;
+
 	const network = config.network;
 	network.flushIntervalMs = ClampInteger(network.flushIntervalMs, 0, 1000, fallback.network.flushIntervalMs);
 	network.nearbyRefreshMs = ClampInteger(network.nearbyRefreshMs, 250, 10000, fallback.network.nearbyRefreshMs);
@@ -519,11 +533,6 @@ function SanitisePhoneMode(config, fallback)
 	numbers.dialling = numbers.dialling === true;
 	numbers.rateLimitCount = ClampInteger(numbers.rateLimitCount, 1, 1000, fallback.phonemode_numbers.rateLimitCount);
 	numbers.rateLimitWindowMs = ClampInteger(numbers.rateLimitWindowMs, 1000, 3600000, fallback.phonemode_numbers.rateLimitWindowMs);
-
-	const avatars = config.phonemode_avatars;
-	avatars.maxUrlLength = ClampInteger(avatars.maxUrlLength, 32, 2048, fallback.phonemode_avatars.maxUrlLength);
-	avatars.allowedHosts = Array.isArray(avatars.allowedHosts) ? avatars.allowedHosts.map((host) => String(host).trim().toLowerCase()).filter((host) => host.length > 0) : [];
-	avatars.allowInsecure = avatars.allowInsecure === true;
 
 	const messages = config.phonemode_messages;
 	messages.maxLength = ClampInteger(messages.maxLength, 1, 4000, fallback.phonemode_messages.maxLength);
@@ -611,6 +620,7 @@ function SanitiseImmersiveMode(config, fallback)
 	letters.maxRecipients = ClampInteger(letters.maxRecipients, 1, 50, fallback.immersivemode_letters.maxRecipients);
 
 	config.immersivemode_posts = CleanPosts(config.immersivemode_posts);
+	config.immersivemode_avatars = config.immersivemode_avatars === true;
 
 	const ui = config.immersivemode_ui;
 	ui.scale = ClampNumber(ui.scale, 0.5, 2, fallback.immersivemode_ui.scale);
@@ -667,6 +677,8 @@ function GetClientConfig(config, languages)
 		command: config.command,
 		openKey: config.openKey,
 		maxNameLength: config.contacts.maxNameLength,
+		maxContacts: config.contacts.maxContacts,
+		maxAvatarUrlLength: config.avatars.maxUrlLength,
 		flightEnabled: config.flight.enabled,
 		toastDurationMs: config.notifications.toastDurationMs,
 		soundMode: config.notifications.soundMode,
@@ -686,6 +698,8 @@ function GetClientConfig(config, languages)
 			maxLetterLines: config.immersivemode_letters.maxLines,
 			maxRecipients: config.immersivemode_letters.maxRecipients,
 			hasPosts: config.immersivemode_posts.length > 0,
+			avatars: config.immersivemode_avatars,
+			maxOfficialRecipients: maxOfficialRecipients,
 			ui: { ...config.immersivemode_ui },
 		};
 	}
@@ -695,7 +709,6 @@ function GetClientConfig(config, languages)
 		// Dialling by number is useless unless players can read their own number to hand it out, so it shows numbers too.
 		numbersVisible: config.phonemode_numbers.visible || config.phonemode_numbers.dialling,
 		numbersDialling: config.phonemode_numbers.dialling,
-		maxAvatarUrlLength: config.phonemode_avatars.maxUrlLength,
 		maxMessageLength: config.phonemode_messages.maxLength,
 		maxGroupMembers: config.phonemode_groups.maxMembers,
 		maxGroupTitleLength: config.phonemode_groups.maxTitleLength,
@@ -724,4 +737,4 @@ function GetClientConfig(config, languages)
 	};
 }
 
-module.exports = { LoadConfig, GetClientConfig, ClampInteger, ClampNumber, NormaliseTheme };
+module.exports = { LoadConfig, GetClientConfig, ClampInteger, ClampNumber, NormaliseTheme, maxOfficialRecipients };

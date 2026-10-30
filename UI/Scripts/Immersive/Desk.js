@@ -102,6 +102,22 @@ Owls.Desk = (() =>
 	}
 
 	/// <summary>
+	/// Show the player's correspondents.
+	/// </summary>
+	function ShowCorrespondents()
+	{
+		Show("Correspondents");
+	}
+
+	/// <summary>
+	/// Show the senders an official letter can be written as, for those allowed to.
+	/// </summary>
+	function ShowOfficial()
+	{
+		Show(Store.state.me.canPostOfficial ? "Official" : "Letters");
+	}
+
+	/// <summary>
 	/// Open a letter to read.
 	/// </summary>
 	/// <param name="letter">Listed letter</param>
@@ -113,10 +129,11 @@ Owls.Desk = (() =>
 	/// <summary>
 	/// Start (or carry on) writing a letter.
 	/// </summary>
-	/// <param name="params">{ replyTo } with the letter being answered (optional)</param>
+	/// <param name="params">{ replyTo } with the letter being answered, { to } with a correspondent, or { official } with the sender of an official letter (all optional)</param>
 	function Compose(params = {})
 	{
-		if (!Store.CanWrite())
+		// Official letters are not tied to owl posts.
+		if (!params.official && !Store.CanWrite())
 		{
 			ShowError(T("error.mail.writeAtPost"));
 			return;
@@ -321,11 +338,12 @@ Owls.Desk = (() =>
 	/// </summary>
 	/// <param name="sentCount">Copies sent</param>
 	/// <param name="failed">[{ name, error }]</param>
-	function ShowDispatch(sentCount, failed)
+	/// <param name="everyone">True for an official letter to everyone</param>
+	function ShowDispatch(sentCount, failed, everyone = false)
 	{
 		const failures = document.getElementById("dispatch-failures");
 		document.getElementById("dispatch-title").textContent = T("mail.dispatch.title");
-		document.getElementById("dispatch-body").textContent = T(Store.state.config.flightEnabled ? "mail.dispatch.flying" : "mail.dispatch.body", { count: sentCount });
+		document.getElementById("dispatch-body").textContent = everyone ? T("mail.dispatch.everyone") : T(Store.state.config.flightEnabled ? "mail.dispatch.flying" : "mail.dispatch.body", { count: sentCount });
 		failures.replaceChildren(...failed.map((failure) => Owls.Util.Element("li", { text: T("mail.dispatch.failed", { name: failure.name, error: failure.error }) })));
 		failures.hidden = failed.length === 0;
 		dispatch.hidden = false;
@@ -414,7 +432,7 @@ Owls.Desk = (() =>
 	// Wiring
 	// ========================
 
-	const api = { ShowLetters, Read, Compose, ShowError, ShowNotice, ShowDispatch, PlaySound, GetPlaceHint, Close };
+	const api = { ShowLetters, ShowCorrespondents, ShowOfficial, Read, Compose, ShowError, ShowNotice, ShowDispatch, PlaySound, GetPlaceHint, Close };
 
 	document.getElementById("desk-close").addEventListener("click", Close);
 	document.getElementById("desk-settings").addEventListener("click", () => Show("Settings"));
@@ -464,6 +482,7 @@ Owls.Desk = (() =>
 	Bridge.On("state:reset", (data) =>
 	{
 		Store.Reset(data);
+		Owls.MailSearch.Clear();
 		hasAnnouncedUnread = false;
 	});
 
@@ -487,6 +506,7 @@ Owls.Desk = (() =>
 	});
 
 	Bridge.On("contacts:chunk", (data) => Store.ApplyContactsChunk(data));
+	Bridge.On("contact:upsert", (data) => Store.SaveContact(data.contact));
 	Bridge.On("settings:update", (data) => Store.SetSettings(data.settings));
 	Bridge.On("quiet:update", (data) => Store.SetQuiet(data));
 	Bridge.On("mail:arrived", OnArrival);

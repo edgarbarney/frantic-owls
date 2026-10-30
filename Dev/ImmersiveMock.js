@@ -8,7 +8,8 @@
 /// <summary>
 /// Stand-in for the client script and server, so immersive mode's letter desk can be previewed in a normal browser.
 /// Defines window.callEvent the way the game's browser does and answers the desk's requests from in-memory letters,
-/// following the same rules as Server/Mail.js (read and write modes, owl posts, unread letters, one copy per recipient).
+/// following the same rules as Server/Mail.js (read and write modes, owl posts, unread letters, one copy per recipient,
+/// any character by name, correspondents saved without knowing who they are, official letters).
 ///
 /// <para>
 /// NOTE: Lives outside UI/ on purpose: the manifest only ships UI/**, so this never reaches players.
@@ -23,19 +24,87 @@
 	const minute = 60000;
 	const post = { id: "hogsmeade", label: "Hogsmeade Owl Post" };
 
-	const contacts =
+	/// <summary>
+	/// Every character with an owl, as the server's roster holds them; online ones are marked.
+	/// </summary>
+	const roster =
 	[
-		{ id: 1, number: "20000002", name: "Natsai Onai" },
-		{ id: 2, number: "20000003", name: "Sebastian Sallow" },
+		{ number: "20000002", name: "Natsai Onai", online: true },
+		{ number: "20000003", name: "Sebastian Sallow", online: false },
+		{ number: "20000004", name: "Poppy Sweeting", online: true },
+		{ number: "20000005", name: "Amit Thakkar", online: false },
+		{ number: "20000006", name: "Ominis Gaunt", online: true },
+		{ number: "20000007", name: "Everett Clopton", online: false },
+		{ number: "20000008", name: "Sirona Ryan", online: false },
+		{ number: "20000009", name: "Lucan Brattleby", online: false },
+		{ number: "20000010", name: "Nerida Robinson", online: false },
+		{ number: "20000011", name: "Leander Prewett", online: true },
+		{ number: "20000012", name: "Samantha Dale", online: false },
+		{ number: "20000013", name: "Imelda Reyes", online: false },
+		{ number: "20000014", name: "Zenobia Noke", online: false },
+		{ number: "20000015", name: "Mariella Fawley", online: false },
+		{ number: "20000016", name: "Andrew Larson", online: false },
+		{ number: "20000017", name: "Sacharissa Tugwood", online: false },
+		{ number: "20000018", name: "Arthur Plummeridge", online: false },
+		{ number: "20000019", name: "Noreen Sedgewick", online: false },
+		{ number: "20000020", name: "Nellie Oggspire", online: false },
+		{ number: "20000021", name: "Cressida Blume", online: false },
+		{ number: "20000022", name: "Gladwin Moon", online: false },
+		{ number: "20000023", name: "Sébastien Lemaire", online: false },
+		{ number: "20000050", name: "Garreth Weasley", online: true },
+		{ number: "20000099", name: "Ominous Stranger", online: false },
 	];
 
-	const online =
+	/// <summary>
+	/// The player's correspondents. realNumber is what the server knows; known is false for one first reached by answering an unsigned letter.
+	/// </summary>
+	const contacts =
 	[
-		{ number: "20000002", name: "Natsai Onai" },
-		{ number: "20000006", name: "Ominis Gaunt" },
-		{ number: "20000004", name: "Poppy Sweeting" },
-		{ number: "20000050", name: "Garreth Weasley" },
+		{ id: 1, realNumber: "20000002", name: "Natsai", known: true, favourite: true, avatarUrl: "" },
+		{ id: 2, realNumber: "20000003", name: "Sebastian Sallow", known: true, favourite: false, avatarUrl: "" },
+		{ id: 3, realNumber: "20000099", name: "Midnight Writer", known: false, favourite: false, avatarUrl: "" },
+		{ id: 4, realNumber: "20000011", name: "Leander", known: true, favourite: false, avatarUrl: "" },
 	];
+
+	/// <summary>
+	/// A correspondent as the server sends it (see ToDeskContact in Server/Mail.js).
+	/// </summary>
+	/// <param name="contact">Mock contact</param>
+	/// <returns>Correspondent</returns>
+	function ToDesk(contact)
+	{
+		const character = roster.find((entry) => entry.number === contact.realNumber);
+		return { id: contact.id, number: contact.known ? contact.realNumber : "", name: contact.name, originalName: contact.known && character ? character.name : "", avatarUrl: config.avatars ? contact.avatarUrl : "", profileAvatarUrl: "", favourite: contact.favourite };
+	}
+
+	/// <summary>
+	/// Fold a name for searching; same as Server/Roster.js.
+	/// </summary>
+	/// <param name="text">Name or search</param>
+	/// <returns>Folded text</returns>
+	function Fold(text)
+	{
+		return String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i").toLowerCase().replace(/\s+/g, " ").trim();
+	}
+
+	/// <summary>
+	/// How well a name matches a folded search; same as Server/Roster.js.
+	/// </summary>
+	/// <param name="name">Name</param>
+	/// <param name="query">Folded search</param>
+	/// <returns>Rank, or -1</returns>
+	function Rank(name, query)
+	{
+		const folded = Fold(name);
+		const words = folded.split(" ");
+
+		if (folded.startsWith(query))
+		{
+			return 0;
+		}
+
+		return query.split(" ").every((queryWord) => words.some((word) => word.startsWith(queryWord))) ? 1 : folded.includes(query) ? 2 : -1;
+	}
 
 	/// <summary>
 	/// Every letter the mock server holds: { id, sender, to, text, sentAt, official, groupTitle, isRead }.
@@ -74,12 +143,17 @@
 		maxLetterLines: 150,
 		maxRecipients: 8,
 		hasPosts: true,
+		avatars: true,
+		maxContacts: 250,
+		maxAvatarUrlLength: 512,
+		maxOfficialRecipients: 50,
 		ui: { scale: 1 },
 		languages: [],
 		quietActivities: true,
 	};
 
-	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true };
+	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true, showOriginalNames: false };
+	let canPostOfficial = true;
 	let isAtPost = false;
 	let isOpen = false;
 	let nextId = 100;
@@ -159,6 +233,17 @@
 	}
 
 	/// <summary>
+	/// What the player calls an owl number, for the sent box: their correspondent's name, or "" for someone else.
+	/// </summary>
+	/// <param name="number">Owl number</param>
+	/// <returns>Name, or ""</returns>
+	function GetCorrespondentName(number)
+	{
+		const contact = contacts.find((entry) => entry.realNumber === number);
+		return contact ? contact.name : "";
+	}
+
+	/// <summary>
 	/// A letter as the server lists it.
 	/// </summary>
 	/// <param name="letter">Mock letter</param>
@@ -180,7 +265,7 @@
 			readProblem,
 			official: letter.official ? { name: letter.official } : null,
 			groupTitle: letter.groupTitle || "",
-			recipients: box === "sent" ? letter.to : [],
+			recipients: box === "sent" ? letter.to.map(GetCorrespondentName) : [],
 			excerpt: readProblem ? null : { first: lines[0] || "", second: lines[1] || "", last: lines.length > 2 ? lines[lines.length - 1] : "" },
 			canReply: box === "inbox" && !letter.official,
 		};
@@ -223,56 +308,171 @@
 			letter.isRead = true;
 			return { ok: true, data: { letter: { ...summary, isUnread: false, text: letter.text }, unread: unread() } };
 		}
-		case "mail.recipients":
-			return { ok: true, data: { online, post: isAtPost ? post : null } };
-		case "mail.send":
+		case "mail.place":
+			return { ok: true, data: { post: isAtPost ? post : null } };
+		case "mail.search":
 		{
-			if (config.writeMode === "postonly" && !isAtPost)
+			const query = Fold(data.query);
+
+			if (query.length < 2)
+			{
+				return { ok: true, data: { query, owls: [], isComplete: false } };
+			}
+
+			const matches = roster.map((owl) => ({ owl, rank: Rank(owl.name, query) })).filter((match) => match.rank >= 0).sort((first, second) => first.rank - second.rank || Fold(first.owl.name).localeCompare(Fold(second.owl.name)));
+			console.log(`ImmersiveMock: searched the roster for "${query}"`);
+			return { ok: true, data: { query, owls: matches.slice(0, 12).map((match) => ({ number: match.owl.number, name: match.owl.name, online: match.owl.online })), isComplete: matches.length <= 12 } };
+		}
+		case "mail.send":
+		case "mail.sendOfficial":
+		{
+			const isOfficial = action === "mail.sendOfficial";
+
+			if (isOfficial && !canPostOfficial)
+			{
+				return { ok: false, errorKey: "error.mail.officialDenied" };
+			}
+
+			if (!isOfficial && config.writeMode === "postonly" && !isAtPost)
 			{
 				return { ok: false, errorKey: "error.mail.writeAtPost" };
 			}
 
+			if (isOfficial && data.everyone)
+			{
+				return { ok: true, data: { everyone: true, sent: 1, failed: [], clientKey: data.clientKey } };
+			}
+
+			// Number -> { name, saveAs, known }, as Server/Mail.js resolves them.
 			const targets = new Map();
 
 			if (data.replyToId)
 			{
 				const answered = letters.find((entry) => entry.id === data.replyToId);
-				targets.set(answered.sender, data.replyLabel || "");
+				targets.set(answered.sender, { name: data.replyLabel || "", saveAs: answered.official ? "" : data.replyLabel || "", known: false });
 			}
 
-			for (const number of data.recipients)
+			for (const recipient of data.recipients || [])
 			{
-				const known = online.find((entry) => entry.number === number) || contacts.find((entry) => entry.number === number);
-				targets.set(number, known ? known.name : "");
+				const contact = recipient.contactId ? contacts.find((entry) => entry.id === recipient.contactId) : null;
+				const character = contact ? null : roster.find((entry) => entry.number === recipient.number);
+
+				if (!contact && !character)
+				{
+					return { ok: false, errorKey: "error.mail.unknownRecipient" };
+				}
+
+				targets.set(contact ? contact.realNumber : character.number, contact ? { name: contact.name, saveAs: "", known: contact.known } : { name: character.name, saveAs: character.name, known: true });
 			}
 
-			const sent = [];
+			let sent = 0;
 			const failed = [];
 			const added = [];
 
 			// Poppy has blocked Harriet in this mock, to show a letter that reaches only some of its recipients.
-			for (const [number, label] of targets)
+			for (const [number, target] of targets)
 			{
-				if (number === "20000004")
+				if (number === "20000004" && !isOfficial)
 				{
-					failed.push({ number, errorKey: "error.undeliverable" });
+					failed.push({ name: target.name, errorKey: "error.undeliverable" });
 					continue;
 				}
 
-				const id = nextId++;
-				letters.push({ id, sender: me.number, to: [number], text: data.body, sentAt: Date.now(), isRead: true });
-				sent.push({ number, messageId: id });
+				++sent;
 
-				if (label && !contacts.some((contact) => contact.number === number))
+				if (isOfficial)
 				{
-					const contact = { id: nextId++, number, name: label };
+					continue;
+				}
+
+				letters.push({ id: nextId++, sender: me.number, to: [number], text: data.body, sentAt: Date.now(), isRead: true });
+
+				if (target.saveAs && !contacts.some((contact) => contact.realNumber === number))
+				{
+					const contact = { id: nextId++, realNumber: number, name: target.saveAs, known: target.known, favourite: false, avatarUrl: "" };
 					contacts.push(contact);
-					added.push(contact);
+					added.push(ToDesk(contact));
 				}
 			}
 
-			return sent.length > 0 ? { ok: true, data: { sent, failed, contacts: added, clientKey: data.clientKey } } : { ok: false, errorKey: failed[0].errorKey };
+			return sent > 0 ? { ok: true, data: { everyone: false, sent, failed, contacts: added, clientKey: data.clientKey } } : { ok: false, errorKey: failed[0].errorKey };
 		}
+		case "mail.addCorrespondent":
+		{
+			const character = roster.find((entry) => entry.number === data.number);
+			const existing = contacts.find((entry) => entry.realNumber === data.number);
+
+			if (!character)
+			{
+				return { ok: false, errorKey: "error.mail.unknownRecipient" };
+			}
+
+			if (existing)
+			{
+				return existing.known ? { ok: false, errorKey: "error.contactNumberTaken", errorParams: { name: existing.name } } : { ok: false, errorKey: "error.mail.alreadyCorrespondent" };
+			}
+
+			const contact = { id: nextId++, realNumber: character.number, name: character.name, known: true, favourite: false, avatarUrl: "" };
+			contacts.push(contact);
+			return { ok: true, data: { contact: ToDesk(contact) } };
+		}
+		case "contacts.update":
+		{
+			const contact = contacts.find((entry) => entry.id === data.contactId);
+			const name = String(data.name || "").trim();
+
+			if (!contact)
+			{
+				return { ok: false, errorKey: "error.contactGone" };
+			}
+
+			if (!name)
+			{
+				return { ok: false, errorKey: "error.contactNameMissing" };
+			}
+
+			contact.name = name.slice(0, config.maxNameLength);
+
+			if (data.avatarUrl !== undefined)
+			{
+				const url = String(data.avatarUrl || "").trim();
+
+				if (url && !/^https:\/\//.test(url))
+				{
+					return { ok: false, errorKey: "error.pictureHttps" };
+				}
+
+				contact.avatarUrl = url;
+			}
+
+			return { ok: true, data: { contact: ToDesk(contact) } };
+		}
+		case "contacts.favourite":
+		{
+			const contact = contacts.find((entry) => entry.id === data.contactId);
+
+			if (!contact)
+			{
+				return { ok: false, errorKey: "error.contactGone" };
+			}
+
+			contact.favourite = data.favourite === true;
+			return { ok: true, data: { contactId: contact.id, favourite: contact.favourite } };
+		}
+		case "contacts.delete":
+		{
+			const index = contacts.findIndex((entry) => entry.id === data.contactId);
+
+			if (index < 0)
+			{
+				return { ok: false, errorKey: "error.contactGone" };
+			}
+
+			contacts.splice(index, 1);
+			return { ok: true, data: { contactId: data.contactId } };
+		}
+		case "mail.officialSenders":
+			return canPostOfficial ? { ok: true, data: { senders: [{ number: "00000001", name: "Ministry of Magic" }, { number: "00000002", name: "Gringotts Wizarding Bank" }] } } : { ok: false, errorKey: "error.mail.officialDenied" };
 		case "settings.update":
 		{
 			const languageBefore = settings.language;
@@ -304,8 +504,8 @@
 				Push
 				([
 					...GetLanguageItems(),
-					{ type: "state:reset", data: { me: { name: me.name }, settings, config, quiet: { active: false, label: "" }, unread, serverNow: Date.now() } },
-					{ type: "contacts:chunk", data: { reset: true, contacts } },
+					{ type: "state:reset", data: { me: { name: me.name, canPostOfficial }, settings, config, quiet: { active: false, label: "" }, unread, serverNow: Date.now() } },
+					{ type: "contacts:chunk", data: { reset: true, contacts: contacts.map(ToDesk) } },
 					{ type: "state:ready", data: {} },
 				]);
 			});
@@ -327,6 +527,14 @@
 			break;
 		}
 	};
+
+	/// <summary>
+	/// Send the page its whole state again, as the server does after a mode or permission change.
+	/// </summary>
+	function Reload()
+	{
+		Push([{ type: "state:reset", data: { me: { name: me.name, canPostOfficial }, settings, config, quiet: { active: false, label: "" }, unread: 0, serverNow: Date.now() } }, { type: "contacts:chunk", data: { reset: true, contacts: contacts.map(ToDesk) } }, { type: "state:ready", data: {} }]);
+	}
 
 	window.OwlsDev =
 	{
@@ -359,7 +567,25 @@
 		{
 			config.readMode = readMode;
 			config.writeMode = writeMode;
-			Push([{ type: "state:reset", data: { me: { name: me.name }, settings, config, quiet: { active: false, label: "" }, unread: 0, serverNow: Date.now() } }, { type: "contacts:chunk", data: { reset: true, contacts } }, { type: "state:ready", data: {} }]);
+			Reload();
+		},
+		SetOfficial: (value = true) =>
+		{
+			canPostOfficial = value;
+			Reload();
+		},
+		SetAvatars: (value = true) =>
+		{
+			config.avatars = value;
+			Reload();
+		},
+		AddContact: (name = "Madam Malkin", known = true) =>
+		{
+			const character = { number: String(20000100 + nextId), name, online: false };
+			roster.push(character);
+			const contact = { id: nextId++, realNumber: character.number, name, known, favourite: false, avatarUrl: "" };
+			contacts.push(contact);
+			Push([{ type: "contact:upsert", data: { contact: ToDesk(contact) } }]);
 		},
 		AtPost: (value = true) =>
 		{

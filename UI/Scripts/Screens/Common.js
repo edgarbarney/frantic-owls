@@ -201,7 +201,7 @@ Owls.Widgets = (() =>
 	{
 		const text = Element("span", { className: "row-text" },
 		[
-			Element("span", { className: "row-title", text: contact.name }),
+			Element("span", { className: "row-title", text: Owls.Store.GetContactLabel(contact) }),
 			options.subtitle ? Element("span", { className: "row-subtitle", text: options.subtitle }) : null,
 		]);
 

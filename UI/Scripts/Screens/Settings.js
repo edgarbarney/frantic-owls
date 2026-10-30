@@ -276,6 +276,7 @@ Owls.Screens.Settings = (() =>
 		});
 
 		const lockToggle = CreateToggle(T("settings.lockScreen"), T("settings.lockScreenHint"), (value) => Save({ lockScreen: value }));
+		const originalNamesToggle = CreateToggle(T("settings.showOriginalNames"), T("settings.showOriginalNamesHint"), (value) => Save({ showOriginalNames: value }));
 		const moveButton = Element("button", { className: "secondary-button", on: { click: () => Owls.LayoutEditor.Request() } });
 		moveButton.innerHTML = Owls.Icons.move;
 		moveButton.appendChild(Element("span", { text: T("settings.move") }));
@@ -286,6 +287,7 @@ Owls.Screens.Settings = (() =>
 			Element("div", { className: "segmented" }, themeButtons),
 			schemeField,
 			ui.lockScreen !== false ? lockToggle.element : null,
+			originalNamesToggle.element,
 			Element("span", { className: "field-label", text: T("settings.wallpaperLabel") }),
 			Element("div", { className: "profile-row" }, [wallpaperInput, wallpaperButton]),
 			Element("span", { className: "field-hint", text: T("settings.wallpaperHint") }),
@@ -619,6 +621,7 @@ Owls.Screens.Settings = (() =>
 			schemeDropdown.Set(store.GetColourScheme());
 			animationsToggle.Set(settings.animations !== false);
 			lockToggle.Set(settings.lockScreen !== false);
+			originalNamesToggle.Set(settings.showOriginalNames === true);
 			effectsToggle.Set(settings.soundEffects !== false);
 			effectsVolumeField.hidden = settings.soundEffects === false;
 			schemeField.hidden = theme !== "muggle";

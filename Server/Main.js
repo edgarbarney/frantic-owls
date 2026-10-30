@@ -5,7 +5,7 @@ const { Logger } = require("./Logger.js");
 const Lang = require("./Lang.js");
 const { LoadConfig, GetClientConfig } = require("./Config.js");
 const { OwlDatabase } = require("./Database.js");
-const { OwlDirectory, EnsureNumber } = require("./Directory.js");
+const { OwlDirectory, EnsureNumber, CreateCandidateNumber } = require("./Directory.js");
 const { Outbox } = require("./Outbox.js");
 const { SettingsService } = require("./Settings.js");
 const { ContactService } = require("./Contacts.js");
@@ -20,7 +20,8 @@ const { AuditLog } = require("./AuditLog.js");
 const { LocationService } = require("./Locations.js");
 const { NumberDialler } = require("./Numbers.js");
 const { PostService } = require("./Posts.js");
-const { MailService } = require("./Mail.js");
+const { MailService, ToDeskContact } = require("./Mail.js");
+const { OwlRoster } = require("./Roster.js");
 const { CreateApi } = require("./Api.js");
 const { RequestDispatcher } = require("./Requests.js");
 const { Ok } = require("./Result.js");
@@ -40,6 +41,11 @@ const chatChunkSize = 15;
 const profileChunkSize = 40;
 const languageChunkSize = 120;
 const callChunkSize = 25;
+
+/// <summary>
+/// Characters numbered per round when backfilling owl numbers at start (backfillNumbers).
+/// </summary>
+const backfillBatchSize = 500;
 
 /// <summary>
 /// How often rate-limit buckets and expired cooldowns are swept.
@@ -93,17 +99,18 @@ const audit = new AuditLog(config.logging);
 const blocks = new BlockService(database);
 const flight = new FlightPlanner(hmp, directory, config.flight);
 const dialler = new NumberDialler(database, hmp, config.phonemode_numbers);
-const settings = new SettingsService(database, config.phonemode_ui, directory, config.phonemode_avatars);
-const contacts = new ContactService(database, hmp, config.contacts, config.phonemode_avatars, dialler);
-const profiles = new ProfileService(database, directory, outbox, config.phonemode_avatars);
-const senders = new SenderRegistry(database, hmp, config.phonemode_avatars, PushSendersToAll);
+const settings = new SettingsService(database, config.phonemode_ui, directory, config.avatars);
+const contacts = new ContactService(database, hmp, config.contacts, config.avatars, dialler);
+const profiles = new ProfileService(database, directory, outbox, config.avatars);
+const senders = new SenderRegistry(database, hmp, config.avatars, PushSendersToAll);
 const locations = new LocationService(database, outbox, hmp, config.phonemode_locations, () => ImportOptional("hmp-blips"));
 const chats = new ChatService({ database, directory, outbox, hmp, config, blocks, senders, flight, audit, locations, settings, dialler, hooks: { Describe, OnSent } });
 const inform = new InformService({ directory, contacts, profiles, outbox, hmp, config: config.phonemode_inform, blocks, audit });
 const calls = new CallService({ database, directory, outbox, hmp, config: config.phonemode_calls, blocks, audit, dialler, hooks: { Describe, OnCall } });
 const requests = new RequestDispatcher(hmp, directory, outbox, config.network);
 const posts = new PostService(hmp, config.immersivemode_posts, () => ImportOptional("hmp-interact"), OpenAtPost, Lang.Translate("", "mail.post.prompt"));
-const mail = new MailService({ database, directory, chats, contacts, posts, senders, hmp, config });
+const roster = new OwlRoster();
+const mail = new MailService({ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial });
 
 /// <summary>
 /// True when players get the immersive letter desk instead of the phone (mode "immersive").
@@ -244,6 +251,7 @@ async function RetireCharacter(characterId)
 		return;
 	}
 
+	roster.Remove(number);
 	const related = await database.ListRelatedNumbers(number) || [];
 	const left = await chats.RetireOwl(number);
 	await database.LeaveChannels(number);
@@ -351,6 +359,31 @@ async function CanAnnounce(player)
 	return false;
 }
 
+/// <summary>
+/// Whether a player may write official letters from immersive mode's desk: the same permission as /owl_announce, while announcements are on.
+/// </summary>
+/// <param name="player">Player asking</param>
+/// <returns>True when allowed</returns>
+async function CanPostOfficial(player)
+{
+	return config.announcements.enabled && await CanAnnounce(player);
+}
+
+/// <summary>
+/// Show a contact on its owner's page straight away, if they are online, after another resource added it (see Api.AddContact).
+/// </summary>
+/// <param name="ownerNumber">Owl number of the owner</param>
+/// <param name="contact">New contact record</param>
+function OnContactAdded(ownerNumber, contact)
+{
+	const owner = directory.GetByNumber(ownerNumber);
+
+	if (owner)
+	{
+		outbox.Push(owner.player, "contact:upsert", { contact: isImmersive ? ToDeskContact(contact, config.immersivemode_avatars) : contact });
+	}
+}
+
 // ========================
 // Owl Lifecycle
 // ========================
@@ -413,7 +446,7 @@ async function SendBootstrap(entry)
 /// <param name="entry">Directory entry</param>
 async function SendImmersiveBootstrap(entry)
 {
-	const [contactList, unread] = await Promise.all([contacts.List(entry.number), mail.CountUnread(entry.number)]);
+	const [contactList, unread, canPostOfficial] = await Promise.all([contacts.List(entry.number), mail.CountUnread(entry.number), CanPostOfficial(entry.player)]);
 
 	// The player may have switched character while the queries ran.
 	if (directory.GetByPlayerId(entry.playerId) !== entry)
@@ -433,14 +466,14 @@ async function SendImmersiveBootstrap(entry)
 	// The owl number stays on the server: immersive pages address owls by name and the server checks every number they send.
 	outbox.Push(entry.player, "state:reset",
 	{
-		me: { name: entry.characterName },
+		me: { name: entry.characterName, canPostOfficial },
 		settings: entry.settings,
 		config: clientConfig,
 		quiet: { active: !!quiet, label: quiet ? quiet.label : "" },
 		unread,
 		serverNow: Date.now(),
 	});
-	outbox.PushChunked(entry.player, "contacts:chunk", "contacts", (contactList || []).map((contact) => ({ id: contact.id, number: contact.number, name: contact.name })), contactChunkSize);
+	outbox.PushChunked(entry.player, "contacts:chunk", "contacts", (contactList || []).map((contact) => ToDeskContact(contact, config.immersivemode_avatars)), contactChunkSize);
 	outbox.Push(entry.player, "state:ready", {});
 }
 
@@ -475,8 +508,16 @@ async function LoadOwl(player, character)
 	const token = Symbol(character.id);
 	loadTokens.set(player.id, token);
 
+	const characterName = String(character.name || "Unknown Wizard");
 	const number = await EnsureNumber(database, character.id);
 	const loadedSettings = number ? await settings.Load(number) : null;
+
+	// Every character is on the roster from its first load, so letters can find it by name from then on, online or not.
+	if (number)
+	{
+		roster.Set(number, characterName);
+		await database.SetNumberName(character.id, characterName);
+	}
 
 	// Another load or an unload happened while we were waiting on the database.
 	if (loadTokens.get(player.id) !== token)
@@ -492,7 +533,7 @@ async function LoadOwl(player, character)
 		return;
 	}
 
-	const entry = directory.Register(player, character.id, String(character.name || "Unknown Wizard"), number, loadedSettings);
+	const entry = directory.Register(player, character.id, characterName, number, loadedSettings);
 	await SendBootstrap(entry);
 }
 
@@ -523,6 +564,11 @@ function UnloadOwl(player, notifyClient)
 		outbox.Push(player, "state:clear", {});
 	}
 }
+
+/// <summary>
+/// The "api" export, also behind the "frantic-owls:addContact" event.
+/// </summary>
+const api = CreateApi({ whenReady, senders, chats, directory, database, contacts, OnContactAdded });
 
 // ========================
 // Requests
@@ -627,7 +673,19 @@ function RegisterImmersiveRequests()
 	requests.Register("mail.list", (entry, data) => mail.List(entry, data));
 	requests.Register("mail.open", (entry, data) => mail.Open(entry, data));
 	requests.Register("mail.send", (entry, data) => mail.Send(entry, data));
-	requests.Register("mail.recipients", (entry) => mail.ListRecipients(entry));
+	requests.Register("mail.place", (entry) => mail.GetPlace(entry));
+	requests.Register("mail.search", (entry, data) => mail.Search(entry, data));
+	requests.Register("mail.addCorrespondent", (entry, data) => mail.AddCorrespondent(entry, data));
+	requests.Register("mail.officialSenders", (entry) => mail.ListOfficialSenders(entry));
+	requests.Register("mail.sendOfficial", (entry, data) => mail.SendOfficial(entry, data));
+	requests.Register("contacts.favourite", (entry, data) => contacts.SetFavourite(entry, data));
+
+	// Correspondents are renamed like the phone's contacts, but never moved to another number, and only get pictures where the server allows them.
+	requests.Register("contacts.update", async (entry, data) =>
+	{
+		const result = await contacts.Update(entry, { contactId: data.contactId, name: data.name, avatarUrl: config.immersivemode_avatars ? data.avatarUrl : undefined });
+		return result.ok ? Ok({ contact: ToDeskContact(result.data.contact, config.immersivemode_avatars) }) : result;
+	});
 }
 
 if (isImmersive)
@@ -737,6 +795,18 @@ Events.on("hmp:character:loaded", ({ session, character }) =>
 
 Events.on("hmp:character:unloading", ({ session }) => UnloadOwl(session.player, true));
 
+// Other resources can add contacts without importing the API: Events.emit("frantic-owls:addContact", { owner, contact, name?, revealName? }) with the same fields as Api.AddContact.
+Events.on("frantic-owls:addContact", (request) =>
+{
+	api.AddContact(request).then((result) =>
+	{
+		if (!result.ok)
+		{
+			Logger.LogWarning("Main", `A "frantic-owls:addContact" event was refused: ${result.error}`);
+		}
+	});
+});
+
 Events.on("hmp:character:deleted", ({ character }) =>
 {
 	if (!isReady || !character)
@@ -839,6 +909,25 @@ async function Start()
 		await RetireCharacter(characterId);
 	}
 
+	// Names changed while the owl post was closed, and numbers from before names were kept, are caught up from hmp-core.
+	await database.SyncNumberNames();
+
+	// Characters that have not loaded since the owl post was installed get their number now, so they can be found and written to like anyone else.
+	if (config.backfillNumbers)
+	{
+		const numbered = await database.BackfillNumbers(CreateCandidateNumber, backfillBatchSize);
+
+		if (numbered > 0)
+		{
+			Logger.LogMessage("Main", `Gave owl numbers to ${numbered} character(s) that had not loaded since the owl post was installed.`);
+		}
+	}
+
+	if (isImmersive)
+	{
+		roster.Load(await database.ListNamedNumbers() || []);
+	}
+
 	if (config.storage.messageRetentionDays > 0)
 	{
 		await PruneOldOwls();
@@ -859,7 +948,8 @@ async function Start()
 		posts.Register();
 	}
 
-	Logger.LogSuccess("Main", `Owl Post is open in ${config.mode} mode with ${directory.GetCount()} owl(s) online. Players use /${config.command}.`);
+	const rosterNote = isImmersive ? ` and ${roster.GetCount()} on the roster` : "";
+	Logger.LogSuccess("Main", `Owl Post is open in ${config.mode} mode with ${directory.GetCount()} owl(s) online${rosterNote}. Players use /${config.command}.`);
 	return true;
 }
 
@@ -929,4 +1019,4 @@ function GetStatus()
 }
 
 Exports.register("status", GetStatus);
-Exports.register("api", CreateApi({ whenReady, senders, chats, directory, database }));
+Exports.register("api", api);

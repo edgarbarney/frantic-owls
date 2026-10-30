@@ -3,9 +3,10 @@
 
 const { Ok, Fail } = require("./Result.js");
 const Lang = require("./Lang.js");
-const { ClampInteger } = require("./Config.js");
+const { ClampInteger, maxOfficialRecipients } = require("./Config.js");
 const { IsSenderNumber, MessageKind, ReadPoll } = require("./Database.js");
 const { ParseLocation } = require("./Locations.js");
+const { AddContactStatus } = require("./Contacts.js");
 
 /// <summary>
 /// Letter boxes immersive mode lists.
@@ -92,6 +93,33 @@ function GetLetterText(message, language)
 	return String(message.body || "");
 }
 
+/// <summary>
+/// A contact as immersive mode's page gets it.
+///
+/// <para>
+/// NOTE: A contact whose character the owner does not know (identityKnown false, e.g. first reached by answering an unsigned letter) is sent without its owl number or profile picture.
+/// The page matches correspondents against characters found by name by their numbers; a number it never sees cannot show which character an anonymous writer is.
+/// </para>
+///
+/// </summary>
+/// <param name="contact">Contact record</param>
+/// <param name="avatarsEnabled">Whether correspondents have pictures on this server (immersivemode_avatars)</param>
+/// <returns>{ id, number, name, originalName, avatarUrl, profileAvatarUrl, favourite }</returns>
+function ToDeskContact(contact, avatarsEnabled)
+{
+	const known = contact.identityKnown === true;
+
+	return {
+		id: contact.id,
+		number: known ? contact.number : "",
+		name: contact.name,
+		originalName: contact.originalName || "",
+		avatarUrl: avatarsEnabled ? contact.avatarUrl : "",
+		profileAvatarUrl: avatarsEnabled && known ? contact.profileAvatarUrl : "",
+		favourite: contact.favourite === true,
+	};
+}
+
 // ========================
 // Mail Service
 // ========================
@@ -153,6 +181,21 @@ class MailService
 	/// SenderRegistry instance, for official letters.
 	/// </summary>
 	#senders;
+
+	/// <summary>
+	/// OwlRoster instance: every character with an owl, by name.
+	/// </summary>
+	#roster;
+
+	/// <summary>
+	/// AuditLog instance, for official letters.
+	/// </summary>
+	#audit;
+
+	/// <summary>
+	/// Async function (player) => boolean: whether a player may send official letters (the announcement permission).
+	/// </summary>
+	#CanPostOfficial;
 
 	/// <summary>
 	/// hmp-lib server import, for rate limits and text cleaning.
@@ -252,8 +295,9 @@ class MailService
 	/// <param name="entry">Directory entry of the viewer</param>
 	/// <param name="letter">Letter record from the database</param>
 	/// <param name="post">Owl post the viewer stands at, or null</param>
+	/// <param name="names">Owl number to correspondent name, for a sent letter's recipients (see #GetCorrespondentNames)</param>
 	/// <returns>{ id, box, sentAt, arrivedAt, isUnread, isReadable, readProblem, official, groupTitle, recipients, excerpt, canReply }</returns>
-	#Summarise(entry, letter, post)
+	#Summarise(entry, letter, post, names)
 	{
 		const box = letter.sender === entry.number ? "sent" : "inbox";
 		const isUnread = box === "inbox" && this.#IsUnread(entry, letter);
@@ -278,7 +322,7 @@ class MailService
 			readProblem: readProblem || "",
 			official: senderName ? { name: senderName } : null,
 			groupTitle: letter.chatKind === "group" ? letter.chatTitle : "",
-			recipients: box === "sent" ? letter.members || [] : [],
+			recipients: box === "sent" ? (letter.members || []).map((number) => names.get(number) || "") : [],
 			excerpt,
 			canReply: box === "inbox" && this.#CanReply(letter),
 		};
@@ -333,9 +377,88 @@ class MailService
 	}
 
 	/// <summary>
+	/// What the writer calls each of their correspondents, so the sent box can say who a letter went to.
+	///
+	/// <para>
+	/// NOTE: Only the writer's own names for people are used, never the characters' names: a correspondent first reached by answering an unsigned letter is named the way the writer named them.
+	/// A letter to someone no longer among the writer's correspondents says only that it went to someone.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="number">Writer's owl number</param>
+	/// <returns>Map of owl number to name (empty on failure)</returns>
+	async #GetCorrespondentNames(number)
+	{
+		const list = await this.#contacts.List(number) || [];
+		return new Map(list.map((contact) => [contact.number, contact.name]));
+	}
+
+	/// <summary>
+	/// Work out who a letter goes to from the recipients the page picked: correspondents by contact ID, anyone else by the owl number a search found.
+	/// </summary>
+	/// <param name="entry">Directory entry of the writer</param>
+	/// <param name="raw">Client-supplied [{ contactId } | { number }]</param>
+	/// <param name="limit">Most recipients allowed</param>
+	/// <param name="allowSelf">True when the writer may address themselves (official letters)</param>
+	/// <param name="targets">Map to fill: owl number to { name, saveAs, identityKnown } where saveAs is the name to save a new correspondent under ("" to save none)</param>
+	/// <returns>Text key (or Lang.Problem) of the first problem, or null</returns>
+	async #ResolveRecipients(entry, raw, limit, allowSelf, targets)
+	{
+		const requested = Array.isArray(raw) ? raw.slice(0, limit + 1) : [];
+
+		for (const recipient of requested)
+		{
+			const source = recipient && typeof recipient === "object" ? recipient : {};
+			const contactId = this.#ReadId(source.contactId);
+			let number = "";
+			let target = null;
+
+			if (contactId > 0)
+			{
+				const contact = await this.#database.GetContact(entry.number, contactId);
+
+				if (!contact)
+				{
+					return "error.mail.unknownRecipient";
+				}
+
+				number = contact.number;
+				target = { name: contact.name, saveAs: "", identityKnown: contact.identityKnown };
+			}
+			else
+			{
+				number = String(source.number || "");
+
+				// The roster holds every live character; one online is on it too, but is checked directly in case the roster could not be read.
+				const online = /^\d{8}$/.test(number) && !IsSenderNumber(number) ? this.#directory.GetByNumber(number) : null;
+				const name = online ? online.characterName : this.#roster.GetName(number);
+
+				if (!name)
+				{
+					return "error.mail.unknownRecipient";
+				}
+
+				target = { name, saveAs: name, identityKnown: true };
+			}
+
+			if (number === entry.number && !allowSelf)
+			{
+				return "error.selfOwl";
+			}
+
+			if (!targets.has(number))
+			{
+				targets.set(number, target);
+			}
+		}
+
+		return targets.size > limit ? Lang.Problem("error.mail.tooManyRecipients", { count: limit }) : null;
+	}
+
+	/// <summary>
 	/// Constructor.
 	/// </summary>
-	/// <param name="services">{ database, directory, chats, contacts, posts, senders, hmp, config }</param>
+	/// <param name="services">{ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial }</param>
 	constructor(services)
 	{
 		this.#database = services.database;
@@ -344,6 +467,9 @@ class MailService
 		this.#contacts = services.contacts;
 		this.#posts = services.posts;
 		this.#senders = services.senders;
+		this.#roster = services.roster;
+		this.#audit = services.audit;
+		this.#CanPostOfficial = services.CanPostOfficial;
 		this.#hmp = services.hmp;
 		this.#config = services.config;
 		this.#sendLimiter = this.#hmp.rateLimit.create({ limit: this.#config.messages.rateLimitCount, windowMs: this.#config.messages.rateLimitWindowMs });
@@ -410,7 +536,8 @@ class MailService
 
 		const post = this.#posts.GetPostAt(entry.player);
 		const unread = await this.CountUnread(entry.number);
-		const letters = page.letters.map((letter) => this.#Summarise(entry, letter, post));
+		const names = box === "sent" ? await this.#GetCorrespondentNames(entry.number) : new Map();
+		const letters = page.letters.map((letter) => this.#Summarise(entry, letter, post, names));
 
 		return Ok({ box, beforeId, letters, hasMore: page.hasMore, post: post ? { id: post.id, label: post.label } : null, unread, serverNow: Date.now() });
 	}
@@ -437,7 +564,8 @@ class MailService
 		}
 
 		const post = this.#posts.GetPostAt(entry.player);
-		const summary = this.#Summarise(entry, letter, post);
+		const names = letter.sender === entry.number ? await this.#GetCorrespondentNames(entry.number) : new Map();
+		const summary = this.#Summarise(entry, letter, post, names);
 
 		if (summary.readProblem)
 		{
@@ -453,15 +581,72 @@ class MailService
 	}
 
 	/// <summary>
-	/// The owls online a letter can be addressed to, besides the writer's correspondents (which the page already has as contacts).
+	/// The owl post the player stands at, for a page that has just opened a screen where it matters.
 	/// </summary>
 	/// <param name="entry">Directory entry of the requesting owl</param>
-	/// <returns>Result carrying { online: [{ number, name }], post }</returns>
-	async ListRecipients(entry)
+	/// <returns>Result carrying { post }</returns>
+	GetPlace(entry)
 	{
-		const online = this.#directory.All().filter((other) => other.number !== entry.number).map((other) => ({ number: other.number, name: other.characterName }));
-		online.sort((first, second) => first.name.localeCompare(second.name));
-		return Ok({ online, post: this.GetPost(entry.player) });
+		return Ok({ post: this.GetPost(entry.player) });
+	}
+
+	/// <summary>
+	/// Find characters to write to by a part of their name, online or not.
+	///
+	/// <para>
+	/// NOTE: The roster is searched in memory, so typing a name costs the database nothing; the page waits for a pause in typing and asks at most once per pause.
+	/// isComplete tells the page every match was sent, so it can narrow a longer search itself without asking again.
+	/// The page puts the player's own correspondents first and leaves out the characters it already knows them as.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ query }</param>
+	/// <returns>Result carrying { query, owls: [{ number, name, online }], isComplete }</returns>
+	Search(entry, data)
+	{
+		const query = String(data.query || "").slice(0, 64);
+		const found = this.#roster.Search(query, entry.number);
+		const owls = found.owls.map((owl) => ({ ...owl, online: !!this.#directory.GetByNumber(owl.number) }));
+		return Ok({ query, owls, isComplete: found.isComplete });
+	}
+
+	/// <summary>
+	/// Save a character found by name as a correspondent, without writing to them.
+	///
+	/// <para>
+	/// NOTE: If the character already is a correspondent saved without knowing who it is (an anonymous writer answered), the refusal does not name that correspondent.
+	/// It still tells the player one of their unnamed correspondents is this character, which cannot be helped without letting one character be saved twice.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ number }</param>
+	/// <returns>Result carrying { contact } as ToDeskContact makes it</returns>
+	async AddCorrespondent(entry, data)
+	{
+		const targets = new Map();
+		const problem = await this.#ResolveRecipients(entry, [{ number: data.number }], 1, false, targets);
+
+		if (problem)
+		{
+			return Fail(problem);
+		}
+
+		const [number, target] = [...targets][0];
+		const result = await this.#contacts.AddOnBehalf(entry.number, number, target.saveAs, true);
+
+		switch (result.status)
+		{
+		case AddContactStatus.Added:
+			return Ok({ contact: ToDeskContact(result.contact, this.#config.immersivemode_avatars) });
+		case AddContactStatus.AlreadyKnown:
+			return result.contact.identityKnown ? Fail(Lang.Problem("error.contactNumberTaken", { name: result.contact.name })) : Fail("error.mail.alreadyCorrespondent");
+		case AddContactStatus.Full:
+			return Fail("error.contactsFull");
+		default:
+			return Fail("error.contactSaveFailed");
+		}
 	}
 
 	/// <summary>
@@ -469,15 +654,19 @@ class MailService
 	/// Every recipient becomes one of the writer's correspondents (a contact); the recipients are not given the writer in return.
 	///
 	/// <para>
-	/// NOTE: Recipients are owls online, the writer's own correspondents, or the writer of the letter being answered.
+	/// NOTE: A letter can go to any character with an owl: a correspondent (by contact ID), anyone found by name (by owl number), or the writer of the letter being answered.
 	/// Answering does not tell the page who it is answering: it names the letter, and the server finds its writer.
 	/// The writer's page may name that correspondent itself (replyLabel), which is what they are saved as; nothing the server knows about them is used.
 	/// </para>
 	///
+	/// <para>
+	/// NOTE: The reply only says how many copies went and, for any that did not, the name the writer picked; it carries no owl numbers, for the reason ToDeskContact gives.
+	/// </para>
+	///
 	/// </summary>
 	/// <param name="entry">Directory entry of the requesting owl</param>
-	/// <param name="data">{ recipients: number[], replyToId, replyLabel, body, clientKey }</param>
-	/// <returns>Result carrying { sent: [{ number, messageId }], failed: [{ number, errorKey }], contacts, clientKey }</returns>
+	/// <param name="data">{ recipients: [{ contactId } | { number }], replyToId, replyLabel, body, clientKey }</param>
+	/// <returns>Result carrying { sent, failed: [{ name, errorKey }], contacts, clientKey }</returns>
 	async Send(entry, data)
 	{
 		const clientKey = String(data.clientKey || "").slice(0, 64).replace(/[^A-Za-z0-9_-]/g, "");
@@ -502,7 +691,6 @@ class MailService
 			return Fail("error.emptyOwl", { clientKey });
 		}
 
-		// Number -> name the writer will know them by ("" to leave them out of the writer's correspondents).
 		const targets = new Map();
 		const replyToId = this.#ReadId(data.replyToId);
 
@@ -516,34 +704,15 @@ class MailService
 			}
 
 			const label = this.#hmp.text.clean(data.replyLabel, maxReplyLabelLength).replace(/\s+/g, " ").trim();
-			targets.set(answered.sender, IsSenderNumber(answered.sender) ? "" : label);
+			const isOfficial = IsSenderNumber(answered.sender);
+			targets.set(answered.sender, { name: isOfficial ? this.#senders.GetName(answered.sender) : label, saveAs: isOfficial ? "" : label, identityKnown: false });
 		}
 
-		const requested = Array.isArray(data.recipients) ? data.recipients.slice(0, letters.maxRecipients + 1) : [];
+		const problem = await this.#ResolveRecipients(entry, data.recipients, letters.maxRecipients, false, targets);
 
-		for (const raw of requested)
+		if (problem)
 		{
-			const number = String(raw || "");
-
-			if (!/^\d{8}$/.test(number) || IsSenderNumber(number) || targets.has(number))
-			{
-				continue;
-			}
-
-			if (number === entry.number)
-			{
-				return Fail("error.selfOwl", { clientKey });
-			}
-
-			const online = this.#directory.GetByNumber(number);
-			const contact = online ? null : await this.#contacts.FindByNumber(entry.number, number);
-
-			if (!online && !contact)
-			{
-				return Fail("error.mail.unknownRecipient", { clientKey });
-			}
-
-			targets.set(number, online ? online.characterName : contact.name);
+			return Fail(problem, { clientKey });
 		}
 
 		if (targets.size === 0)
@@ -551,45 +720,155 @@ class MailService
 			return Fail("error.mail.noRecipients", { clientKey });
 		}
 
-		if (targets.size > letters.maxRecipients)
-		{
-			return Fail(Lang.Problem("error.mail.tooManyRecipients", { count: letters.maxRecipients }), { clientKey });
-		}
-
-		const sent = [];
+		let sent = 0;
 		const failed = [];
 		const added = [];
 
-		for (const [number, label] of targets)
+		for (const [number, target] of targets)
 		{
 			const result = await this.#chats.SendLetter(entry, number, body);
 
 			if (result.error)
 			{
-				failed.push({ number, errorKey: result.error });
+				failed.push({ name: target.name, errorKey: result.error });
 				continue;
 			}
 
-			sent.push({ number, messageId: result.message.id });
+			++sent;
 
-			if (label)
+			if (target.saveAs)
 			{
-				const saved = await this.#contacts.AddOnBehalf(entry.number, number, label);
+				const saved = await this.#contacts.AddOnBehalf(entry.number, number, target.saveAs, target.identityKnown);
 
-				if (saved.contact)
+				if (saved.status === AddContactStatus.Added)
 				{
-					added.push(saved.contact);
+					added.push(ToDeskContact(saved.contact, this.#config.immersivemode_avatars));
 				}
 			}
 		}
 
-		if (sent.length === 0)
+		if (sent === 0)
 		{
 			return Fail(failed[0] ? failed[0].errorKey : "error.sendFailed", { clientKey, failed });
 		}
 
 		return Ok({ sent, failed, contacts: added, clientKey, serverNow: Date.now() });
 	}
+
+	// ========================
+	// Official Letters
+	// ========================
+
+	/// <summary>
+	/// The official senders a player may write as (the Ministry, and any other resource's sender that is running), if they may write official letters at all.
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <returns>Result carrying { senders: [{ number, name }] }</returns>
+	async ListOfficialSenders(entry)
+	{
+		if (!await this.#CanPostOfficial(entry.player))
+		{
+			return Fail("error.mail.officialDenied");
+		}
+
+		const senders = this.#senders.GetClientList().filter((sender) => this.#senders.GetByNumber(sender.number)).map((sender) => ({ number: sender.number, name: sender.name }));
+		return Ok({ senders });
+	}
+
+	/// <summary>
+	/// Send an official letter as a system sender: to everyone, as an announcement, or one copy to each character named.
+	///
+	/// <para>
+	/// NOTE: Official letters are not tied to owl posts and do not add anyone to the writer's correspondents, since it is the sender writing, not the character.
+	/// Readers see the sender's name, as with any official owl, and cannot answer unless the sender's resource takes replies.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ sender: number, everyone, recipients: [{ contactId } | { number }], body, clientKey }</param>
+	/// <returns>Result carrying { everyone, sent, failed: [{ name, errorKey }], clientKey }</returns>
+	async SendOfficial(entry, data)
+	{
+		const clientKey = String(data.clientKey || "").slice(0, 64).replace(/[^A-Za-z0-9_-]/g, "");
+		const letters = this.#config.immersivemode_letters;
+
+		if (!await this.#CanPostOfficial(entry.player))
+		{
+			return Fail("error.mail.officialDenied", { clientKey });
+		}
+
+		if (!this.#sendLimiter.allow(entry.number))
+		{
+			return Fail("error.owlsTired", { clientKey });
+		}
+
+		const sender = this.#senders.GetByNumber(String(data.sender || ""));
+
+		if (!sender)
+		{
+			return Fail("error.mail.senderGone", { clientKey });
+		}
+
+		const body = CleanLetter(data.body, letters.maxLength, letters.maxLines);
+
+		if (body.length === 0)
+		{
+			return Fail("error.emptyOwl", { clientKey });
+		}
+
+		const writer = `${entry.characterName} (${entry.number}, player ${entry.playerId})`;
+
+		if (data.everyone === true)
+		{
+			const result = await this.#chats.DeliverAnnouncement(sender, body);
+
+			if (!result.ok)
+			{
+				return Fail("error.mail.officialFailed", { clientKey });
+			}
+
+			this.#audit.Log("announcements", "Official letter to everyone", `${writer} wrote to everyone as ${sender.name}.`);
+			return Ok({ everyone: true, sent: 1, failed: [], clientKey });
+		}
+
+		const targets = new Map();
+		const problem = await this.#ResolveRecipients(entry, data.recipients, maxOfficialRecipients, true, targets);
+
+		if (problem)
+		{
+			return Fail(problem, { clientKey });
+		}
+
+		if (targets.size === 0)
+		{
+			return Fail("error.mail.noRecipients", { clientKey });
+		}
+
+		let sent = 0;
+		const failed = [];
+
+		for (const [number, target] of targets)
+		{
+			const result = await this.#chats.DeliverFromSender(sender, number, body, 0);
+
+			if (result.ok)
+			{
+				++sent;
+			}
+			else
+			{
+				failed.push({ name: target.name, errorKey: "error.mail.officialFailed" });
+			}
+		}
+
+		if (sent === 0)
+		{
+			return Fail("error.mail.officialFailed", { clientKey, failed });
+		}
+
+		this.#audit.Log("announcements", "Official letter", `${writer} wrote to ${sent} character(s) as ${sender.name}.`);
+		return Ok({ everyone: false, sent, failed, clientKey });
+	}
 }
 
-module.exports = { MailService, CleanLetter };
+module.exports = { MailService, CleanLetter, ToDeskContact };

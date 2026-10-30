@@ -99,7 +99,7 @@ button
 	inset: 0;
 	display: flex;
 	flex-direction: column;
-	background: rgba(0, 0, 0, 0.55);
+	background: rgba(0, 0, 0, 0.85);
 	opacity: 0;
 	transition: opacity 220ms ease;
 }
@@ -296,7 +296,7 @@ button
 {
 	display: flex;
 	flex-direction: column;
-	width: min(56rem, 100%);
+	width: min(60rem, 100%);
 	height: 100%;
 	padding: 1.25rem 1.5rem;
 	border: 1px solid var(--panel-line);
@@ -308,6 +308,7 @@ button
 .letters-head
 {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
 	gap: 1rem;
@@ -326,14 +327,14 @@ button
 	display: inline-flex;
 	align-items: center;
 	gap: 0.5rem;
-	padding: 0.5rem 1rem;
+	padding: 0.5rem 0.85rem;
 	border: 0;
 	border-bottom: 2px solid transparent;
 	background: transparent;
 	font-family: var(--font-heading);
-	font-size: 1rem;
+	font-size: 0.95rem;
 	font-weight: 700;
-	letter-spacing: 0.08em;
+	letter-spacing: 0.07em;
 	text-transform: uppercase;
 	color: var(--text-dim);
 }
@@ -956,6 +957,385 @@ button
 {
 	font-style: italic;
 	color: rgba(139, 90, 43, 0.75);
+}
+
+/* Correspondents come first among the suggestions; a thin rule sets them apart from everyone else found by name. */
+.picker-option
+{
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.picker-option-name
+{
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.picker-option-mark
+{
+	font-size: 13px;
+	color: rgba(139, 90, 43, 0.7);
+}
+
+.picker-divider
+{
+	height: 1px;
+	margin: 4px 16px;
+	background: rgba(139, 90, 43, 0.3);
+}
+
+.picker-online
+{
+	flex: none;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: #5d8a3c;
+	box-shadow: 0 0 0 2px rgba(93, 138, 60, 0.25);
+}
+
+.picker-name.is-everyone
+{
+	color: var(--letter-accent);
+}
+
+/* ======================== */
+/* Inputs & Pictures        */
+/* ======================== */
+
+.desk-input
+{
+	width: 100%;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.3rem;
+	outline: none;
+	background: rgba(0, 0, 0, 0.3);
+	color: var(--text);
+	user-select: text;
+}
+
+.desk-input:focus
+{
+	border-color: var(--gold);
+}
+
+.desk-input::placeholder
+{
+	color: var(--text-dim);
+	opacity: 0.8;
+}
+
+.desk-input-wrap
+{
+	position: relative;
+	display: flex;
+	flex: 1;
+	align-items: center;
+}
+
+.desk-input-wrap > i
+{
+	position: absolute;
+	left: 0.75rem;
+	font-size: 0.85rem;
+	color: var(--text-dim);
+	pointer-events: none;
+}
+
+.desk-input-wrap > .desk-input
+{
+	padding-left: 2.1rem;
+}
+
+.desk-icon.is-small
+{
+	width: 2.1rem;
+	height: 2.1rem;
+	font-size: 0.85rem;
+}
+
+.desk-icon.is-on
+{
+	color: #e8c56a;
+}
+
+/* Initials on a coloured disc, or the picture over them once it loads (Owls.Util.CreateAvatar). */
+.avatar
+{
+	position: relative;
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	overflow: hidden;
+	border-radius: 50%;
+	font-family: var(--font-heading);
+	font-weight: 700;
+	color: #fff;
+}
+
+.avatar img
+{
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.avatar.is-desk
+{
+	width: 3.25rem;
+	height: 3.25rem;
+	border: 2px solid rgba(var(--gold-rgb), 0.55);
+	font-size: 1.1rem;
+	box-shadow: 0 0.2rem 0.5rem rgba(0, 0, 0, 0.45);
+}
+
+/* ======================== */
+/* Correspondents           */
+/* ======================== */
+
+.correspondents-bar
+{
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	margin-top: 0.75rem;
+}
+
+.correspondents-count
+{
+	flex: none;
+	font-size: 0.85rem;
+	color: var(--text-dim);
+}
+
+.correspondents-add
+{
+	margin-top: 0.75rem;
+	padding: 0.85rem 1rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.35rem;
+	background: rgba(var(--gold-rgb), 0.06);
+}
+
+.correspondents-add-hint
+{
+	margin: 0 0 0.6rem;
+	font-size: 0.9rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.correspondents-found
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	max-height: 14rem;
+	margin: 0.5rem 0 0;
+	padding: 0;
+	overflow-y: auto;
+	list-style: none;
+}
+
+.correspondents-found-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.3rem 0.5rem;
+	border-radius: 0.3rem;
+}
+
+.correspondents-found-row:hover
+{
+	background: rgba(var(--gold-rgb), 0.08);
+}
+
+.correspondents-found-row .correspondent-name
+{
+	flex: 1;
+}
+
+.correspondents-found-note
+{
+	padding: 0.3rem 0.5rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.correspondents-list
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.correspondent-row
+{
+	display: flex;
+	align-items: center;
+	gap: 1.1rem;
+	min-height: 4.5rem;
+	padding: 0.6rem 1rem;
+	border: 1px solid transparent;
+	border-left: 3px solid transparent;
+	border-radius: 0.35rem;
+	background: rgba(var(--gold-rgb), 0.05);
+}
+
+.correspondent-row:hover
+{
+	border-color: var(--panel-line);
+	background: rgba(var(--gold-rgb), 0.1);
+}
+
+.correspondent-row.is-favourite
+{
+	border-left-color: #c9a24a;
+}
+
+.correspondent-row.is-editing
+{
+	align-items: flex-start;
+	border-color: var(--panel-line);
+	background: rgba(var(--gold-rgb), 0.1);
+}
+
+.correspondent-lines
+{
+	flex: 1;
+	min-width: 0;
+}
+
+.correspondent-name
+{
+	display: block;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-family: var(--font-letter);
+	font-size: 1.75rem;
+	line-height: 1.1;
+	color: var(--parchment);
+}
+
+.correspondent-actions
+{
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.correspondent-forget
+{
+	padding: 0.35rem 0.8rem;
+	font-size: 0.75rem;
+}
+
+.correspondent-fields
+{
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 0.6rem;
+	min-width: 0;
+}
+
+.correspondent-field
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	font-family: var(--font-heading);
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--gold);
+}
+
+.correspondent-field .desk-input
+{
+	font-family: var(--font-body);
+	font-size: 1rem;
+	font-weight: 400;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+.correspondent-original
+{
+	font-size: 0.9rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+/* ======================== */
+/* Official Post            */
+/* ======================== */
+
+.official-senders
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.official-sender
+{
+	display: flex;
+	align-items: center;
+	gap: 1.1rem;
+	width: 100%;
+	padding: 0.85rem 1.25rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.35rem;
+	background: rgba(var(--gold-rgb), 0.05);
+	text-align: left;
+	color: var(--gold);
+	transition: background-color 150ms;
+}
+
+.official-sender:hover
+{
+	background: rgba(var(--gold-rgb), 0.13);
+}
+
+.official-sender-lines
+{
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+
+.official-sender-name
+{
+	font-family: var(--font-heading);
+	font-size: 1.1rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+}
+
+.official-sender-hint
+{
+	font-size: 0.9rem;
+	color: var(--text-dim);
 }
 
 /* ======================== */

@@ -3,6 +3,7 @@
 
 const { EnsureNumber } = require("./Directory.js");
 const { IsSenderNumber } = require("./Database.js");
+const { AddContactStatus } = require("./Contacts.js");
 
 // ========================
 // Public API
@@ -17,16 +18,17 @@ const { IsSenderNumber } = require("./Database.js");
 ///   await Owls.RegisterSender({ resource: "my-bank", key: "gringotts", name: "Gringotts Wizarding Bank", onReply: (reply) => { ... } });
 ///   await Owls.SendOwl({ sender: "gringotts", to: { characterId: 42 }, body: "Your vault is ready." });
 ///   await Owls.SendAnnouncement({ sender: "gringotts", body: "The bank closes early tonight." });
+///   await Owls.AddContact({ owner: { characterId: 42 }, contact: { characterId: 7 }, name: "Madam Malkin" });
 /// Every call resolves with { ok, error, ... } and never rejects, in keeping with the rest of the resource.
 /// Calls made before the database is ready wait for it, so a resource may register its senders as it starts.
 /// </para>
 ///
 /// </summary>
-/// <param name="services">{ whenReady: Promise of boolean, senders, chats, directory, database }</param>
+/// <param name="services">{ whenReady: Promise of boolean, senders, chats, directory, database, contacts, OnContactAdded(ownerNumber, contact) }</param>
 /// <returns>The API object</returns>
 function CreateApi(services)
 {
-	const { whenReady, senders, chats, directory, database } = services;
+	const { whenReady, senders, chats, directory, database, contacts, OnContactAdded } = services;
 	let isReady = false;
 
 	whenReady.then((ready) =>
@@ -52,7 +54,14 @@ function CreateApi(services)
 		if (target.characterId !== undefined)
 		{
 			const characterId = Math.trunc(Number(target.characterId));
-			return Number.isSafeInteger(characterId) && characterId > 0 ? EnsureNumber(database, characterId) : "";
+
+			// NOTE: The character is checked against hmp-core first; otherwise EnsureNumber would hand a mistyped or deleted character ID a fresh number, leaving a contact or a letter nobody can ever read.
+			if (!Number.isSafeInteger(characterId) || characterId <= 0 || await database.IsActiveCharacter(characterId) !== true)
+			{
+				return "";
+			}
+
+			return EnsureNumber(database, characterId);
 		}
 
 		if (target.playerId !== undefined)
@@ -135,7 +144,7 @@ function CreateApi(services)
 
 			if (!number)
 			{
-				return { ok: false, error: "The recipient has no owl (unknown character, number or player).", chatId: 0, messageId: 0 };
+				return { ok: false, error: "The recipient has no owl (unknown or deleted character, invalid number, or offline player).", chatId: 0, messageId: 0 };
 			}
 
 			return chats.SendFromSender(sender, number, source.body, source.delaySeconds);
@@ -157,6 +166,56 @@ function CreateApi(services)
 			}
 
 			return chats.Broadcast(sender, source.body);
+		},
+
+		/// <summary>
+		/// Save a character as one of another character's contacts (a correspondent, in immersive mode), as if they had been given their owl.
+		/// A contact the owner already has is left as it is. The owner's page shows the new contact at once if they are online.
+		///
+		/// <para>
+		/// NOTE: revealName (on unless false) says the owner knows which character this is, so with showOriginalNames on they see its character name next to the saved one.
+		/// Leave it off for a contact that should stay a mystery, e.g. a secret admirer's owl slipped under a door.
+		/// </para>
+		///
+		/// </summary>
+		/// <param name="request">{ owner: { characterId } | { number } | { playerId }, contact: { characterId } | { number } | { playerId }, name?, revealName? } where name defaults to the contact's character name</param>
+		/// <returns>Promise of { ok, error, contactId, added } where added is false when the owner already had the contact</returns>
+		async AddContact(request)
+		{
+			const source = request && typeof request === "object" ? request : {};
+
+			if (!await whenReady)
+			{
+				return { ok: false, error: "The owl post is not running (its database is unavailable).", contactId: 0, added: false };
+			}
+
+			const [ownerNumber, contactNumber] = await Promise.all([ResolveRecipient(source.owner), ResolveRecipient(source.contact)]);
+
+			if (!ownerNumber || !contactNumber)
+			{
+				return { ok: false, error: `The ${ownerNumber ? "contact" : "owner"} has no owl (unknown or deleted character, invalid number, or offline player).`, contactId: 0, added: false };
+			}
+
+			if (ownerNumber === contactNumber)
+			{
+				return { ok: false, error: "A character cannot be their own contact.", contactId: 0, added: false };
+			}
+
+			const name = String(source.name || "").trim() || await database.GetNumberName(contactNumber) || "";
+			const result = await contacts.AddOnBehalf(ownerNumber, contactNumber, name, source.revealName !== false);
+
+			switch (result.status)
+			{
+			case AddContactStatus.Added:
+				OnContactAdded(ownerNumber, result.contact);
+				return { ok: true, error: "", contactId: result.contact.id, added: true };
+			case AddContactStatus.AlreadyKnown:
+				return { ok: true, error: "", contactId: result.contact.id, added: false };
+			case AddContactStatus.Full:
+				return { ok: false, error: "The owner's contact list is full (contacts.maxContacts).", contactId: 0, added: false };
+			default:
+				return { ok: false, error: "The contact could not be saved.", contactId: 0, added: false };
+			}
 		},
 
 		/// <summary>

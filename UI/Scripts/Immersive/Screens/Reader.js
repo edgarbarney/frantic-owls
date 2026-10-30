@@ -58,7 +58,7 @@ Owls.DeskScreens.Reader = (() =>
 
 			if (letter.box === "sent")
 			{
-				const names = letter.recipients.map((number) => Store.GetContactName(number) || T("mail.list.unknownRecipient"));
+				const names = letter.recipients.map((name) => name || T("mail.list.unknownRecipient"));
 				return T("mail.reader.sentTo", { names: names.length > 0 ? Owls.Sheet.JoinNames(names) : T("mail.list.unknownRecipient"), when });
 			}
 

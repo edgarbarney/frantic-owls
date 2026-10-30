@@ -34,6 +34,7 @@ const maxLayoutScale = 1.6;
 /// lockScreen shows the lock screen each time the phone is taken out (a clock on Muggle Phone, a sealed letter on Parchment), when the server allows it (phonemode_ui.lockScreen).
 /// soundEffects plays the phone's own sounds (key taps, app taps, locking, owls sent and arriving in the chat on screen) at effectsVolume, when the server has any (effects).
 /// wallpaperUrl is the home screen's picture ("" for none). Only its owner's page ever loads it, so unlike profile pictures it shows nobody else's IP address to the image host.
+/// showOriginalNames adds a contact's character name in parentheses after the name the player saved them as, where the two differ and the player knows who the contact is.
 /// </para>
 ///
 /// <para>
@@ -63,6 +64,7 @@ const defaultSettings = Object.freeze
 	lockScreen: true,
 	soundEffects: true,
 	effectsVolume: 0.5,
+	showOriginalNames: false,
 });
 
 /// <summary>
@@ -144,6 +146,7 @@ function SanitiseSettings(raw, base = defaultSettings)
 		lockScreen: typeof source.lockScreen === "boolean" ? source.lockScreen : base.lockScreen,
 		soundEffects: typeof source.soundEffects === "boolean" ? source.soundEffects : base.soundEffects,
 		effectsVolume: Number.isFinite(effectsVolume) ? Math.min(1, Math.max(0, effectsVolume)) : base.effectsVolume,
+		showOriginalNames: typeof source.showOriginalNames === "boolean" ? source.showOriginalNames : base.showOriginalNames,
 	};
 }
 
@@ -172,7 +175,7 @@ class SettingsService
 	#directory;
 
 	/// <summary>
-	/// The "phonemode_avatars" section of the server config, whose link rules the wallpaper follows too.
+	/// The "avatars" section of the server config, whose link rules the wallpaper follows too.
 	/// </summary>
 	#avatarsConfig;
 
@@ -182,7 +185,7 @@ class SettingsService
 	/// <param name="database">OwlDatabase instance</param>
 	/// <param name="uiConfig">The "phonemode_ui" section of the server config</param>
 	/// <param name="directory">OwlDirectory instance</param>
-	/// <param name="avatarsConfig">The "phonemode_avatars" section of the server config</param>
+	/// <param name="avatarsConfig">The "avatars" section of the server config</param>
 	constructor(database, uiConfig, directory, avatarsConfig)
 	{
 		this.#database = database;

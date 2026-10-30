@@ -36,7 +36,7 @@ class ProfileService
 	#outbox;
 
 	/// <summary>
-	/// The "phonemode_avatars" section of the server config.
+	/// The "avatars" section of the server config.
 	/// </summary>
 	#avatarsConfig;
 
@@ -46,7 +46,7 @@ class ProfileService
 	/// <param name="database">OwlDatabase instance</param>
 	/// <param name="directory">OwlDirectory instance</param>
 	/// <param name="outbox">Outbox instance</param>
-	/// <param name="avatarsConfig">The "phonemode_avatars" section of the server config</param>
+	/// <param name="avatarsConfig">The "avatars" section of the server config</param>
 	constructor(database, directory, outbox, avatarsConfig)
 	{
 		this.#database = database;

@@ -165,7 +165,7 @@ class InformService
 	async #AddDirectly(entry, target, key, name)
 	{
 		const cooldownSeconds = this.#config.cooldownSeconds;
-		const result = await this.#contacts.AddOnBehalf(target.number, entry.number, entry.characterName);
+		const result = await this.#contacts.AddOnBehalf(target.number, entry.number, entry.characterName, true);
 
 		switch (result.status)
 		{
@@ -413,7 +413,7 @@ class InformService
 			return Ok({ requestId, choice, contact: null, exchanged: false });
 		}
 
-		const result = await this.#contacts.AddOnBehalf(entry.number, request.fromNumber, request.fromName);
+		const result = await this.#contacts.AddOnBehalf(entry.number, request.fromNumber, request.fromName, true);
 
 		if (result.status === AddContactStatus.Full)
 		{
@@ -433,7 +433,7 @@ class InformService
 		// Giving yours back is skipped, silently, if the sender has since blocked you.
 		if (choice === InformChoice.Exchange && await this.#blocks.HasBlocked(request.fromNumber, entry.number) === false)
 		{
-			returned = await this.#contacts.AddOnBehalf(request.fromNumber, entry.number, entry.characterName);
+			returned = await this.#contacts.AddOnBehalf(request.fromNumber, entry.number, entry.characterName, true);
 			exchanged = returned.status === AddContactStatus.Added || returned.status === AddContactStatus.AlreadyKnown;
 		}
 

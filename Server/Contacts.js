@@ -51,7 +51,7 @@ class ContactService
 	#config;
 
 	/// <summary>
-	/// The "phonemode_avatars" section of the server config.
+	/// The "avatars" section of the server config.
 	/// </summary>
 	#avatarsConfig;
 
@@ -77,7 +77,7 @@ class ContactService
 	/// <param name="database">OwlDatabase instance</param>
 	/// <param name="hmp">hmp-lib server import</param>
 	/// <param name="contactsConfig">The "contacts" section of the server config</param>
-	/// <param name="avatarsConfig">The "phonemode_avatars" section of the server config</param>
+	/// <param name="avatarsConfig">The "avatars" section of the server config</param>
 	/// <param name="dialler">NumberDialler instance</param>
 	constructor(database, hmp, contactsConfig, avatarsConfig, dialler)
 	{
@@ -124,13 +124,14 @@ class ContactService
 	/// Rename a contact, change their picture override (an empty link clears the override) and, with phonemode_numbers.dialling on, their owl number.
 	/// </summary>
 	/// <param name="entry">Directory entry of the requesting owl</param>
-	/// <param name="data">{ contactId, name, avatarUrl, number } where number is optional and keeps the current one when missing</param>
+	/// <param name="data">{ contactId, name, avatarUrl, number } where avatarUrl and number are optional and keep the current ones when missing</param>
 	/// <returns>Result carrying the updated contact</returns>
 	async Update(entry, data)
 	{
 		const contactId = ClampInteger(data.contactId, 0, Number.MAX_SAFE_INTEGER, 0);
 		const name = this.#CleanName(data.name);
-		const avatar = CheckAvatarUrl(data.avatarUrl, this.#avatarsConfig);
+		const keepsAvatar = data.avatarUrl === undefined;
+		const avatar = keepsAvatar ? { ok: true, url: "", error: null } : CheckAvatarUrl(data.avatarUrl, this.#avatarsConfig);
 
 		if (contactId === 0)
 		{
@@ -154,6 +155,7 @@ class ContactService
 			return Fail("error.contactGone");
 		}
 
+		const avatarUrl = keepsAvatar ? contact.avatarUrl : avatar.url;
 		const typed = data.number === undefined || data.number === null ? contact.number : this.#dialler.Normalise(data.number);
 
 		if (!typed)
@@ -186,7 +188,7 @@ class ContactService
 			}
 		}
 
-		switch (await this.#database.UpdateContact(entry.number, contactId, name, avatar.url, typed))
+		switch (await this.#database.UpdateContact(entry.number, contactId, name, avatarUrl, typed))
 		{
 		case ContactWrite.Saved:
 			break;
@@ -203,8 +205,10 @@ class ContactService
 		}
 
 		// A contact moved to another owl shows that owl's own picture now, until an override is set.
+		// It also stops naming the character behind it: the owner typed a number, they were not told who it belongs to.
 		const profileAvatarUrl = isNewNumber ? await this.#database.GetProfileAvatar(typed) || "" : contact.profileAvatarUrl;
-		return Ok({ contact: { ...contact, number: typed, name, avatarUrl: avatar.url, profileAvatarUrl, updatedAt: Date.now() } });
+		const identity = isNewNumber ? { originalName: "", identityKnown: false } : {};
+		return Ok({ contact: { ...contact, ...identity, number: typed, name, avatarUrl, profileAvatarUrl, updatedAt: Date.now() } });
 	}
 
 	/// <summary>
@@ -274,7 +278,7 @@ class ContactService
 			return Fail("error.saveOnlyDirect");
 		}
 
-		const result = await this.AddOnBehalf(entry.number, other, name);
+		const result = await this.AddOnBehalf(entry.number, other, name, false);
 
 		switch (result.status)
 		{
@@ -320,7 +324,7 @@ class ContactService
 			return Fail(target.error);
 		}
 
-		const result = await this.AddOnBehalf(entry.number, target.number, name);
+		const result = await this.AddOnBehalf(entry.number, target.number, name, false);
 
 		switch (result.status)
 		{
@@ -337,13 +341,20 @@ class ContactService
 
 	/// <summary>
 	/// Add a contact to an owl's list without overwriting one they already saved.
-	/// Used by Inform, where the name comes from the sharing character rather than the owner.
+	/// Used by Inform, where the name comes from the sharing character rather than the owner, and by letters and other resources.
+	///
+	/// <para>
+	/// NOTE: identityKnown says whether the owner knows which character this is; only then can they see the character's own name next to the one saved (showOriginalNames).
+	/// A contact that already exists keeps what it had: if it was saved without knowing who it is, learning that now would tell the owner who wrote them anonymously.
+	/// </para>
+	///
 	/// </summary>
 	/// <param name="ownerNumber">Owl number receiving the contact</param>
 	/// <param name="contactNumber">Owl number being added</param>
 	/// <param name="name">Display name to save, cleaned here</param>
+	/// <param name="identityKnown">True when the owner knows which character this is (an Inform, or picking them by name)</param>
 	/// <returns>{ status: AddContactStatus, contact }</returns>
-	async AddOnBehalf(ownerNumber, contactNumber, name)
+	async AddOnBehalf(ownerNumber, contactNumber, name, identityKnown)
 	{
 		const cleanName = this.#CleanName(name) || "Unnamed Owl";
 		const existing = await this.#database.FindContactByNumber(ownerNumber, contactNumber);
@@ -370,7 +381,7 @@ class ContactService
 			return { status: AddContactStatus.Full, contact: null };
 		}
 
-		const contact = await this.#database.InsertContact(ownerNumber, contactNumber, cleanName, "");
+		const contact = await this.#database.InsertContact(ownerNumber, contactNumber, cleanName, "", identityKnown === true);
 
 		if (!contact)
 		{

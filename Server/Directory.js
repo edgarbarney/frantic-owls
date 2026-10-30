@@ -53,6 +53,15 @@ function GetDistanceMetres(hmp, first, second)
 // ========================
 
 /// <summary>
+/// A random owl number to try. It may already be taken or retired; whoever stores it must check.
+/// </summary>
+/// <returns>8-digit number</returns>
+function CreateCandidateNumber()
+{
+	return String(lowestNumber + Math.floor(Math.random() * (highestNumber - lowestNumber + 1)));
+}
+
+/// <summary>
 /// Return the owl number of a character, assigning a fresh random one the first time it loads.
 ///
 /// <para>
@@ -80,7 +89,7 @@ async function EnsureNumber(database, characterId)
 
 	for (let attempt = 0; attempt < numberAttempts; ++attempt)
 	{
-		const candidate = String(lowestNumber + Math.floor(Math.random() * (highestNumber - lowestNumber + 1)));
+		const candidate = CreateCandidateNumber();
 
 		if (await database.TryInsertNumber(characterId, candidate))
 		{
@@ -212,4 +221,4 @@ class OwlDirectory
 	}
 }
 
-module.exports = { OwlDirectory, EnsureNumber, GetDistanceMetres };
+module.exports = { OwlDirectory, EnsureNumber, CreateCandidateNumber, GetDistanceMetres };
