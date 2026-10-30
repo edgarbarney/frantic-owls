@@ -20,6 +20,7 @@ const { AuditLog } = require("./AuditLog.js");
 const { LocationService, ReadArea } = require("./Locations.js");
 const { NumberDialler } = require("./Numbers.js");
 const { PostService } = require("./Posts.js");
+const { TestOwlService } = require("./TestOwl.js");
 const { MailService, ToDeskContact } = require("./Mail.js");
 const { OwlRoster } = require("./Roster.js");
 const { CreateApi } = require("./Api.js");
@@ -110,6 +111,7 @@ const calls = new CallService({ database, directory, outbox, hmp, config: config
 const requests = new RequestDispatcher(hmp, directory, outbox, config.network);
 const posts = new PostService(hmp, config.immersivemode_posts, () => ImportOptional("hmp-interact"), OpenAtPost, Lang.Translate("", "mail.post.prompt"));
 const roster = new OwlRoster();
+const testOwls = new TestOwlService(hmp);
 const mail = new MailService({ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial });
 
 /// <summary>
@@ -838,6 +840,45 @@ if (isImmersive)
 	});
 }
 
+const testOwlUsage = `/${config.command}_testowl <${testOwls.GetPresetNames().join("|")}|/Game/...|stop> [simulated] [hold]`;
+
+// Puts an owl model from the game in front of the admin and flies it off, to find one that looks right before owls are flown for real.
+commands.register(`${config.command}_testowl`, { description: Lang.Translate("", "command.testOwlDescription"), usage: testOwlUsage }, async ({ player, args, reply }) =>
+{
+	if (!await HasPermission(player, config.immersivemode_postadmin, "test owl"))
+	{
+		return reply(T(player, "command.adminDenied"));
+	}
+
+	if (!args[0])
+	{
+		return reply(T(player, "command.usage", { usage: testOwlUsage }));
+	}
+
+	if (String(args[0]).toLowerCase() === "stop")
+	{
+		return reply(T(player, testOwls.Stop(player.id) ? "command.testOwlStopped" : "command.testOwlNone"));
+	}
+
+	const model = testOwls.ResolveModel(args[0]);
+
+	if (!model)
+	{
+		return reply(T(player, "command.testOwlBadModel"));
+	}
+
+	const flags = args.slice(1).map((flag) => String(flag).toLowerCase());
+	const isHeld = flags.includes("hold");
+	const problem = testOwls.Start(player, model, { isSimulated: flags.includes("simulated"), isHeld });
+
+	if (problem)
+	{
+		return reply(T(player, problem));
+	}
+
+	return reply(T(player, isHeld ? "command.testOwlHeld" : "command.testOwlFlying", { model, command: config.command }));
+});
+
 // The letter desk always sits in the middle of the screen; only the phone can be moved.
 if (!isImmersive)
 {
@@ -952,6 +993,7 @@ for (const eventName of ["hmp:activities:started", "hmp:activities:joined", "hmp
 Events.on("playerDisconnect", (player) =>
 {
 	UnloadOwl(player, false);
+	testOwls.Stop(player.id);
 	outbox.Forget(player.id);
 	requests.Forget(player.id);
 });
@@ -1118,6 +1160,7 @@ Events.on("resourceStop", (name) =>
 	chats.StopFlights();
 	calls.Stop();
 	posts.Unregister();
+	testOwls.StopAll();
 	audit.Stop();
 	outbox.Stop();
 });

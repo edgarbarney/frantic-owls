@@ -351,6 +351,21 @@ Owls are never pruned unless the server sets `storage.messageRetentionDays`. The
 
 With `flight.enabled`, owls take time to fly. A one-to-one owl takes `minSeconds` plus `secondsPerHundredMetres` for every 100 m between the two characters, capped at `maxSeconds`. Owls to someone offline or in another virtual world take `maxSeconds`, and bulk owls take `groupSeconds`. Until an owl lands the recipient sees nothing (no message, preview, unread badge or sound), while the sender sees it marked "In flight...". Owls still in the air when the server restarts land on schedule afterwards.
 
+### Trying owl models (experimental)
+
+The owls do not show in the world yet. To find an owl model from the game that looks right before they do, admins (the same `immersivemode_postadmin` rule as for [placing owl posts](#placing-owl-posts), in either mode) can use `/owl_testowl <model> [simulated] [hold]`. The owl appears 3 m in front of them, waits 3 seconds, then flies 30 m on and climbs 10 m over 6 seconds before it is taken away. `hold` keeps it in place for a minute instead, and `/owl_testowl stop` takes it away early.
+
+`<model>` is a world object path (`/Game/Folder/BP_Name.BP_Name_C` for a Blueprint) or one of these presets:
+
+| Preset | Blueprint | What to look for |
+| --- | --- | --- |
+| `delivery` | The owl of the game's Special Delivery world event | Most likely to fit: It flaps, hoots and sheds feathers. It normally follows its event's spline, which it does not have here. |
+| `glide` | The owl of the Bird of Prey world event | The same, but gliding. |
+| `creature` | The wild creature owl | It has its own AI, so it may fly off on its own or fight the movement. |
+| `prop` / `station` | Perched owls, such as the one at the Owl Post counter | Not meant to fly; a candidate for an owl post's `model`. |
+
+`simulated` lets the nearest player's game run the Blueprint for everyone, rather than every game running its own copy. Ask a second player to watch, since the two can differ. The game's Blueprints are only promised to behave for the race ring and the snitch, so a model may sit still, vanish or jump elsewhere; that is what the test is for.
+
 ## Placing owl posts
 
 In immersive mode, admins (the hmp-admin capability `immersivemode_postadmin.capability`, `admin.view` by default, or without hmp-admin the hmp-core group `fallbackGroup` at `fallbackMinimumGrade` or above) have two commands for setting up owl posts without leaving the game:
@@ -542,7 +557,7 @@ Only the letter desk reads these.
 | `immersivemode_letters.maxRecipients` | `8` | Most recipients of one letter (1 - 50). Each gets a copy of their own. |
 | `immersivemode_posts` | `[]` | The owl posts: `[{ "id", "label", "position": { "x", "y", "z" }, "areaId", "regionId", "radiusMetres", "model", "yaw" }]`. `id` is 1-32 of a-z, 0-9, `_` or `-`; `position` is in centimetres, as `player.position`; `areaId` and `regionId` (optional) tie it to one map; `radiusMetres` defaults to 3; `model` (optional) is a StaticMesh path for hmp-interact to place there. At most 64. |
 | `immersivemode_avatars` | `false` | Give correspondents pictures (see [Profile pictures](#profile-pictures)). Off keeps the desk to initials. |
-| `immersivemode_postadmin.capability` | `"admin.view"` | hmp-admin capability needed for `/owl_posthere` and `/owl_reloadposts`, when hmp-admin is running. |
+| `immersivemode_postadmin.capability` | `"admin.view"` | hmp-admin capability needed for `/owl_posthere`, `/owl_reloadposts` and `/owl_testowl`, when hmp-admin is running. |
 | `immersivemode_postadmin.fallbackGroup` / `fallbackMinimumGrade` | `"admin"` / `1` | hmp-core group and grade needed for them without hmp-admin. |
 | `immersivemode_ui.scale` | `1.0` | Extra scale of the desk on top of the automatic resolution scaling (sizes are authored for 1080p). |
 
