@@ -213,6 +213,11 @@
 		"maxRecipients": 8
 	},
 	"immersivemode_posts": [],
+	"immersivemode_postadmin": {
+		"capability": "admin.view",
+		"fallbackGroup": "admin",
+		"fallbackMinimumGrade": 1
+	},
 	"immersivemode_avatars": false,
 	"immersivemode_ui": {
 		"scale": 1.0

@@ -52,7 +52,7 @@ Set `"mode": "immersive"` and players get a writing desk instead of the phone. T
   - `"postonly_freeunread"` (reading only): Unread letters anywhere; letters already read only at an owl post.
 
   The server checks every read and write against where the character stands, and a letter's text never leaves the server while it may not be read there.
-- **Owl posts** are listed in `immersivemode_posts` (see `Examples/frantic-owls.immersive.json`; stand where a post should be and read your position from an admin tool). With **hmp-interact** running each one is an interaction zone ("Use the owl post"), optionally with a prop of your choice, that opens the desk; without it, players open the desk with `/owl` while standing at one.
+- **Owl posts** are listed in `immersivemode_posts` (see `Examples/frantic-owls.immersive.json`; stand where a post should be and use `/owl_posthere <id> [label]` to get its entry, then `/owl_reloadposts` once it is in the file; see [Placing owl posts](#placing-owl-posts)). With **hmp-interact** running each one is an interaction zone ("Use the owl post"), optionally with a prop of your choice, that opens the desk; without it, players open the desk with `/owl` while standing at one.
 - **Notices**: While the desk is closed, a slip of parchment drops in at the top of the screen when an owl arrives (and once on loading in, if letters are waiting), with the player's notification sound. Do Not Disturb and Quiet during duels apply as on the phone.
 - **Settings** on the desk: Language, the arrival sound and its volume, notices, Do Not Disturb, Quiet during duels and Show original names. They are the same stored settings as the phone's.
 
@@ -351,6 +351,13 @@ Owls are never pruned unless the server sets `storage.messageRetentionDays`. The
 
 With `flight.enabled`, owls take time to fly. A one-to-one owl takes `minSeconds` plus `secondsPerHundredMetres` for every 100 m between the two characters, capped at `maxSeconds`. Owls to someone offline or in another virtual world take `maxSeconds`, and bulk owls take `groupSeconds`. Until an owl lands the recipient sees nothing (no message, preview, unread badge or sound), while the sender sees it marked "In flight...". Owls still in the air when the server restarts land on schedule afterwards.
 
+## Placing owl posts
+
+In immersive mode, admins (the hmp-admin capability `immersivemode_postadmin.capability`, `admin.view` by default, or without hmp-admin the hmp-core group `fallbackGroup` at `fallbackMinimumGrade` or above) have two commands for setting up owl posts without leaving the game:
+
+- `/owl_posthere <id> [label]` replies with the `immersivemode_posts` entry for where they stand: Their position, the area and region they are in, the way they face (`yaw`, for a `model`) and a 3 metre radius. It is written to the server log too, for copying. Paste it into `data/frantic-owls.json` and adjust the radius or add a `model` if you like.
+- `/owl_reloadposts` reads `immersivemode_posts` from `data/frantic-owls.json` again and puts the posts up in the world (through hmp-interact, when it runs) without restarting the resource. Only the posts are reloaded; any other setting still needs a restart. If the file cannot be read, the current posts stay up.
+
 ## Ministry announcements
 
 `/owl_announce <message>` sends an owl from the Ministry of Magic to every character with an owl, offline ones included (they find it when they next load). Announcements arrive in a read-only "Ministry of Magic" chat that players can mute but not leave or answer. Who may announce is decided by the hmp-admin capability `announcements.capability` (`admin.announce` by default) when hmp-admin is running, otherwise by membership of the hmp-core group `announcements.fallbackGroup` at `fallbackMinimumGrade` or above.
@@ -535,6 +542,8 @@ Only the letter desk reads these.
 | `immersivemode_letters.maxRecipients` | `8` | Most recipients of one letter (1 - 50). Each gets a copy of their own. |
 | `immersivemode_posts` | `[]` | The owl posts: `[{ "id", "label", "position": { "x", "y", "z" }, "areaId", "regionId", "radiusMetres", "model", "yaw" }]`. `id` is 1-32 of a-z, 0-9, `_` or `-`; `position` is in centimetres, as `player.position`; `areaId` and `regionId` (optional) tie it to one map; `radiusMetres` defaults to 3; `model` (optional) is a StaticMesh path for hmp-interact to place there. At most 64. |
 | `immersivemode_avatars` | `false` | Give correspondents pictures (see [Profile pictures](#profile-pictures)). Off keeps the desk to initials. |
+| `immersivemode_postadmin.capability` | `"admin.view"` | hmp-admin capability needed for `/owl_posthere` and `/owl_reloadposts`, when hmp-admin is running. |
+| `immersivemode_postadmin.fallbackGroup` / `fallbackMinimumGrade` | `"admin"` / `1` | hmp-core group and grade needed for them without hmp-admin. |
 | `immersivemode_ui.scale` | `1.0` | Extra scale of the desk on top of the automatic resolution scaling (sizes are authored for 1080p). |
 
 ### Network and lag compensation

@@ -3,7 +3,7 @@
 
 const { Logger } = require("./Logger.js");
 const Lang = require("./Lang.js");
-const { LoadConfig, GetClientConfig } = require("./Config.js");
+const { LoadConfig, LoadPosts, GetClientConfig, postIdPattern } = require("./Config.js");
 const { OwlDatabase } = require("./Database.js");
 const { OwlDirectory, EnsureNumber, CreateCandidateNumber } = require("./Directory.js");
 const { Outbox } = require("./Outbox.js");
@@ -17,7 +17,7 @@ const { BlockService } = require("./Blocks.js");
 const { FlightPlanner } = require("./Flight.js");
 const { SenderRegistry } = require("./Senders.js");
 const { AuditLog } = require("./AuditLog.js");
-const { LocationService } = require("./Locations.js");
+const { LocationService, ReadArea } = require("./Locations.js");
 const { NumberDialler } = require("./Numbers.js");
 const { PostService } = require("./Posts.js");
 const { MailService, ToDeskContact } = require("./Mail.js");
@@ -329,34 +329,45 @@ function PushSendersToAll()
 }
 
 /// <summary>
-/// Whether a player may post announcements: the hmp-admin capability when hmp-admin is running, otherwise the hmp-core group.
+/// Whether a player passes a permission rule: the hmp-admin capability when hmp-admin is running, otherwise the hmp-core group.
 /// </summary>
 /// <param name="player">Player asking</param>
+/// <param name="rule">{ capability, fallbackGroup, fallbackMinimumGrade }</param>
+/// <param name="what">What is being checked, for the log</param>
 /// <returns>True when allowed</returns>
-async function CanAnnounce(player)
+async function HasPermission(player, rule, what)
 {
-	const settingsForAnnouncements = config.announcements;
 	const admin = ImportOptional("hmp-admin");
 
 	// Permission backends reject on internal failures; a failed check simply means "no".
 	try
 	{
-		if (admin && admin.permissions && settingsForAnnouncements.capability)
+		if (admin && admin.permissions && rule.capability)
 		{
-			return await admin.permissions.has(player, settingsForAnnouncements.capability);
+			return await admin.permissions.has(player, rule.capability);
 		}
 
-		if (settingsForAnnouncements.fallbackGroup)
+		if (rule.fallbackGroup)
 		{
-			return await core.groups.has(player, settingsForAnnouncements.fallbackGroup, settingsForAnnouncements.fallbackMinimumGrade);
+			return await core.groups.has(player, rule.fallbackGroup, rule.fallbackMinimumGrade);
 		}
 	}
 	catch (error)
 	{
-		Logger.LogWarning("Main", `Could not check announcement permission for player ${player.id}: ${Logger.Describe(error)}`);
+		Logger.LogWarning("Main", `Could not check ${what} permission for player ${player.id}: ${Logger.Describe(error)}`);
 	}
 
 	return false;
+}
+
+/// <summary>
+/// Whether a player may post announcements (announcements.capability).
+/// </summary>
+/// <param name="player">Player asking</param>
+/// <returns>True when allowed</returns>
+async function CanAnnounce(player)
+{
+	return HasPermission(player, config.announcements, "announcement");
 }
 
 /// <summary>
@@ -720,6 +731,102 @@ commands.register(config.command, { description: Lang.Translate("", "command.ope
 	outbox.Push(player, "ui:open", isImmersive ? { post: mail.GetPost(player) } : {});
 	return true;
 });
+
+if (isImmersive)
+{
+	const postHereUsage = `/${config.command}_posthere <id> [label]`;
+
+	// Prints the immersivemode_posts entry for where the admin stands, to paste into the configuration.
+	commands.register(`${config.command}_posthere`, { description: Lang.Translate("", "command.postHereDescription"), usage: postHereUsage }, async ({ player, args, reply }) =>
+	{
+		if (!await HasPermission(player, config.immersivemode_postadmin, "owl post"))
+		{
+			return reply(T(player, "command.adminDenied"));
+		}
+
+		const id = String(args[0] || "").trim().toLowerCase();
+
+		if (!id)
+		{
+			return reply(T(player, "command.usage", { usage: postHereUsage }));
+		}
+
+		if (!postIdPattern.test(id))
+		{
+			return reply(T(player, "command.postHereBadId"));
+		}
+
+		// player.location() also carries the heading and the map; hmp.position is the fallback for the coordinates alone.
+		const location = typeof player.location === "function" ? player.location() : null;
+		const position = location && [location.x, location.y, location.z].every(Number.isFinite) ? location : hmp.position.read(player);
+
+		if (!position)
+		{
+			return reply(T(player, "command.postHereNoPosition"));
+		}
+
+		const label = args.slice(1).join(" ").trim().slice(0, 64);
+		const { areaId, regionId } = ReadArea(player);
+		const definition = { id, label: label || id, position: { x: Math.round(position.x), y: Math.round(position.y), z: Math.round(position.z) } };
+
+		// Coordinates only mean a place within their own map, so the post is tied to the map it was made on.
+		if (areaId)
+		{
+			definition.areaId = areaId;
+		}
+
+		if (regionId)
+		{
+			definition.regionId = regionId;
+		}
+
+		definition.radiusMetres = 3;
+		definition.yaw = location && Number.isFinite(location.yaw) ? Math.round(location.yaw * 10) / 10 : 0;
+
+		const json = JSON.stringify(definition);
+		Logger.LogMessage("Posts", `Owl post definition from ${player.nickname} (player ${player.id}): ${json}`);
+
+		if (posts.GetPosts().some((post) => post.id === id))
+		{
+			reply(T(player, "command.postHereTaken", { id }));
+		}
+
+		reply(T(player, "command.postHereDone"));
+		return reply(json);
+	});
+
+	// Reads immersivemode_posts from the file again and puts the posts up in the world, without restarting the resource.
+	commands.register(`${config.command}_reloadposts`, { description: Lang.Translate("", "command.reloadPostsDescription"), usage: `/${config.command}_reloadposts` }, async ({ player, reply }) =>
+	{
+		if (!await HasPermission(player, config.immersivemode_postadmin, "owl post"))
+		{
+			return reply(T(player, "command.adminDenied"));
+		}
+
+		if (!isReady)
+		{
+			return reply(T(player, "command.closed"));
+		}
+
+		const list = LoadPosts(hmp);
+
+		if (list === null)
+		{
+			return reply(T(player, "command.reloadPostsFailed"));
+		}
+
+		config.immersivemode_posts = list;
+		posts.SetPosts(list);
+		Logger.LogMessage("Posts", `${player.nickname} (player ${player.id}) reloaded the owl posts: ${list.length} loaded.`);
+
+		if (list.length === 0 && (config.immersivemode_readmode !== "free" || config.immersivemode_writemode !== "free"))
+		{
+			reply(T(player, "command.reloadPostsNone"));
+		}
+
+		return reply(T(player, "command.reloadPostsDone", { count: list.length }));
+	});
+}
 
 // The letter desk always sits in the middle of the screen; only the phone can be moved.
 if (!isImmersive)

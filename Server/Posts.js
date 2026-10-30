@@ -83,6 +83,25 @@ class PostService
 	}
 
 	/// <summary>
+	/// Replace the posts, e.g. after they were reloaded from the configuration, and offer the new ones in the world.
+	/// </summary>
+	/// <param name="posts">Clean list of posts</param>
+	SetPosts(posts)
+	{
+		this.#posts = posts;
+		this.Register();
+	}
+
+	/// <summary>
+	/// Every post, as configured.
+	/// </summary>
+	/// <returns>Post records (not to be modified)</returns>
+	GetPosts()
+	{
+		return this.#posts;
+	}
+
+	/// <summary>
 	/// Whether any post is configured.
 	/// </summary>
 	/// <returns>True when there is at least one</returns>

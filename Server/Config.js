@@ -221,6 +221,12 @@ const defaultConfig = Object.freeze
 		maxRecipients: 8,
 	},
 	immersivemode_posts: [],
+	immersivemode_postadmin:
+	{
+		capability: "admin.view",
+		fallbackGroup: "admin",
+		fallbackMinimumGrade: 1,
+	},
 	immersivemode_avatars: false,
 	immersivemode_ui:
 	{
@@ -620,6 +626,12 @@ function SanitiseImmersiveMode(config, fallback)
 	letters.maxRecipients = ClampInteger(letters.maxRecipients, 1, 50, fallback.immersivemode_letters.maxRecipients);
 
 	config.immersivemode_posts = CleanPosts(config.immersivemode_posts);
+
+	const postAdmin = config.immersivemode_postadmin;
+	postAdmin.capability = String(postAdmin.capability ?? fallback.immersivemode_postadmin.capability).trim();
+	postAdmin.fallbackGroup = String(postAdmin.fallbackGroup ?? fallback.immersivemode_postadmin.fallbackGroup).trim();
+	postAdmin.fallbackMinimumGrade = ClampInteger(postAdmin.fallbackMinimumGrade, 0, 1000000, fallback.immersivemode_postadmin.fallbackMinimumGrade);
+
 	config.immersivemode_avatars = config.immersivemode_avatars === true;
 
 	const ui = config.immersivemode_ui;
@@ -659,6 +671,33 @@ function LoadConfig(hmp)
 	}
 
 	return Sanitise(config);
+}
+
+/// <summary>
+/// Read only the owl posts (immersivemode_posts) from data/frantic-owls.json again, for reloading them while the server runs.
+///
+/// <para>
+/// NOTE: Nothing else in the file is reloaded, since most settings are handed to services once at start and changing them underneath would leave those services half on the old values.
+/// A file that cannot be read gives null rather than an empty list, so a typo while editing does not take every post down.
+/// </para>
+///
+/// </summary>
+/// <param name="hmp">hmp-lib server import</param>
+/// <returns>Clean list of posts, or null when the file cannot be read</returns>
+function LoadPosts(hmp)
+{
+	// Same as LoadConfig: hmp-lib throws on malformed JSON.
+	// hmp-lib keeps a file it loaded once in memory; fresh reads it from disk again, or the edit just made would never be seen.
+	try
+	{
+		const loaded = hmp.config.load(process.env.FRANTIC_OWLS_CONFIG || configPath, { cwd: process.cwd(), required: false, fresh: true });
+		return CleanPosts(loaded && typeof loaded === "object" ? loaded.immersivemode_posts : []);
+	}
+	catch (error)
+	{
+		Logger.LogError("Config", `Could not read ${configPath} to reload the owl posts: ${Logger.Describe(error)}`);
+		return null;
+	}
 }
 
 /// <summary>
@@ -737,4 +776,4 @@ function GetClientConfig(config, languages)
 	};
 }
 
-module.exports = { LoadConfig, GetClientConfig, ClampInteger, ClampNumber, NormaliseTheme, maxOfficialRecipients };
+module.exports = { LoadConfig, LoadPosts, GetClientConfig, ClampInteger, ClampNumber, NormaliseTheme, maxOfficialRecipients, postIdPattern };
