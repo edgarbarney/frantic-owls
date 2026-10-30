@@ -64,7 +64,13 @@
 		"minSeconds": 3,
 		"maxSeconds": 45,
 		"secondsPerHundredMetres": 3,
-		"groupSeconds": 5
+		"groupSeconds": 5,
+		"owl": {
+			"enabled": true,
+			"model": "/Game/Levels/WorldEvents/Blueprints/BirdOfPrey/BP_WE_BOP_MoveObjectAlongSpline_Owl.BP_WE_BOP_MoveObjectAlongSpline_Owl_C",
+			"departure": true,
+			"arrival": true
+		}
 	},
 	"announcements": {
 		"enabled": true,

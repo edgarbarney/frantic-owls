@@ -263,6 +263,12 @@ class ChatService
 		{
 			this.#flights.delete(message.id);
 
+			// Only an owl that flew is seen arriving, and not one to the whole server.
+			if (message.deliverAt > 0 && owlKinds.includes(message.kind) && !isChannel)
+			{
+				this.#hooks.OnLanded({ chatId: chat.id, chatKind: chat.kind, messageId: message.id, sender: message.sender, audience });
+			}
+
 			// A letter's text is only handed out when it may be read (see Mail.js), so immersive pages are told that one arrived and nothing more.
 			// Notes about bulk owls mean nothing there and are not sent at all.
 			if (this.#config.mode === "immersive")

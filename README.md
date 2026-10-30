@@ -158,7 +158,7 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Emoji picker with recently used emoji | ✅ |
 | Inform: Share your owl with someone nearby, with Accept, Exchange or Decline | ✅ |
 | Blocking and muting | ✅ |
-| Owl flight: Owls take time to fly, depending on distance | ✅ |
+| Owl flight: Owls take time to fly, depending on distance, and players see them leave and arrive | ✅ |
 | Ministry announcements (`/owl_announce`) | ✅ |
 | Optional Discord logging | ✅ |
 | `api` export so other resources can send owls | ✅ |
@@ -351,18 +351,29 @@ Owls are never pruned unless the server sets `storage.messageRetentionDays`. The
 
 With `flight.enabled`, owls take time to fly. A one-to-one owl takes `minSeconds` plus `secondsPerHundredMetres` for every 100 m between the two characters, capped at `maxSeconds`. Owls to someone offline or in another virtual world take `maxSeconds`, and bulk owls take `groupSeconds`. Until an owl lands the recipient sees nothing (no message, preview, unread badge or sound), while the sender sees it marked "In flight...". Owls still in the air when the server restarts land on schedule afterwards.
 
+### Owls in the world
+
+With flight on, players also see the owls (`flight.owl`, on by default once `flight.enabled` is):
+
+- **Leaving:** When a player sends an owl, one takes off from just in front of them and climbs away over about 4.5 seconds. It heads towards the recipient when both are on the same map, otherwise the way the sender faces.
+- **Arriving:** When the owl lands, one swoops in from about 35 m up and away, passes just beside each recipient who is online, and climbs off on the far side over about 7 seconds. It comes from the sender's side when both are on the same map.
+
+The owl does not fly the whole way between the two: Players are usually far apart or one is offline, and a world object is only seen near it. The flight time stands for the journey. Everyone nearby sees these owls, not only the two players.
+
+Only owls that take time to fly are shown. Phone-mode replies to a quoted owl (which land at once), official owls leaving, announcements and notes about bulk owls get none; a bulk owl's members each get one arriving. At most 32 owls are in the air across the server at once, and any past that are skipped. The owls have no collision and fly a fixed path, so indoors they pass through walls and ceilings. The default owl is the game's Bird of Prey owl; `flight.owl.model` takes another world object path (see below), and `departure` / `arrival` turn either scene off.
+
 ### Trying owl models (experimental)
 
-The owls do not show in the world yet. To find an owl model from the game that looks right before they do, admins (the same `immersivemode_postadmin` rule as for [placing owl posts](#placing-owl-posts), in either mode) can use `/owl_testowl <model> [simulated] [hold]`. The owl appears 3 m in front of them, waits 3 seconds, then flies 30 m on and climbs 10 m over 6 seconds before it is taken away. `hold` keeps it in place for a minute instead, and `/owl_testowl stop` takes it away early.
+To try another owl model from the game for `flight.owl.model`, admins (the same `immersivemode_postadmin` rule as for [placing owl posts](#placing-owl-posts), in either mode) can use `/owl_testowl <model> [simulated] [hold]`. The owl appears 3 m in front of them, waits 3 seconds, then flies 30 m on and climbs 10 m over 6 seconds before it is taken away. `hold` keeps it in place for a minute instead, and `/owl_testowl stop` takes it away early.
 
 `<model>` is a world object path (`/Game/Folder/BP_Name.BP_Name_C` for a Blueprint) or one of these presets:
 
-| Preset | Blueprint | What to look for |
+| Preset | Blueprint | Tested in game |
 | --- | --- | --- |
-| `delivery` | The owl of the game's Special Delivery world event | Most likely to fit: It flaps, hoots and sheds feathers. It normally follows its event's spline, which it does not have here. |
-| `glide` | The owl of the Bird of Prey world event | The same, but gliding. |
-| `creature` | The wild creature owl | It has its own AI, so it may fly off on its own or fight the movement. |
-| `prop` / `station` | Perched owls, such as the one at the Owl Post counter | Not meant to fly; a candidate for an owl post's `model`. |
+| `glide` | The owl of the Bird of Prey world event | Works: It stays hidden while still and shows once it moves, then follows the flight. |
+| `station` | The perched owl at the Owl Post counter | Shows and stays put; suits an owl post's `model`. The Owlery and Hogsmeade prop owls (`BP_PropOwl_Owlery`, `BP_HM_PropOwl`) do too. |
+| `creature` | The wild creature owl | Flies off by its own AI, even with `hold`; with `simulated` it also jumps about. |
+| `delivery` / `prop` | The Special Delivery owl and the base prop owl | Nothing shows. |
 
 `simulated` lets the nearest player's game run the Blueprint for everyone, rather than every game running its own copy. Ask a second player to watch, since the two can differ. The game's Blueprints are only promised to behave for the race ring and the snitch, so a model may sit still, vanish or jump elsewhere; that is what the test is for.
 
@@ -478,6 +489,9 @@ Settings only one front end uses carry its prefix (`phonemode_` or `immersivemod
 | `flight.minSeconds` / `maxSeconds` | `3` / `45` | Shortest and longest one-to-one flight. |
 | `flight.secondsPerHundredMetres` | `3` | Extra flight time per 100 m between the two characters. |
 | `flight.groupSeconds` | `5` | Flight time of bulk owls. |
+| `flight.owl.enabled` | `true` | Show owls leaving and arriving while flight is on (see [Owls in the world](#owls-in-the-world)). `"owl": false` turns them off. |
+| `flight.owl.model` | The Bird of Prey owl | World object path of the owl (`/Game/Folder/BP_Name.BP_Name_C`). Try others with `/owl_testowl`. |
+| `flight.owl.departure` / `arrival` | `true` / `true` | Show the owl leaving the sender, and reaching the recipient. |
 | `announcements.enabled` | `true` | Register the Ministry sender and `/owl_announce`. |
 | `announcements.command` | `"owl_announce"` | Command that sends an announcement. |
 | `announcements.senderName` / `avatarUrl` | `"Ministry of Magic"` / `""` | Who announcements come from. |

@@ -21,6 +21,7 @@ const { LocationService, ReadArea } = require("./Locations.js");
 const { NumberDialler } = require("./Numbers.js");
 const { PostService } = require("./Posts.js");
 const { TestOwlService } = require("./TestOwl.js");
+const { OwlFlier, OwlFlightScenes } = require("./OwlFlights.js");
 const { MailService, ToDeskContact } = require("./Mail.js");
 const { OwlRoster } = require("./Roster.js");
 const { CreateApi } = require("./Api.js");
@@ -99,19 +100,21 @@ const outbox = new Outbox(config.network.flushIntervalMs, config.network.maxBatc
 const audit = new AuditLog(config.logging);
 const blocks = new BlockService(database);
 const flight = new FlightPlanner(hmp, directory, config.flight);
+const flier = new OwlFlier();
+const owlFlights = new OwlFlightScenes(hmp, flier, config.flight);
 const dialler = new NumberDialler(database, hmp, config.phonemode_numbers);
 const settings = new SettingsService(database, config.phonemode_ui, directory, config.avatars);
 const contacts = new ContactService(database, hmp, config.contacts, config.avatars, dialler);
 const profiles = new ProfileService(database, directory, outbox, config.avatars);
 const senders = new SenderRegistry(database, hmp, config.avatars, PushSendersToAll);
 const locations = new LocationService(database, outbox, hmp, config.phonemode_locations, () => ImportOptional("hmp-blips"));
-const chats = new ChatService({ database, directory, outbox, hmp, config, blocks, senders, flight, audit, locations, settings, dialler, hooks: { Describe, OnSent } });
+const chats = new ChatService({ database, directory, outbox, hmp, config, blocks, senders, flight, audit, locations, settings, dialler, hooks: { Describe, OnSent, OnLanded } });
 const inform = new InformService({ directory, contacts, profiles, outbox, hmp, config: config.phonemode_inform, blocks, audit });
 const calls = new CallService({ database, directory, outbox, hmp, config: config.phonemode_calls, blocks, audit, dialler, hooks: { Describe, OnCall } });
 const requests = new RequestDispatcher(hmp, directory, outbox, config.network);
 const posts = new PostService(hmp, config.immersivemode_posts, () => ImportOptional("hmp-interact"), OpenAtPost, Lang.Translate("", "mail.post.prompt"));
 const roster = new OwlRoster();
-const testOwls = new TestOwlService(hmp);
+const testOwls = new TestOwlService(hmp, flier);
 const mail = new MailService({ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial });
 
 /// <summary>
@@ -301,11 +304,43 @@ async function PruneOldOwls()
 
 /// <summary>
 /// Let other server resources hear about every owl sent ("frantic-owls:sent").
+/// A player's owl that flies is also seen leaving them.
 /// </summary>
 /// <param name="info">{ chatId, chatKind, messageId, sender, origin, recipients, body, sentAt, deliverAt }</param>
 function OnSent(info)
 {
 	Events.emit("frantic-owls:sent", info).catch((error) => Logger.LogWarning("Main", `A "frantic-owls:sent" listener failed: ${Logger.Describe(error)}`));
+
+	// Only a player's own owl that takes time to fly is seen leaving; official owls and announcements have nobody to leave from.
+	if (info.origin === "player" && info.deliverAt > 0)
+	{
+		const sender = directory.GetByNumber(info.sender);
+		const recipient = info.chatKind === "direct" ? directory.GetByNumber(info.recipients[0] || "") : null;
+
+		if (sender)
+		{
+			owlFlights.Depart(sender.player, recipient ? recipient.player : null);
+		}
+	}
+}
+
+/// <summary>
+/// Show an owl reaching every recipient online when a flown owl lands.
+/// </summary>
+/// <param name="info">{ chatId, chatKind, messageId, sender, audience }: audience is the owl numbers it was delivered to</param>
+function OnLanded(info)
+{
+	const sender = directory.GetByNumber(info.sender);
+
+	for (const number of info.audience)
+	{
+		const entry = directory.GetByNumber(number);
+
+		if (entry)
+		{
+			owlFlights.Arrive(entry.player, sender ? sender.player : null);
+		}
+	}
 }
 
 /// <summary>
@@ -994,6 +1029,7 @@ Events.on("playerDisconnect", (player) =>
 {
 	UnloadOwl(player, false);
 	testOwls.Stop(player.id);
+	owlFlights.Forget(player.id);
 	outbox.Forget(player.id);
 	requests.Forget(player.id);
 });
@@ -1160,7 +1196,7 @@ Events.on("resourceStop", (name) =>
 	chats.StopFlights();
 	calls.Stop();
 	posts.Unregister();
-	testOwls.StopAll();
+	flier.StopAll();
 	audit.Stop();
 	outbox.Stop();
 });

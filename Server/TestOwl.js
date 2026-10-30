@@ -2,6 +2,8 @@
 "use strict";
 
 const { Logger } = require("./Logger.js");
+const { modelPathPattern } = require("./Config.js");
+const { ReadPlacement, DirectionFromYaw } = require("./OwlFlights.js");
 
 /// <summary>
 /// HogwartsMP world units per metre (positions are in centimetres).
@@ -27,12 +29,6 @@ const flightDistanceMetres = 30;
 const flightClimbMetres = 10;
 
 /// <summary>
-/// Time between two position updates in flight.
-/// Every update is a network message to everyone nearby, so this is the smoothness bought against traffic.
-/// </summary>
-const stepMs = 250;
-
-/// <summary>
 /// A held owl is taken away after this long even if nobody stops it, so a forgotten test does not stay in the world.
 /// </summary>
 const holdMs = 60000;
@@ -53,11 +49,6 @@ const testOwlPresets =
 	prop: "/Game/Environment/Universal/Blueprints/BP_PropOwl_Base.BP_PropOwl_Base_C",
 	station: "/Game/Gameplay/Stations/Interaction/MailInteraction/BP_OwlStation_Owl.BP_OwlStation_Owl_C",
 };
-
-/// <summary>
-/// A model path WorldObject.create accepts: /Game/Folder/Name.Name, with _C on the end for a Blueprint class.
-/// </summary>
-const modelPathPattern = /^\/Game\/[A-Za-z0-9_\/]+\.[A-Za-z0-9_]+$/;
 
 // ========================
 // Test Owls
@@ -81,17 +72,19 @@ class TestOwlService
 	#hmp;
 
 	/// <summary>
-	/// The test owl each admin has out, by player ID: { key, object, timer }.
+	/// OwlFlier instance, shared with the letter owls.
 	/// </summary>
-	#flights = new Map();
+	#flier;
 
 	/// <summary>
 	/// Constructor.
 	/// </summary>
 	/// <param name="hmp">hmp-lib server import</param>
-	constructor(hmp)
+	/// <param name="flier">OwlFlier instance</param>
+	constructor(hmp, flier)
 	{
 		this.#hmp = hmp;
+		this.#flier = flier;
 	}
 
 	/// <summary>
@@ -133,97 +126,39 @@ class TestOwlService
 	{
 		this.Stop(player.id);
 
-		// player.location() also carries the heading; hmp.position is the fallback for the coordinates alone.
-		const location = typeof player.location === "function" ? player.location() : null;
-		const position = location && [location.x, location.y, location.z].every(Number.isFinite) ? location : this.#hmp.position.read(player);
+		const placement = ReadPlacement(this.#hmp, player);
 
-		if (!position)
+		if (!placement)
 		{
 			return "command.testOwlNoPosition";
 		}
 
-		const yaw = location && Number.isFinite(location.yaw) ? location.yaw : 0;
-		const radians = (yaw * Math.PI) / 180;
-		const forward = { x: Math.cos(radians), y: Math.sin(radians) };
+		const forward = DirectionFromYaw(placement.yaw);
 		const start =
 		{
-			x: position.x + forward.x * spawnDistanceMetres * unitsPerMetre,
-			y: position.y + forward.y * spawnDistanceMetres * unitsPerMetre,
-			z: position.z + spawnHeightMetres * unitsPerMetre,
+			x: placement.x + forward.x * spawnDistanceMetres * unitsPerMetre,
+			y: placement.y + forward.y * spawnDistanceMetres * unitsPerMetre,
+			z: placement.z + spawnHeightMetres * unitsPerMetre,
 		};
-		const key = `${keyPrefix}${player.id}`;
-		let object;
 
-		// WorldObject.create throws for a model path it cannot parse, and returns undefined for one it cannot place.
-		try
+		// Climbing harder as it goes, the way a bird leaves a perch.
+		const PositionAt = (progress) =>
 		{
-			// Facing the way it will fly, since an object's rotation is only set when it is created.
-			object = WorldObject.create(key, model, { x: start.x, y: start.y, z: start.z, yaw, collision: false, simulated: options.isSimulated === true });
-		}
-		catch (error)
+			const along = progress * flightDistanceMetres * unitsPerMetre;
+			return { x: start.x + forward.x * along, y: start.y + forward.y * along, z: start.z + progress * progress * flightClimbMetres * unitsPerMetre };
+		};
+
+		const isHeld = options.isHeld === true;
+		const flight = isHeld ? { durationMs: holdMs } : { delayMs: hoverMs, durationMs: flightMs, PositionAt };
+
+		// Facing the way it will fly, since an object's rotation is only set when it is created.
+		if (!this.#flier.Launch(`${keyPrefix}${player.id}`, model, { start, yaw: placement.yaw, world: player.virtualWorld || 0, isSimulated: options.isSimulated === true, ...flight }))
 		{
-			Logger.LogWarning("TestOwl", `${model} was refused: ${Logger.Describe(error)}`);
 			return "command.testOwlRefused";
 		}
 
-		if (!object)
-		{
-			Logger.LogWarning("TestOwl", `${model} could not be created for player ${player.id}.`);
-			return "command.testOwlRefused";
-		}
-
-		// Objects start in world 0, which an admin in another world would not see.
-		if (player.virtualWorld && typeof object.setVirtualWorld === "function")
-		{
-			object.setVirtualWorld(player.virtualWorld);
-		}
-
-		const flight = { key, object, timer: null };
-		this.#flights.set(player.id, flight);
-		Logger.LogMessage("TestOwl", `${player.nickname} (player ${player.id}) is testing ${model}${options.isSimulated === true ? " (simulated)" : ""}${options.isHeld === true ? ", held" : ""}.`);
-
-		if (options.isHeld === true)
-		{
-			flight.timer = setTimeout(() => this.Stop(player.id), holdMs);
-			return "";
-		}
-
-		flight.timer = setTimeout(() => this.#Fly(player.id, flight, start, forward), hoverMs);
+		Logger.LogMessage("TestOwl", `${player.nickname} (player ${player.id}) is testing ${model}${options.isSimulated === true ? " (simulated)" : ""}${isHeld ? ", held" : ""}.`);
 		return "";
-	}
-
-	/// <summary>
-	/// Move a test owl along its flight a step at a time, then take it away.
-	/// </summary>
-	/// <param name="playerId">Admin the owl belongs to</param>
-	/// <param name="flight">The flight Start() made</param>
-	/// <param name="start">Where the owl appeared</param>
-	/// <param name="forward">Unit direction it flies in, on the ground plane</param>
-	#Fly(playerId, flight, start, forward)
-	{
-		const startedAt = Date.now();
-
-		flight.timer = setInterval(() =>
-		{
-			// Replaced or stopped since the last step.
-			if (this.#flights.get(playerId) !== flight)
-			{
-				clearInterval(flight.timer);
-				return;
-			}
-
-			const progress = Math.min(1, (Date.now() - startedAt) / flightMs);
-			const distance = progress * flightDistanceMetres * unitsPerMetre;
-
-			// Climbing harder as it goes, the way a bird leaves a perch.
-			const climb = progress * progress * flightClimbMetres * unitsPerMetre;
-			flight.object.position = new Vector3(start.x + forward.x * distance, start.y + forward.y * distance, start.z + climb);
-
-			if (progress >= 1)
-			{
-				this.Stop(playerId);
-			}
-		}, stepMs);
 	}
 
 	/// <summary>
@@ -233,29 +168,7 @@ class TestOwlService
 	/// <returns>True when there was one</returns>
 	Stop(playerId)
 	{
-		const flight = this.#flights.get(playerId);
-
-		if (!flight)
-		{
-			return false;
-		}
-
-		this.#flights.delete(playerId);
-		clearTimeout(flight.timer);
-		clearInterval(flight.timer);
-		WorldObject.destroy(flight.key);
-		return true;
-	}
-
-	/// <summary>
-	/// Take every test owl away, when the resource stops.
-	/// </summary>
-	StopAll()
-	{
-		for (const playerId of [...this.#flights.keys()])
-		{
-			this.Stop(playerId);
-		}
+		return this.#flier.Stop(`${keyPrefix}${playerId}`);
 	}
 }
 

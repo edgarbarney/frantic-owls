@@ -66,6 +66,13 @@ const defaultConfig = Object.freeze
 		maxSeconds: 45,
 		secondsPerHundredMetres: 3,
 		groupSeconds: 5,
+		owl:
+		{
+			enabled: true,
+			model: "/Game/Levels/WorldEvents/Blueprints/BirdOfPrey/BP_WE_BOP_MoveObjectAlongSpline_Owl.BP_WE_BOP_MoveObjectAlongSpline_Owl_C",
+			departure: true,
+			arrival: true,
+		},
 	},
 	announcements:
 	{
@@ -259,6 +266,11 @@ const maxPosts = 64;
 /// </summary>
 const maxOfficialRecipients = 50;
 const postIdPattern = /^[a-z0-9_-]{1,32}$/;
+
+/// <summary>
+/// A model path WorldObject.create accepts: /Game/Folder/Name.Name, with _C on the end for a Blueprint class.
+/// </summary>
+const modelPathPattern = /^\/Game\/[A-Za-z0-9_\/]+\.[A-Za-z0-9_]+$/;
 
 /// <summary>
 /// Most notification sounds a server can offer, and the shape of a sound's ID.
@@ -482,6 +494,24 @@ function Sanitise(config)
 	flight.maxSeconds = ClampNumber(flight.maxSeconds, flight.minSeconds, 3600, Math.max(flight.minSeconds, fallback.flight.maxSeconds));
 	flight.secondsPerHundredMetres = ClampNumber(flight.secondsPerHundredMetres, 0, 600, fallback.flight.secondsPerHundredMetres);
 	flight.groupSeconds = ClampNumber(flight.groupSeconds, 0, 3600, fallback.flight.groupSeconds);
+
+	// "owl": false is the natural way to write "no owls", and the merge leaves that in place of the section.
+	if (flight.owl === null || typeof flight.owl !== "object")
+	{
+		flight.owl = { ...fallback.flight.owl, enabled: flight.owl === true };
+	}
+
+	const owl = flight.owl;
+	owl.enabled = owl.enabled !== false;
+	owl.departure = owl.departure !== false;
+	owl.arrival = owl.arrival !== false;
+	owl.model = String(owl.model || "").trim();
+
+	if (!modelPathPattern.test(owl.model))
+	{
+		Logger.LogWarning("Config", `flight.owl.model "${owl.model}" is not a /Game/Folder/Name.Name path; the default owl is used.`);
+		owl.model = fallback.flight.owl.model;
+	}
 
 	const announcements = config.announcements;
 	announcements.enabled = announcements.enabled !== false;
@@ -776,4 +806,4 @@ function GetClientConfig(config, languages)
 	};
 }
 
-module.exports = { LoadConfig, LoadPosts, GetClientConfig, ClampInteger, ClampNumber, NormaliseTheme, maxOfficialRecipients, postIdPattern };
+module.exports = { LoadConfig, LoadPosts, GetClientConfig, ClampInteger, ClampNumber, NormaliseTheme, maxOfficialRecipients, postIdPattern, modelPathPattern };
