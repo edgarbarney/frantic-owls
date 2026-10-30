@@ -257,20 +257,93 @@ button
 	background: rgba(var(--gold-rgb), 0.16);
 }
 
+/* Back on the left, the title in the middle, actions on the right. The side columns share the width equally, so the title sits over the sheet's centre whatever the sides hold; a side only grows past its share when its buttons cannot fit in it. */
 .desk-toolbar
 {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
 	align-items: center;
-	gap: 0.75rem;
+	column-gap: 1rem;
 	width: min(52rem, 100%);
 	margin: 0 auto 0.75rem;
 	flex: none;
 }
 
+/* An official letter's toolbar carries the Everyone button too. */
+.desk-toolbar.is-wide
+{
+	width: min(62rem, 100%);
+}
+
+.desk-toolbar > :first-child
+{
+	justify-self: start;
+}
+
+.desk-toolbar-start,
+.desk-toolbar-actions
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.desk-toolbar-start
+{
+	grid-column: 1;
+}
+
+.desk-toolbar-actions
+{
+	grid-column: 3;
+	justify-self: end;
+}
+
+.desk-toolbar .desk-button
+{
+	position: relative;
+}
+
+/* An icon-only button, named by its aria-label and explained by its tooltip. */
+.desk-button.is-icon
+{
+	justify-content: center;
+	width: 2.4rem;
+	padding-left: 0;
+	padding-right: 0;
+}
+
+/* "Click again to ..." under a button waiting for its second click. */
+.confirm-bubble
+{
+	position: absolute;
+	top: calc(100% + 0.45rem);
+	right: 0;
+	z-index: 5;
+	padding: 0.4rem 0.75rem;
+	border-radius: 0.3rem;
+	background: var(--wax-bright);
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+	font-family: var(--font-body);
+	font-size: 0.85rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	text-transform: none;
+	white-space: nowrap;
+	color: var(--parchment);
+	pointer-events: none;
+}
+
+.desk-toolbar-start .confirm-bubble
+{
+	right: auto;
+	left: 0;
+}
+
 .compose-title,
 .reader-details
 {
-	flex: 1;
+	grid-column: 2;
 	text-align: center;
 	color: var(--text-dim);
 }

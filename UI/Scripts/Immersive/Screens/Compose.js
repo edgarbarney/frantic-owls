@@ -104,6 +104,7 @@ Owls.DeskScreens.Compose = (() =>
 		let saveTimer = null;
 		let confirmTimer = null;
 		let pendingConfirm = "";
+		let endConfirm = null;
 		let picker = null;
 
 		const element = Element("section", { className: "compose" });
@@ -184,25 +185,34 @@ Owls.DeskScreens.Compose = (() =>
 		/// <returns>True when this click is the confirming one</returns>
 		function Confirm(button, id, confirmText)
 		{
-			if (pendingConfirm === id)
+			const isSecondClick = pendingConfirm === id;
+
+			// One question at a time: a click on another button takes the first one down.
+			if (endConfirm)
 			{
-				clearTimeout(confirmTimer);
-				pendingConfirm = "";
+				endConfirm();
+			}
+
+			if (isSecondClick)
+			{
 				return true;
 			}
 
 			pendingConfirm = id;
-			const label = button.querySelector("span");
-			const original = label.textContent;
-			label.textContent = confirmText;
+
+			// The question hangs under the button rather than replacing its label, so the toolbar keeps its width and the title stays centred.
+			const bubble = Element("span", { className: "confirm-bubble", text: confirmText, attributes: { role: "status" } });
+			button.appendChild(bubble);
 			button.classList.add("is-confirming");
-			clearTimeout(confirmTimer);
-			confirmTimer = setTimeout(() =>
+			endConfirm = () =>
 			{
+				clearTimeout(confirmTimer);
 				pendingConfirm = "";
-				label.textContent = original;
+				endConfirm = null;
+				bubble.remove();
 				button.classList.remove("is-confirming");
-			}, confirmMs);
+			};
+			confirmTimer = setTimeout(endConfirm, confirmMs);
 			return false;
 		}
 
@@ -498,10 +508,9 @@ Owls.DeskScreens.Compose = (() =>
 				Element("i", { className: "fa-solid fa-feather-pointed", attributes: { "aria-hidden": "true" } }),
 				Element("span", { text: T(draft.isFull ? "mail.compose.template" : "mail.compose.full") }),
 			]);
-			const discardButton = Element("button", { className: "desk-button is-quiet", title: T("mail.compose.discardHint") },
+			const discardButton = Element("button", { className: "desk-button is-quiet is-icon", title: T("mail.compose.discardHint"), attributes: { "aria-label": T("mail.compose.discard") } },
 			[
 				Element("i", { className: "fa-solid fa-trash-can", attributes: { "aria-hidden": "true" } }),
-				Element("span", { text: T("mail.compose.discard") }),
 			]);
 			const everyoneButton = official ? Element("button", { className: `desk-button ${draft.everyone ? "is-active" : ""}`, title: T("mail.official.everyoneHint") },
 			[
@@ -555,7 +564,10 @@ Owls.DeskScreens.Compose = (() =>
 			// An official letter's sender is already named in its signature, so the title stays short enough for the extra button.
 			const titleText = T(official ? "mail.official.composeTitle" : replyTo ? "mail.compose.titleReply" : "mail.compose.title");
 			const title = Element("span", { className: "compose-title", text: titleText });
-			const toolbar = Element("div", { className: "desk-toolbar" }, [backButton, title, everyoneButton, modeButton, discardButton].filter(Boolean));
+			// Leaving the letter (back, or throwing it away) sits on the left and the ways of writing it on the right, so both sides stay short enough for the title to sit over the sheet's centre.
+			const start = Element("div", { className: "desk-toolbar-start" }, [backButton, discardButton]);
+			const actions = Element("div", { className: "desk-toolbar-actions" }, [everyoneButton, modeButton].filter(Boolean));
+			const toolbar = Element("div", { className: `desk-toolbar ${official ? "is-wide" : ""}` }, [start, title, actions]);
 			let sheet = null;
 			let focusTarget = null;
 			picker = CreatePicker(!draft.isFull);

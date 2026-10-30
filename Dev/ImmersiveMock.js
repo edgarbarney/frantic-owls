@@ -473,6 +473,8 @@
 		}
 		case "mail.officialSenders":
 			return canPostOfficial ? { ok: true, data: { senders: [{ number: "00000001", name: "Ministry of Magic" }, { number: "00000002", name: "Gringotts Wizarding Bank" }] } } : { ok: false, errorKey: "error.mail.officialDenied" };
+		case "me.refresh":
+			return { ok: true, data: { canPostOfficial } };
 		case "settings.update":
 		{
 			const languageBefore = settings.language;

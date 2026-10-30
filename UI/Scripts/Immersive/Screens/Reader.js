@@ -41,7 +41,7 @@ Owls.DeskScreens.Reader = (() =>
 		const stage = Element("div", { className: "reader-stage" }, [Element("p", { className: "desk-loading", text: T("mail.reader.opening") })]);
 		const element = Element("section", { className: "reader" },
 		[
-			Element("div", { className: "desk-toolbar" }, [backButton, details, replyButton]),
+			Element("div", { className: "desk-toolbar" }, [backButton, details, Element("div", { className: "desk-toolbar-actions" }, [replyButton])]),
 			stage,
 		]);
 
