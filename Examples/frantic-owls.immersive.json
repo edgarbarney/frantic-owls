@@ -1,5 +1,112 @@
 {
 	"mode": "immersive",
+	"command": "owl",
+	"openKey": "o",
+	"defaultLanguage": "en-GB",
+	"backfillNumbers": true,
+	"contacts": {
+		"maxContacts": 250,
+		"maxNameLength": 40
+	},
+	"messages": {
+		"pageSize": 40,
+		"maxChatsListed": 100,
+		"rateLimitCount": 8,
+		"rateLimitWindowMs": 5000
+	},
+	"notifications": {
+		"toastDurationMs": 3000,
+		"soundMode": "file",
+		"sounds": [
+			{
+				"id": "hoot",
+				"label": "Owl Hoot",
+				"file": "Sounds/OwlHoot.wav"
+			},
+			{
+				"id": "chime",
+				"label": "Bell Chime",
+				"file": "Sounds/BellChime.wav"
+			},
+			{
+				"id": "sparkle",
+				"label": "Wand Sparkle",
+				"file": "Sounds/WandSparkle.wav"
+			},
+			{
+				"id": "tap",
+				"label": "Window Tap",
+				"file": "Sounds/WindowTap.wav"
+			},
+			{
+				"id": "quill",
+				"label": "Quill Scratch",
+				"file": "Sounds/QuillScratch.wav"
+			},
+			{
+				"id": "harp",
+				"label": "Enchanted Harp",
+				"file": "Sounds/EnchantedHarp.wav"
+			}
+		],
+		"defaultSound": "hoot",
+		"wwiseEvent": "UI_OwlMail_Envelope_Open",
+		"quietActivities": [
+			"duel:standard"
+		]
+	},
+	"storage": {
+		"disableSoftDelete": false,
+		"messageRetentionDays": 0
+	},
+	"flight": {
+		"enabled": false,
+		"minSeconds": 3,
+		"maxSeconds": 45,
+		"secondsPerHundredMetres": 3,
+		"groupSeconds": 5
+	},
+	"announcements": {
+		"enabled": true,
+		"command": "owl_announce",
+		"senderName": "Ministry of Magic",
+		"avatarUrl": "",
+		"capability": "admin.announce",
+		"fallbackGroup": "admin",
+		"fallbackMinimumGrade": 1,
+		"maxLength": 1000
+	},
+	"logging": {
+		"enabled": false,
+		"destination": "",
+		"url": "",
+		"urlEnv": "FRANTIC_OWLS_WEBHOOK_URL",
+		"username": "Owl Post",
+		"includeBodies": false,
+		"flushIntervalMs": 5000,
+		"events": {
+			"messages": true,
+			"groups": true,
+			"informs": true,
+			"calls": true,
+			"blocks": true,
+			"announcements": true,
+			"system": true
+		}
+	},
+	"network": {
+		"flushIntervalMs": 50,
+		"nearbyRefreshMs": 1000,
+		"requestTimeoutMs": 8000,
+		"requestRateLimitCount": 30,
+		"requestRateLimitWindowMs": 3000,
+		"maxBatchBytes": 24000
+	},
+	"avatars": {
+		"maxUrlLength": 512,
+		"allowedHosts": [],
+		"allowInsecure": false
+	},
 	"immersivemode_readmode": "postonly_freeunread",
 	"immersivemode_writemode": "postonly",
 	"immersivemode_letters": {
@@ -23,6 +130,11 @@
 			"yaw": 0
 		}
 	],
+	"immersivemode_postadmin": {
+		"capability": "admin.view",
+		"fallbackGroup": "admin",
+		"fallbackMinimumGrade": 1
+	},
 	"immersivemode_avatars": false,
 	"immersivemode_ui": {
 		"scale": 1.0

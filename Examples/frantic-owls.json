@@ -148,7 +148,7 @@
 		"arrivalMetres": 10
 	},
 	"phonemode_calls": {
-		"enabled": false,
+		"enabled": true,
 		"ringSeconds": 30,
 		"logSize": 50,
 		"rateLimitCount": 4,
@@ -201,7 +201,7 @@
 		"heightPx": 700,
 		"rightMarginPx": 32,
 		"defaultTheme": "muggle",
-		"allowMove": true,
+		"allowMove": false,
 		"lockScreen": true,
 		"bannerDurationMs": 4000
 	},

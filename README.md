@@ -126,7 +126,7 @@ The Muggle Phone's house colour schemes.
 
 1. Make sure the required resources above are installed and `hmp-mysql` can reach your database.
 2. Put this folder in the server's `resources` folder as `resources/frantic-owls`. It must sit directly inside `resources`, not in a sub-folder such as `resources/[phone]/frantic-owls`.
-3. Optional: Copy `Examples/frantic-owls.json` to the server's `data` folder as `data/frantic-owls.json` and change what you like (see [Configuration](#configuration)). Without it, every setting uses its default. For [immersive mode](#immersive-mode), `Examples/frantic-owls.immersive.json` lists just its keys; copy them over and give its example owl post a real position (or remove it).
+3. Optional: Copy `Examples/frantic-owls.json` to the server's `data` folder as `data/frantic-owls.json` and change what you like (see [Configuration](#configuration)). Without it, every setting uses its default. For [immersive mode](#immersive-mode), copy `Examples/frantic-owls.immersive.json` instead: It is a complete configuration for that mode, with every shared setting and every `immersivemode_` one, leaving out the `phonemode_` sections it does not use. Give its example owl post a real position (or remove it).
 4. Start the server and join it.
 5. Load a character and type `/owl` or use up arrow key.
 
@@ -585,7 +585,7 @@ frantic-owls/
 ├── Client/Main.js   loads the page of the server's mode; view placement and size, focus, pop-ups, close animation, open key
 ├── UI/              the pages (shipped to players): Index.html (phone) and Immersive.html (letter desk)
 ├── Lang/            one language file per language (server only; players are sent theirs)
-├── Examples/        a complete data/frantic-owls.json to copy into the server's data folder, and immersive mode's keys
+├── Examples/        a complete data/frantic-owls.json to copy into the server's data folder, for each mode
 └── Dev/             browser preview with a mock server (not shipped)
 ```
 
