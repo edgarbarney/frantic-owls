@@ -337,6 +337,21 @@ Owls.MailStore = (() =>
 	}
 
 	/// <summary>
+	/// Take whether the player may write official letters, which the server checks again each time the desk opens.
+	/// </summary>
+	/// <param name="canPostOfficial">Whether they may</param>
+	function SetCanPostOfficial(canPostOfficial)
+	{
+		if (state.me.canPostOfficial === canPostOfficial)
+		{
+			return;
+		}
+
+		state.me = { ...state.me, canPostOfficial };
+		Notify("me");
+	}
+
+	/// <summary>
 	/// Whether letters may be written where the player stands, as far as the page can tell. The server decides for certain.
 	/// </summary>
 	/// <returns>True when writing is allowed</returns>
@@ -415,5 +430,5 @@ Owls.MailStore = (() =>
 		}
 	}
 
-	return { state, Subscribe, Reset, Clear, SetReady, ApplyContactsChunk, UpsertContact, SaveContact, RemoveContact, GetContact, GetKnownNumbers, GetContactLabel, GetContactPicture, ApplyPage, ApplyOpened, NoteArrival, NoteSent, SetPost, SetSettings, SetQuiet, CanWrite, UsesPosts, LoadDraft, SaveDraft };
+	return { state, Subscribe, Reset, Clear, SetReady, ApplyContactsChunk, UpsertContact, SaveContact, RemoveContact, GetContact, GetKnownNumbers, GetContactLabel, GetContactPicture, ApplyPage, ApplyOpened, NoteArrival, NoteSent, SetPost, SetSettings, SetQuiet, SetCanPostOfficial, CanWrite, UsesPosts, LoadDraft, SaveDraft };
 })();

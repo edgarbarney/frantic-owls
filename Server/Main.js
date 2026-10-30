@@ -689,6 +689,9 @@ function RegisterImmersiveRequests()
 	requests.Register("mail.addCorrespondent", (entry, data) => mail.AddCorrespondent(entry, data));
 	requests.Register("mail.officialSenders", (entry) => mail.ListOfficialSenders(entry));
 	requests.Register("mail.sendOfficial", (entry, data) => mail.SendOfficial(entry, data));
+
+	// Staff rights can change while a character stays loaded (an /admin unlock, a promotion), so the desk asks again each time it opens.
+	requests.Register("me.refresh", async (entry) => Ok({ canPostOfficial: await CanPostOfficial(entry.player) }));
 	requests.Register("contacts.favourite", (entry, data) => contacts.SetFavourite(entry, data));
 
 	// Correspondents are renamed like the phone's contacts, but never moved to another number, and only get pictures where the server allows them.

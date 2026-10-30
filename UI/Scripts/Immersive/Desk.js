@@ -38,6 +38,11 @@ Owls.Desk = (() =>
 	/// </summary>
 	const errorNoticeMs = 4000;
 
+	/// <summary>
+	/// The screens that show the tabs along the top of the desk, the official tab among them.
+	/// </summary>
+	const tabScreens = ["Letters", "Correspondents", "Official"];
+
 	const desk = document.getElementById("desk");
 	const view = document.getElementById("desk-view");
 	const postLabel = document.getElementById("desk-post");
@@ -454,6 +459,21 @@ Owls.Desk = (() =>
 		{
 			ShowLetters({});
 		}
+
+		RefreshOfficial();
+	}
+
+	/// <summary>
+	/// Ask the server again whether the player may write official letters, since staff rights can change while the character stays loaded.
+	/// </summary>
+	async function RefreshOfficial()
+	{
+		const result = await Bridge.Request("me.refresh", {});
+
+		if (result.ok)
+		{
+			Store.SetCanPostOfficial(result.data.canPostOfficial === true);
+		}
 	}
 
 	/// <summary>
@@ -542,6 +562,21 @@ Owls.Desk = (() =>
 		if (reason === "post" || reason === "letters" || reason === "reset")
 		{
 			UpdatePostLabel();
+		}
+
+		// The official tab comes and goes with the permission, so the screens that show the tabs are built again.
+		if (reason === "me" && current)
+		{
+			if (current.name === "Official" && !Store.state.me.canPostOfficial)
+			{
+				ShowLetters({});
+			}
+			else if (tabScreens.includes(current.name))
+			{
+				Rebuild();
+			}
+
+			return;
 		}
 
 		if (current && current.instance.OnStore)
