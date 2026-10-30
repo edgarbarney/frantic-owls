@@ -45,6 +45,9 @@ Owls.Desk = (() =>
 	const noticeTitle = document.getElementById("notice-title");
 	const noticeBody = document.getElementById("notice-body");
 	const dispatch = document.getElementById("dispatch");
+	const postJson = document.getElementById("post-json");
+	const postJsonField = document.getElementById("post-json-field");
+	const postJsonStatus = document.getElementById("post-json-status");
 	const sound = document.getElementById("owl-sound");
 
 	let isOpen = false;
@@ -361,6 +364,75 @@ Owls.Desk = (() =>
 	}
 
 	// ========================
+	// Owl Post Definition
+	// ========================
+
+	/// <summary>
+	/// Show the owl post entry /owl_posthere made, ready to copy into the configuration.
+	/// </summary>
+	/// <param name="data">{ id, json, isTaken }</param>
+	function ShowPostDefinition(data)
+	{
+		const command = Store.state.config.command || "owl";
+		const warning = document.getElementById("post-json-warning");
+		document.getElementById("post-json-help").textContent = T("admin.postJson.help", { command });
+		warning.textContent = T("command.postHereTaken", { id: data.id });
+		warning.hidden = data.isTaken !== true;
+		postJsonField.value = String(data.json || "");
+		postJsonStatus.textContent = "";
+		postJson.hidden = false;
+		requestAnimationFrame(() => postJson.classList.add("is-showing"));
+		document.getElementById("post-json-copy").focus();
+	}
+
+	/// <summary>
+	/// Put the owl post entry away.
+	/// </summary>
+	function HidePostDefinition()
+	{
+		postJson.classList.remove("is-showing");
+		postJson.hidden = true;
+	}
+
+	/// <summary>
+	/// Copy the owl post entry to the clipboard.
+	///
+	/// <para>
+	/// NOTE: The game's browser may refuse the clipboard API, so the selected text is copied the old way when it does.
+	/// If both fail the text is left selected for the admin to copy themselves.
+	/// </para>
+	///
+	/// </summary>
+	async function CopyPostDefinition()
+	{
+		let isCopied = false;
+
+		// writeText rejects when the page may not use the clipboard; execCommand is the fallback for that.
+		try
+		{
+			await navigator.clipboard.writeText(postJsonField.value);
+			isCopied = true;
+		}
+		catch (error)
+		{
+			postJsonField.focus();
+			postJsonField.select();
+
+			// execCommand throws in some browsers rather than returning false.
+			try
+			{
+				isCopied = document.execCommand("copy");
+			}
+			catch (copyError)
+			{
+				isCopied = false;
+			}
+		}
+
+		postJsonStatus.textContent = T(isCopied ? "admin.postJson.copied" : "admin.postJson.copyFailed");
+	}
+
+	// ========================
 	// Open & Close
 	// ========================
 
@@ -397,6 +469,7 @@ Owls.Desk = (() =>
 		isOpen = false;
 		isClosing = true;
 		HideDispatch();
+		HidePostDefinition();
 		desk.classList.remove("is-open");
 		desk.classList.add("is-closing");
 		clearTimeout(closeTimer);
@@ -437,6 +510,8 @@ Owls.Desk = (() =>
 	document.getElementById("desk-close").addEventListener("click", Close);
 	document.getElementById("desk-settings").addEventListener("click", () => Show("Settings"));
 	document.getElementById("dispatch-close").addEventListener("click", HideDispatch);
+	document.getElementById("post-json-close").addEventListener("click", HidePostDefinition);
+	document.getElementById("post-json-copy").addEventListener("click", CopyPostDefinition);
 
 	document.addEventListener("keydown", (event) =>
 	{
@@ -446,6 +521,12 @@ Owls.Desk = (() =>
 		}
 
 		event.preventDefault();
+
+		if (!postJson.hidden)
+		{
+			HidePostDefinition();
+			return;
+		}
 
 		if (!dispatch.hidden)
 		{
@@ -511,6 +592,7 @@ Owls.Desk = (() =>
 	Bridge.On("quiet:update", (data) => Store.SetQuiet(data));
 	Bridge.On("mail:arrived", OnArrival);
 	Bridge.On("ui:open", (data) => Store.SetPost(data.post || null));
+	Bridge.On("admin:postDefinition", ShowPostDefinition);
 	Bridge.On("ui:opened", OnOpened);
 	Bridge.On("ui:closed", OnClosed);
 	Bridge.On("ui:layout", OnLayout);

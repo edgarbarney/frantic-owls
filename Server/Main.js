@@ -784,9 +784,19 @@ if (isImmersive)
 		definition.yaw = location && Number.isFinite(location.yaw) ? Math.round(location.yaw * 10) / 10 : 0;
 
 		const json = JSON.stringify(definition);
+		const isTaken = posts.GetPosts().some((post) => post.id === id);
 		Logger.LogMessage("Posts", `Owl post definition from ${player.nickname} (player ${player.id}): ${json}`);
 
-		if (posts.GetPosts().some((post) => post.id === id))
+		// Shown on the desk in a box with a copy button, since chat text cannot be copied in game.
+		if (isReady && directory.GetByPlayerId(player.id))
+		{
+			outbox.Push(player, "ui:open", { post: mail.GetPost(player) });
+			outbox.Push(player, "admin:postDefinition", { id, json: JSON.stringify(definition, null, "\t"), isTaken });
+			return true;
+		}
+
+		// Without an owl there is no desk to show it on, so it goes to chat (and the server log) instead.
+		if (isTaken)
 		{
 			reply(T(player, "command.postHereTaken", { id }));
 		}

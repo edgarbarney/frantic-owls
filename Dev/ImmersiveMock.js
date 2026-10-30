@@ -592,5 +592,16 @@
 			isAtPost = value;
 			Push([{ type: "ui:open", data: { post: isAtPost ? post : null } }]);
 		},
+		PostHere: (id = "hogsmeade", isTaken = false) =>
+		{
+			const definition = { id, label: "Hogsmeade Owl Post", position: { x: 1234, y: -568, z: 90 }, areaId: "Overland", regionId: "HM_Village", radiusMetres: 3, yaw: 91.2 };
+
+			if (!isOpen)
+			{
+				window.OwlsDev.Open();
+			}
+
+			Push([{ type: "admin:postDefinition", data: { id, json: JSON.stringify(definition, null, "	"), isTaken } }]);
+		},
 	};
 })();

@@ -355,7 +355,7 @@ With `flight.enabled`, owls take time to fly. A one-to-one owl takes `minSeconds
 
 In immersive mode, admins (the hmp-admin capability `immersivemode_postadmin.capability`, `admin.view` by default, or without hmp-admin the hmp-core group `fallbackGroup` at `fallbackMinimumGrade` or above) have two commands for setting up owl posts without leaving the game:
 
-- `/owl_posthere <id> [label]` replies with the `immersivemode_posts` entry for where they stand: Their position, the area and region they are in, the way they face (`yaw`, for a `model`) and a 3 metre radius. It is written to the server log too, for copying. Paste it into `data/frantic-owls.json` and adjust the radius or add a `model` if you like.
+- `/owl_posthere <id> [label]` opens the desk with the `immersivemode_posts` entry for where they stand, in a box with a **Copy JSON** button: Their position, the area and region they are in, the way they face (`yaw`, for a `model`) and a 3 metre radius. It is written to the server log too. Paste it into `data/frantic-owls.json` and adjust the radius or add a `model` if you like. An admin without an owl gets it in chat instead.
 - `/owl_reloadposts` reads `immersivemode_posts` from `data/frantic-owls.json` again and puts the posts up in the world (through hmp-interact, when it runs) without restarting the resource. Only the posts are reloaded; any other setting still needs a restart. If the file cannot be read, the current posts stay up.
 
 ## Ministry announcements

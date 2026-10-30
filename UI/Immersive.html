@@ -49,6 +49,25 @@
 				<button class="desk-button" id="dispatch-close" data-lang="mail.dispatch.return"></button>
 			</div>
 		</div>
+
+		<!-- Shown over the desk by /owl_posthere: the owl post entry for where the admin stands, to copy into the configuration. -->
+		<div id="post-json" class="dispatch" hidden role="dialog" aria-modal="true" aria-labelledby="post-json-title">
+			<div class="dispatch-card post-json-card">
+				<span class="dispatch-corner top-left"></span>
+				<span class="dispatch-corner top-right"></span>
+				<span class="dispatch-corner bottom-left"></span>
+				<span class="dispatch-corner bottom-right"></span>
+				<h2 class="dispatch-title" id="post-json-title" data-lang="admin.postJson.title"></h2>
+				<p class="post-json-help" id="post-json-help"></p>
+				<p class="post-json-warning" id="post-json-warning" hidden></p>
+				<textarea class="post-json-field" id="post-json-field" readonly spellcheck="false"></textarea>
+				<div class="post-json-actions">
+					<span class="post-json-status" id="post-json-status" role="status"></span>
+					<button class="desk-button" id="post-json-close" data-lang="common.close"></button>
+					<button class="desk-button is-primary" id="post-json-copy"><i class="fa-solid fa-copy"></i><span data-lang="admin.postJson.copy"></span></button>
+				</div>
+			</div>
+		</div>
 	</div>
 
 	<audio id="owl-sound" preload="auto"></audio>
