@@ -116,18 +116,31 @@
 	},
 	"immersivemode_posts": [
 		{
-			"id": "example",
-			"label": "Example Owl Post",
+			"id": "owlp_cmnrm_rc_m_5th",
+			"label": "Ravenclaw Common Room",
 			"position": {
-				"x": 0,
-				"y": 0,
-				"z": 0
+				"x": 358223,
+				"y": -455258,
+				"z": -78798
 			},
 			"areaId": "Overland",
-			"regionId": "",
+			"regionId": "HOG_Ravenclaw_CommonRoom",
 			"radiusMetres": 3,
-			"model": "",
-			"yaw": 0
+			"yaw": 41.6
+		},
+		{
+			"id": "owlp_greathall",
+			"label": "the Great Hall",
+			"position": {
+				"x": 367651,
+				"y": -452400,
+				"z": -82000
+			},
+			"areaId": "Overland",
+			"regionId": "HOG_GreatHall",
+			"radiusMetres": 3,
+			"model": "/Game/Gameplay/Stations/Interaction/MailInteraction/Props/SM_Owl.SM_Owl",
+			"yaw": 80.6
 		}
 	],
 	"immersivemode_postadmin": {
