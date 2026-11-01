@@ -36,7 +36,7 @@
 		{ id: 1, chatId: 1, sender: "20000002", body: "Are you coming to the Three Broomsticks tonight?", sentAt: now - 26 * 60 * minute },
 		{ id: 2, chatId: 1, sender: me.number, body: "Only if Sirona saves us a table.", sentAt: now - 25 * 60 * minute },
 		{ id: 3, chatId: 1, sender: "20000002", body: "She always does. 8 o'clock!", sentAt: now - 12 * minute },
-		{ id: 14, chatId: 1, sender: "20000002", body: "For the butterbeer. My treat this time.", sentAt: now - 11 * minute, parcel: { galleons: 25, status: "waiting" } },
+		{ id: 14, chatId: 1, sender: "20000002", body: "For the butterbeer. My treat this time. And the frogs are for Poppy.", sentAt: now - 11 * minute, parcel: { galleons: 25, items: [{ label: "Chocolate Frog", amount: 3, kind: "item", icon: "" }], status: "waiting" } },
 		{ id: 10, chatId: 1, sender: "20000002", kind: "location", body: JSON.stringify({ x: 12000, y: -3400, z: 250, areaId: "Overland", regionId: "Hogsmeade", world: 0, place: "Hogsmeade" }), sentAt: now - 10 * minute },
 		{ id: 4, chatId: 2, sender: "20000003", body: "Meet me at the Undercroft.", sentAt: now - 90 * minute },
 		{ id: 5, chatId: 3, sender: "20000004", body: "Who fed the Puffskein?", sentAt: now - 5 * minute },
@@ -182,7 +182,7 @@
 			{ id: "harp", label: "Enchanted Harp", file: "../UI/Sounds/EnchantedHarp.wav" },
 		],
 		effects: { muggle: { keyTap: "../UI/Sounds/Phone/KeyTap.wav", keyEraseTap: "../UI/Sounds/Phone/KeyEraseTap.wav", appTap: "../UI/Sounds/Phone/AppTap.wav", lock: "../UI/Sounds/Phone/Lock.wav", unlock: "../UI/Sounds/Phone/Unlock.wav", messageSent: "../UI/Sounds/Phone/MessageSent.wav", messageReceived: "../UI/Sounds/Phone/MessageReceived.wav" }, parchment: { keyTap: "../UI/Sounds/Parchment/KeyTap.wav", keyEraseTap: "../UI/Sounds/Parchment/KeyEraseTap.wav", appTap: "../UI/Sounds/Parchment/AppTap.wav", lock: "../UI/Sounds/Parchment/Lock.wav", unlock: "../UI/Sounds/Parchment/Unlock.wav", messageSent: "../UI/Sounds/Parchment/MessageSent.wav", messageReceived: "../UI/Sounds/Parchment/MessageReceived.wav" } },
-		defaultSound: "hoot", readReceipts: true, typingIndicators: true, unsendSeconds: 120, maxPinnedChats: 5, galleons: { max: 10000, postage: 2, returnAfterDays: 7 },
+		defaultSound: "hoot", readReceipts: true, typingIndicators: true, unsendSeconds: 120, maxPinnedChats: 5, parcels: { galleons: 10000, items: true, gear: true, maxItemStacks: 5, postage: 2, returnAfterDays: 7 },
 		nearbyRefreshMs: 1000, requestTimeoutMs: 8000, ui: { scale: 1, widthPx: 360, heightPx: 700, rightMarginPx: 32, defaultTheme: "muggle", allowMove: true, lockScreen: true, bannerDurationMs: 4000 },
 		languages: [], quietActivities: true,
 	};
@@ -319,6 +319,32 @@
 				Push([{ type: "chat:read", data: { chatId: chat.id, number, messageId: newest } }]);
 			}
 		}, delayMs);
+	}
+
+	/// <summary>
+	/// What the mock player could put on an owl, as Server/Parcels.js lists it.
+	/// </summary>
+	const mockCarriable = [
+				{ key: "n:native:wiggenweld_potion|", kind: "item", label: "Wiggenweld Potion", icon: "", amount: 4, reason: "" },
+				{ key: "n:native:edurus_potion|", kind: "item", label: "Edurus Potion", icon: "", amount: 2, reason: "" },
+				{ key: "n:native:head_011_rare|", kind: "gear", label: "Ravenclaw Scholar's Hat", icon: "", amount: 1, reason: "" },
+				{ key: "c:3", kind: "item", label: "Chocolate Frog", icon: "", amount: 6, reason: "" },
+				{ key: "c:7", kind: "item", label: "Recipe: Maxima Potion", icon: "", amount: 1, reason: "Recipes stay with you." },
+			];
+
+	/// <summary>
+	/// The parcel a page asked to send, as the server would describe it on the owl.
+	/// </summary>
+	/// <param name="request">{ galleons, items: [{ key, amount }] }</param>
+	/// <returns>{ galleons, items, status }</returns>
+	function MockParcel(request)
+	{
+		const items = (request.items || []).map((item) =>
+		{
+			const known = mockCarriable.find((entry) => entry.key === item.key);
+			return { label: known ? known.label : item.key, amount: item.amount, kind: known ? known.kind : "item", icon: "" };
+		});
+		return { galleons: Number(request.galleons) || 0, items, status: "waiting" };
 	}
 
 	/// <summary>
@@ -472,6 +498,8 @@
 
 			return { ok: true, data: { chatId: data.chatId, messageId: message.id, unsentAt: message.unsentAt } };
 		}
+		case "parcels.carriable":
+			return { ok: true, data: { items: mockCarriable } };
 		case "parcels.collect":
 		{
 			const message = messages.find((entry) => entry.id === data.messageId && entry.chatId === data.chatId);
@@ -585,14 +613,14 @@
 			const sentAt = Date.now();
 			const quoted = data.replyToId ? messages.find((entry) => entry.id === data.replyToId) : null;
 			const replyTo = quoted ? { id: quoted.id, sender: quoted.sender, kind: quoted.kind || "text", body: quoted.unsentAt ? "" : quoted.body, unsent: !!quoted.unsentAt } : null;
-			const galleons = Number(data.galleons) || 0;
+			const parcel = data.parcel ? MockParcel(data.parcel) : null;
 
-			if (galleons > 0 && (!chat || chat.kind !== "direct"))
+			if (parcel && (!chat || chat.kind !== "direct"))
 			{
 				return { ok: false, errorKey: "error.parcel.directOnly", data: { clientKey: data.clientKey } };
 			}
 
-			const message = { id: nextId++, chatId: data.chatId, sender: me.number, body: data.body, kind: "text", sentAt, deliverAt: sentAt + mockFlightMs, replyTo, unsentAt: 0, parcel: galleons > 0 ? { galleons, status: "waiting" } : null };
+			const message = { id: nextId++, chatId: data.chatId, sender: me.number, body: data.body, kind: "text", sentAt, deliverAt: sentAt + mockFlightMs, replyTo, unsentAt: 0, parcel };
 			messages.push(message);
 			setTimeout(() => Push([{ type: "message:landed", data: { chatId: message.chatId, messageId: message.id } }]), mockFlightMs);
 

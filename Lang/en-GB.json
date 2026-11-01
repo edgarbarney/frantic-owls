@@ -317,14 +317,24 @@
 		"error.parcel.collected": "You have already collected these Galleons.",
 		"error.parcel.dailyCap": "Owls may carry only {max} of your Galleons a day. {left} are left for today.",
 		"error.parcel.directOnly": "Galleons can only travel on an owl to one witch or wizard.",
+		"error.parcel.galleonsOff": "Owls cannot carry Galleons here.",
+		"error.parcel.gearOff": "Owls cannot carry gear here.",
 		"error.parcel.gone": "There is nothing left to collect from this owl.",
 		"error.parcel.invalid": "Write a whole number of Galleons.",
+		"error.parcel.inventoryFull": "Your inventory has no room for this parcel. Make room and collect it again.",
+		"error.parcel.itemGone": "Something in the parcel is no longer in your inventory. Choose again.",
+		"error.parcel.itemsOff": "Owls cannot carry items here.",
 		"error.parcel.notEnough": {
 			"one": "You need {count} Galleon for that, postage included.",
 			"other": "You need {count} Galleons for that, postage included."
 		},
+		"error.parcel.oneRecipient": "A letter carrying items can go to one witch or wizard only.",
+		"error.parcel.refused": "This cannot travel by owl.",
+		"error.parcel.ruleFailed": "This cannot travel by owl right now.",
 		"error.parcel.tooMany": "An owl can carry at most {max} Galleons.",
+		"error.parcel.tooManyItems": "An owl can carry at most {max} different items.",
 		"error.parcel.unavailable": "Owls cannot carry Galleons right now.",
+		"error.parcel.worn": "You are wearing one. Take it off to send it.",
 		"error.pictureCredentials": "Picture links cannot contain a username or password.",
 		"error.pictureFailed": "The picture could not be saved. Try again shortly.",
 		"error.pictureHost": "Pictures must be hosted on: {hosts}.",
@@ -656,37 +666,47 @@
 		"owls.search": "Search owls",
 		"owls.sendNew": "Send New Owl",
 		"parcel.amountPlaceholder": "How many Galleons?",
-		"parcel.attach": "Attach Galleons",
+		"parcel.attachMenu": "Attach",
 		"parcel.attachShort": "Attach",
 		"parcel.attachedHint": "Sent with your next owl",
 		"parcel.collect": "Collect",
 		"parcel.collecting": "Collecting…",
 		"parcel.enclose": "Enclose Galleons",
 		"parcel.encloseHint": "Send Galleons with this letter. They wait on it until each recipient collects them.",
-		"parcel.enclosedAmount": {
-			"one": "{count} Galleon enclosed",
-			"other": "{count} Galleons enclosed"
-		},
+		"parcel.enclosed": "Enclosed",
 		"parcel.galleons": {
 			"one": "{count} Galleon",
 			"other": "{count} Galleons"
 		},
 		"parcel.intro": "Send Galleons with your next owl. They wait on it until the recipient collects them.",
+		"parcel.itemCount": {
+			"one": "{count} item",
+			"other": "{count} items"
+		},
+		"parcel.itemLine": "{label} × {count}",
+		"parcel.itemsIntro": "Choose what goes with it. Worn gear stays with you.",
+		"parcel.loading": "Opening your bag…",
+		"parcel.menu.galleons": "Galleons",
+		"parcel.menu.items": "Items & gear",
+		"parcel.noItems": "Nothing you carry can travel by owl.",
+		"parcel.owned": "You have {count}",
 		"parcel.postage": {
 			"one": "Postage costs {count} Galleon, which is not returned.",
 			"other": "Postage costs {count} Galleons, which are not returned."
 		},
 		"parcel.remove": "Take the Galleons out",
+		"parcel.removeAll": "Take everything out",
+		"parcel.returnWaiting": "A parcel came back to you, but your inventory is full. Make room and the owl tries again.",
 		"parcel.returnedToYou": {
-			"one": "{count} Galleon came back to you by owl.",
-			"other": "{count} Galleons came back to you by owl."
+			"one": "A parcel came back to you by owl.",
+			"other": "{count} parcels came back to you by owl."
 		},
 		"parcel.status.collected": "Collected",
 		"parcel.status.returned": "Returned to the sender.",
 		"parcel.status.waiting": "Waiting to be collected",
 		"parcel.terms": {
-			"one": "Galleons nobody collects within {count} day go back to the sender.",
-			"other": "Galleons nobody collects within {count} days go back to the sender."
+			"one": "Parcels nobody collects within {count} day go back to the sender.",
+			"other": "Parcels nobody collects within {count} days go back to the sender."
 		},
 		"picker.addButton": "Add to Bulk Owl",
 		"picker.addTitle": "Add Members",

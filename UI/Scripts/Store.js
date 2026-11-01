@@ -1672,10 +1672,10 @@ Owls.Store = (() =>
 	/// <param name="clientKey">Key matching the server's reply</param>
 	/// <param name="body">Message text</param>
 	/// <param name="replyTo">Quote of the owl it answers, or null</param>
-	/// <param name="galleons">Galleons the owl carries, kept for a retry; 0 for none</param>
-	function AddPending(chatId, clientKey, body, replyTo = null, galleons = 0)
+	/// <param name="parcel">{ request, display } of the parcel it carries, kept for a retry; null for none</param>
+	function AddPending(chatId, clientKey, body, replyTo = null, parcel = null)
 	{
-		GetHistory(chatId).pending.push({ clientKey, chatId, body, replyTo, galleons, sentAt: Date.now(), status: "pending" });
+		GetHistory(chatId).pending.push({ clientKey, chatId, body, replyTo, parcel, sentAt: Date.now(), status: "pending" });
 		Notify(`history:${chatId}`);
 	}
 

@@ -49,8 +49,10 @@ Your home screen holds five apps with these icons:
 - **Tap an owl** to **Reply**, **Forward** it to other chats, **Pin** it under the chat's header, **Unsend** it or **Delete for yourself**.
 - **The magnifying glass** searches the whole chat, not only what is on screen. Tap a result to fly back to it.
 - **The smiling face** opens the emoji picker. Muggles invented them; we added a Magic page.
-- **The location pin** sends a location owl.
-- **The chart** (bulk owls only) asks everyone a question to vote on. Tap an answer to vote, and tap it again to take your vote back.
+- **The paperclip** opens what an owl can carry:
+  - **Galleons** and **Items & gear** (one-to-one owls only) pack a parcel for your next owl. It leaves your pockets when you send, and the other side taps **Collect** once the owl lands. Anything nobody collects flies back to you after a few days, and unsending the owl brings it back at once. Neither of you is ever told who the other is.
+  - **Location** sends a location owl.
+  - **Poll** (bulk owls only) asks everyone a question to vote on. Tap an answer to vote, and tap it again to take your vote back.
 - **Unfinished owls wait for you**: Leave a chat mid-sentence and the words stay in the box, marked **Draft** in your chat list.
 - **The bell** mutes a chat. Owls still arrive; they just stop hooting.
 - **Read** and **typing…** show when the other side has read your owl or is writing. Turn either off in Settings and you stop seeing theirs too. Fair is fair.

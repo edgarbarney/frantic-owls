@@ -584,7 +584,7 @@ function UnloadOwl(player, notifyClient)
 /// <summary>
 /// The "api" export, also behind the "frantic-owls:addContact" event.
 /// </summary>
-const api = CreateApi({ whenReady, senders, chats, directory, database, contacts, OnContactAdded });
+const api = CreateApi({ whenReady, senders, chats, directory, database, contacts, parcels, OnContactAdded });
 
 // ========================
 // Requests
@@ -615,6 +615,7 @@ requests.Register("settings.update", async (entry, data) =>
 function RegisterPhoneRequests()
 {
 	requests.Register("parcels.collect", (entry, data) => parcels.Collect(entry, data));
+	requests.Register("parcels.carriable", (entry) => parcels.ListCarriable(entry));
 	requests.Register("contacts.update", (entry, data) => contacts.Update(entry, data));
 	requests.Register("contacts.saveFromChat", (entry, data) => contacts.SaveFromChat(entry, data));
 	requests.Register("contacts.favourite", (entry, data) => contacts.SetFavourite(entry, data));
@@ -689,6 +690,7 @@ function RegisterImmersiveRequests()
 {
 	// A letter's parcel follows its text's reading rules (owl posts), so the desk collects through the mail service.
 	requests.Register("parcels.collect", (entry, data) => mail.Collect(entry, data));
+	requests.Register("parcels.carriable", (entry) => parcels.ListCarriable(entry));
 	requests.Register("mail.list", (entry, data) => mail.List(entry, data));
 	requests.Register("mail.open", (entry, data) => mail.Open(entry, data));
 	requests.Register("mail.send", (entry, data) => mail.Send(entry, data));
@@ -1021,10 +1023,10 @@ async function Start()
 	// A crash between a parcel's journal step and its Galleons moving is settled before any owl loads (see ParcelState).
 	await parcels.Recover();
 
-	// Pages offer Galleons only when owls can carry them here: switched on, and hmp-inventory running.
-	if (!parcels.IsAvailable())
+	// Pages offer parcels only when owls can carry something here: switched on, and hmp-inventory running.
+	if (!parcels.IsRunning())
 	{
-		clientConfig.galleons = null;
+		clientConfig.parcels = null;
 	}
 
 	isReady = true;
@@ -1113,8 +1115,9 @@ Events.on("resourceStop", (name) =>
 {
 	if (name !== resourceName)
 	{
-		// Senders belong to the resource that registered them.
+		// Senders and parcel rules belong to the resource that registered them.
 		senders.UnregisterResource(name);
+		parcels.UnregisterRules(name);
 
 		// hmp-interact takes its prompts with it when it stops.
 		if (name === "hmp-interact")

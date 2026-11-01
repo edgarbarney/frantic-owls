@@ -1,7 +1,7 @@
 // FranticDreamer 2026
 "use strict";
 
-const { Ok, Fail } = require("./Result.js");
+const { Ok, Fail, FailWith } = require("./Result.js");
 const { Problem } = require("./Lang.js");
 const { ClampInteger } = require("./Config.js");
 const { Logger } = require("./Logger.js");
@@ -509,31 +509,32 @@ class ChatService
 	}
 
 	/// <summary>
-	/// Check that an owl may carry the Galleons asked for: only a one-to-one owl to another player can, never a bulk owl or one to a system sender.
+	/// Check that an owl may carry the parcel asked for: only a one-to-one owl to another player can, never a bulk owl or one to a system sender.
 	/// </summary>
 	/// <param name="entry">Directory entry of the writing owl</param>
 	/// <param name="chat">Chat summary, already checked to be writable</param>
 	/// <param name="replyTo">The system sender the owl goes to, or null</param>
-	/// <param name="galleons">Galleons read with ParcelService.ReadGalleons</param>
-	/// <returns>A Fail problem, or null when it may go (also when it carries none)</returns>
-	async #CheckParcel(entry, chat, replyTo, galleons)
+	/// <param name="request">Read with ParcelService.ReadRequest: null for none, undefined when malformed</param>
+	/// <returns>{ problem, plan } where problem is a Fail problem (or a refusal result) and plan { galleons, items } what the owl carries, or null</returns>
+	async #CheckParcel(entry, chat, replyTo, request)
 	{
-		if (galleons === 0)
+		if (request === null)
 		{
-			return null;
+			return { problem: null, plan: null };
 		}
 
-		if (galleons < 0)
+		if (request === undefined)
 		{
-			return "error.parcel.invalid";
+			return { problem: "error.parcel.invalid", plan: null };
 		}
 
 		if (chat.kind !== "direct" || replyTo)
 		{
-			return "error.parcel.directOnly";
+			return { problem: "error.parcel.directOnly", plan: null };
 		}
 
-		return this.#parcels.Check(entry, galleons, 1);
+		const { problem, items } = await this.#parcels.Check(entry, request, 1);
+		return { problem, plan: problem ? null : { galleons: request.galleons, items } };
 	}
 
 	/// <summary>
@@ -544,16 +545,16 @@ class ChatService
 	/// <param name="body">Owl text, already cleaned</param>
 	/// <param name="deliverAt">When the owl lands, in epoch milliseconds; 0 for at once</param>
 	/// <param name="quoted">Message record this owl answers, or null</param>
-	/// <param name="galleons">Galleons, already checked with #CheckParcel; 0 for none</param>
+	/// <param name="plan">{ galleons, items } already checked with #CheckParcel; null for no parcel</param>
 	/// <returns>{ message, error } where error is a Fail problem when nothing was stored</returns>
-	async #StoreOwl(entry, chat, body, deliverAt, quoted, galleons)
+	async #StoreOwl(entry, chat, body, deliverAt, quoted, plan)
 	{
 		let parcel = null;
 
-		if (galleons > 0)
+		if (plan)
 		{
 			const recipient = chat.members.find((member) => member !== entry.number) || "";
-			const prepared = await this.#parcels.Prepare(entry, recipient, galleons);
+			const prepared = await this.#parcels.Prepare(entry, recipient, plan.galleons, plan.items);
 
 			if (prepared.error)
 			{
@@ -905,21 +906,20 @@ class ChatService
 			return Fail("error.replyGone", { clientKey });
 		}
 
-		const galleons = this.#parcels.ReadGalleons(data.galleons);
-		const parcelProblem = await this.#CheckParcel(entry, chat, replyTo, galleons);
+		const { problem: parcelProblem, plan } = await this.#CheckParcel(entry, chat, replyTo, this.#parcels.ReadRequest(data.parcel));
 
 		if (parcelProblem)
 		{
-			return Fail(parcelProblem, { clientKey });
+			return FailWith(parcelProblem, { clientKey });
 		}
 
 		// Replies to a system sender go to a callback, not across the map, so they never fly.
 		const deliverAt = replyTo ? 0 : this.#flight.GetDeliverAt(entry, chat);
-		const { message, error: storeProblem } = await this.#StoreOwl(entry, chat, body, deliverAt, quoted, galleons);
+		const { message, error: storeProblem } = await this.#StoreOwl(entry, chat, body, deliverAt, quoted, plan);
 
 		if (!message)
 		{
-			return Fail(storeProblem, { clientKey });
+			return FailWith(storeProblem, { clientKey });
 		}
 
 		await this.#Publish(chat, message);
@@ -960,9 +960,9 @@ class ChatService
 	/// <param name="entry">Directory entry of the writing owl</param>
 	/// <param name="toNumber">Owl number of the recipient, already checked to be one the writer may address</param>
 	/// <param name="body">Letter text, already cleaned</param>
-	/// <param name="galleons">Galleons the copy carries, already read and checked by Mail.js for every copy; 0 for none</param>
+	/// <param name="plan">{ galleons, items } the copy carries, already checked by Mail.js for every copy; null for none</param>
 	/// <returns>{ error, message } where error is null on success (otherwise a text key) and message the stored record</returns>
-	async SendLetter(entry, toNumber, body, galleons = 0)
+	async SendLetter(entry, toNumber, body, plan = null)
 	{
 		const chatId = await this.#EnsureDirectChat(entry.number, toNumber);
 		const chat = chatId > 0 ? await this.#database.GetChatForMember(chatId, entry.number) : null;
@@ -979,19 +979,19 @@ class ChatService
 			return { error, message: null };
 		}
 
-		// A letter to a system sender (an answer to an official letter) cannot carry Galleons; Mail.js checked the amount itself for every copy at once.
-		if (galleons > 0 && replyTo)
+		// A letter to a system sender (an answer to an official letter) carries no parcel; Mail.js checked the parcel itself for every copy at once.
+		if (plan && replyTo)
 		{
 			return { error: "error.parcel.directOnly", message: null };
 		}
 
 		// Letters to a system sender go to a callback, not across the map, so they never fly.
 		const deliverAt = replyTo ? 0 : this.#flight.GetDeliverAt(entry, chat);
-		const { message, error: storeProblem } = await this.#StoreOwl(entry, chat, body, deliverAt, null, galleons);
+		const { message, error: storeProblem } = await this.#StoreOwl(entry, chat, body, deliverAt, null, plan);
 
 		if (!message)
 		{
-			return { error: typeof storeProblem === "string" ? storeProblem : storeProblem.key, message: null };
+			return { error: typeof storeProblem === "string" ? storeProblem : storeProblem.errorKey || storeProblem.key, message: null };
 		}
 
 		await this.#Publish(chat, message);

@@ -3798,13 +3798,26 @@ button.settings-card:hover
 	color: var(--bubble-mine-text);
 }
 
+.parcel-contents
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
 .parcel-amount
 {
-	flex: 1;
 	font-family: var(--font-heading);
 	font-size: 0.85rem;
 	font-weight: 700;
 	white-space: nowrap;
+}
+
+.parcel-item
+{
+	font-size: 0.8rem;
+	line-height: 1.25;
 }
 
 /* A long status takes a line of its own under the amount rather than squeezing it. */
@@ -3850,4 +3863,145 @@ button.settings-card:hover
 .parcel-chip .reply-text
 {
 	border-left-color: var(--gold-bright);
+}
+
+/* The attach menu: what an owl can carry, laid out like a phone's share sheet in the place the emoji picker opens. */
+.attach-menu
+{
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 0.5rem;
+	padding: 0.75rem 0.6rem;
+	flex: none;
+	border-top: 0.0625rem solid var(--line);
+	background: var(--ink-sunken);
+}
+
+.attach-menu[hidden],
+.attach-option[hidden]
+{
+	display: none;
+}
+
+.attach-option
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.35rem 0;
+	border-radius: var(--radius);
+	color: var(--text);
+}
+
+.attach-option:hover
+{
+	background: rgba(var(--accent-rgb), 0.1);
+}
+
+.attach-glyph
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.6rem;
+	height: 2.6rem;
+	border-radius: 50%;
+	background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+	color: var(--on-accent);
+	font-size: 1.05rem;
+}
+
+.attach-label
+{
+	font-size: 0.72rem;
+	text-align: center;
+}
+
+.composer-button.is-open
+{
+	color: var(--gold-bright);
+}
+
+/* The item picker inside its bar: one row per item, with an amount to send. */
+.parcel-picker
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	max-height: 13rem;
+	overflow-y: auto;
+}
+
+.parcel-picker-note
+{
+	font-size: 0.8rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.parcel-picker-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	padding: 0.3rem 0.4rem;
+	border-radius: 0.5rem;
+	background: rgba(var(--accent-rgb), 0.06);
+}
+
+.parcel-picker-row.is-disabled
+{
+	opacity: 0.6;
+}
+
+.parcel-item-icon
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.8rem;
+	height: 1.8rem;
+	flex: none;
+	color: var(--gold);
+}
+
+.parcel-item-icon img
+{
+	max-width: 100%;
+	max-height: 100%;
+}
+
+.parcel-picker-text
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.parcel-picker-label
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: 0.85rem;
+}
+
+.parcel-picker-detail
+{
+	font-size: 0.72rem;
+	color: var(--text-dim);
+}
+
+.parcel-picker-amount
+{
+	width: 3.6rem;
+	padding: 0.25rem 0.35rem;
+	border: 0.0625rem solid var(--line);
+	border-radius: 0.4rem;
+	background: var(--ink-sunken);
+	font: inherit;
+	font-size: 0.85rem;
+	color: var(--text);
 }

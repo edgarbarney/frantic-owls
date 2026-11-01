@@ -246,21 +246,31 @@ Owls.Screens.Chat = (() =>
 		});
 
 		// ========================
-		// Parcel Bar
+		// Attachments
 		// ========================
 
 		/// <summary>
-		/// What owls here may carry ({ max, postage, returnAfterDays }), or null when they carry no Galleons.
+		/// What owls may carry here ({ galleons (most per owl, 0 when off), items, gear, maxItemStacks, postage, returnAfterDays }), or null when they carry nothing.
 		/// </summary>
-		const galleonsConfig = config.galleons || null;
+		const parcelConfig = config.parcels || null;
 
 		/// <summary>
 		/// Galleons attached to the next owl sent from this composer; 0 for none.
 		/// </summary>
 		let attachedGalleons = 0;
 
+		/// <summary>
+		/// Items attached to the next owl, by key: { key, label, kind, amount }.
+		/// </summary>
+		const attachedItems = new Map();
+
+		/// <summary>
+		/// The item picker's rows as last fetched, in order: { key, kind, label, icon, amount, reason, input }.
+		/// </summary>
+		let carriable = [];
+
 		const parcelError = Element("span", { className: "form-error" });
-		const parcelAmount = Element("input", { className: "text-input", attributes: { type: "number", min: "1", max: String(galleonsConfig ? galleonsConfig.max : 1), step: "1", placeholder: T("parcel.amountPlaceholder") } });
+		const parcelAmount = Element("input", { className: "text-input", attributes: { type: "number", min: "1", max: String(parcelConfig ? parcelConfig.galleons : 1), step: "1", placeholder: T("parcel.amountPlaceholder") } });
 		const parcelAttach = Element("button", { className: "primary-button", text: T("parcel.attachShort") });
 		const parcelBar = Element("div", { className: "leave-bar parcel-bar" },
 		[
@@ -275,23 +285,39 @@ Owls.Screens.Chat = (() =>
 			]),
 		]);
 
+		const itemsError = Element("span", { className: "form-error" });
+		const itemsList = Element("div", { className: "parcel-picker" });
+		const itemsAttach = Element("button", { className: "primary-button", text: T("parcel.attachShort"), on: { click: () => AttachItems() } });
+		const itemsBar = Element("div", { className: "leave-bar parcel-bar" },
+		[
+			Element("span", { className: "leave-text", text: T("parcel.itemsIntro") }),
+			itemsList,
+			Element("span", { className: "parcel-terms", text: GetParcelTerms() }),
+			itemsError,
+			Element("div", { className: "button-row" },
+			[
+				Element("button", { className: "secondary-button", text: T("common.cancel"), on: { click: () => ShowBar(null) } }),
+				itemsAttach,
+			]),
+		]);
+
 		/// <summary>
-		/// The terms shown under the amount: when uncollected Galleons go back, and the postage if there is any.
+		/// The terms shown under a parcel: when uncollected parcels go back, and the postage if there is any.
 		/// </summary>
 		/// <returns>Text</returns>
 		function GetParcelTerms()
 		{
-			if (!galleonsConfig)
+			if (!parcelConfig)
 			{
 				return "";
 			}
 
-			const terms = T("parcel.terms", { count: galleonsConfig.returnAfterDays });
-			return galleonsConfig.postage > 0 ? `${terms} ${T("parcel.postage", { count: galleonsConfig.postage })}` : terms;
+			const terms = T("parcel.terms", { count: parcelConfig.returnAfterDays });
+			return parcelConfig.postage > 0 ? `${terms} ${T("parcel.postage", { count: parcelConfig.postage })}` : terms;
 		}
 
 		/// <summary>
-		/// Attach the amount typed in the parcel bar to the next owl.
+		/// Attach the amount typed in the Galleons bar to the next owl.
 		/// </summary>
 		function AttachGalleons()
 		{
@@ -303,13 +329,14 @@ Owls.Screens.Chat = (() =>
 				return;
 			}
 
-			if (amount > galleonsConfig.max)
+			if (amount > parcelConfig.galleons)
 			{
-				parcelError.textContent = T("error.parcel.tooMany", { max: galleonsConfig.max });
+				parcelError.textContent = T("error.parcel.tooMany", { max: parcelConfig.galleons });
 				return;
 			}
 
-			SetGalleons(amount);
+			attachedGalleons = amount;
+			UpdateParcelChip();
 			ShowBar(null);
 			input.focus();
 		}
@@ -323,6 +350,190 @@ Owls.Screens.Chat = (() =>
 				AttachGalleons();
 			}
 		});
+
+		/// <summary>
+		/// Open the item picker with what the player could send right now. The server reads the inventory, and checks everything again when the owl is sent.
+		/// </summary>
+		async function OpenItems()
+		{
+			ShowBar(itemsBar);
+			itemsList.replaceChildren(Element("span", { className: "parcel-picker-note", text: T("parcel.loading") }));
+			const result = await Owls.Bridge.Request("parcels.carriable", {});
+
+			if (itemsBar.hidden)
+			{
+				return;
+			}
+
+			if (!result.ok)
+			{
+				itemsList.replaceChildren();
+				itemsError.textContent = result.error;
+				return;
+			}
+
+			carriable = (result.data.items || []).map((item) => ({ ...item }));
+			RenderItems();
+		}
+
+		/// <summary>
+		/// Draw the picker: one row per item with an amount to send, and the reason under any item that cannot travel.
+		/// </summary>
+		function RenderItems()
+		{
+			if (carriable.length === 0)
+			{
+				itemsList.replaceChildren(Element("span", { className: "parcel-picker-note", text: T("parcel.noItems") }));
+				return;
+			}
+
+			itemsList.replaceChildren(...carriable.map((item) =>
+			{
+				const attached = attachedItems.get(item.key);
+				item.input = Element("input", { className: "parcel-picker-amount", attributes: { type: "number", min: "0", max: String(item.amount), step: "1", value: attached ? String(attached.amount) : "0", "aria-label": item.label } });
+				item.input.disabled = !!item.reason;
+				return Element("label", { className: `parcel-picker-row${item.reason ? " is-disabled" : ""}` },
+				[
+					CreateItemIcon(item),
+					Element("span", { className: "parcel-picker-text" },
+					[
+						Element("span", { className: "parcel-picker-label", text: item.label }),
+						Element("span", { className: "parcel-picker-detail", text: item.reason || T("parcel.owned", { count: item.amount }) }),
+					]),
+					item.input,
+				]);
+			}));
+		}
+
+		/// <summary>
+		/// An item's picture, or a parcel icon when it has none the page can load.
+		/// </summary>
+		/// <param name="item">{ icon, kind }</param>
+		/// <returns>Element</returns>
+		function CreateItemIcon(item)
+		{
+			const holder = Element("span", { className: "parcel-item-icon" });
+
+			if (/^(https?|fw):\/\//i.test(item.icon || ""))
+			{
+				const image = Element("img", { attributes: { src: item.icon, alt: "" } });
+				image.addEventListener("error", () => { holder.innerHTML = Owls.Icons.parcel; });
+				holder.appendChild(image);
+			}
+			else
+			{
+				holder.innerHTML = Owls.Icons.parcel;
+			}
+
+			return holder;
+		}
+
+		/// <summary>
+		/// Attach the amounts chosen in the picker to the next owl, replacing what was attached before.
+		/// </summary>
+		function AttachItems()
+		{
+			const chosen = [];
+
+			for (const item of carriable)
+			{
+				const amount = item.input ? Number(item.input.value) : 0;
+
+				if (!Number.isInteger(amount) || amount < 0 || amount > item.amount)
+				{
+					itemsError.textContent = T("error.parcel.invalid");
+					return;
+				}
+
+				if (amount > 0 && !item.reason)
+				{
+					chosen.push({ key: item.key, label: item.label, kind: item.kind, amount });
+				}
+			}
+
+			if (chosen.length > parcelConfig.maxItemStacks)
+			{
+				itemsError.textContent = T("error.parcel.tooManyItems", { max: parcelConfig.maxItemStacks });
+				return;
+			}
+
+			attachedItems.clear();
+
+			for (const item of chosen)
+			{
+				attachedItems.set(item.key, item);
+			}
+
+			UpdateParcelChip();
+			ShowBar(null);
+			input.focus();
+		}
+
+		/// <summary>
+		/// Take everything off the next owl.
+		/// </summary>
+		function ClearParcel()
+		{
+			attachedGalleons = 0;
+			attachedItems.clear();
+			UpdateParcelChip();
+		}
+
+		/// <summary>
+		/// The parcel to send with the next owl: what the server needs, and what the pending bubble shows until it answers.
+		/// </summary>
+		/// <returns>{ request, display }, or null when nothing is attached</returns>
+		function GetParcel()
+		{
+			const items = [...attachedItems.values()];
+
+			if (attachedGalleons <= 0 && items.length === 0)
+			{
+				return null;
+			}
+
+			return {
+				request: { galleons: attachedGalleons, items: items.map((item) => ({ key: item.key, amount: item.amount })) },
+				display: { galleons: attachedGalleons, items: items.map((item) => ({ label: item.label, amount: item.amount, kind: item.kind, icon: "" })) },
+			};
+		}
+
+		/// <summary>
+		/// One choice of the attach menu: a round icon over its name, like a phone's share sheet.
+		/// </summary>
+		/// <param name="icon">Icon markup</param>
+		/// <param name="label">Its name</param>
+		/// <param name="onClick">What it opens</param>
+		/// <returns>Button element</returns>
+		function CreateAttachOption(icon, label, onClick)
+		{
+			const glyph = Element("span", { className: "attach-glyph" });
+			glyph.innerHTML = icon;
+			return Element("button", { className: "attach-option", on: { click: () => { ShowAttachMenu(false); onClick(); } } }, [glyph, Element("span", { className: "attach-label", text: label })]);
+		}
+
+		const galleonsOption = CreateAttachOption(Owls.Icons.coins, T("parcel.menu.galleons"), () => ShowBar(parcelBar));
+		const itemsOption = CreateAttachOption(Owls.Icons.parcel, T("parcel.menu.items"), () => OpenItems());
+		const locationOption = CreateAttachOption(Owls.Icons.location, T("chat.location"), () => ShowBar(locationBar));
+		const pollOption = CreateAttachOption(Owls.Icons.poll, T("chat.poll"), () => ShowBar(pollBar));
+		const attachMenu = Element("div", { className: "attach-menu" }, [galleonsOption, itemsOption, locationOption, pollOption]);
+		attachMenu.hidden = true;
+
+		/// <summary>
+		/// Open or close the attach menu above the composer. It shares that place with the emoji picker, so opening one closes the other.
+		/// </summary>
+		/// <param name="show">Whether to open it</param>
+		function ShowAttachMenu(show)
+		{
+			attachMenu.hidden = !show;
+			attachButton.classList.toggle("is-open", show);
+
+			if (show)
+			{
+				emojiPicker.Hide();
+				emojiButton.classList.remove("is-active");
+			}
+		}
 
 		/// <summary>
 		/// Add one more answer field to the poll being written.
@@ -411,7 +622,7 @@ Owls.Screens.Chat = (() =>
 		/// <param name="bar">Bar element, or null</param>
 		function ShowBar(bar)
 		{
-			for (const candidate of [muteBar, blockBar, leaveBar, locationBar, pollBar, parcelBar])
+			for (const candidate of [muteBar, blockBar, leaveBar, locationBar, pollBar, parcelBar, itemsBar])
 			{
 				candidate.hidden = candidate !== bar;
 			}
@@ -422,6 +633,12 @@ Owls.Screens.Chat = (() =>
 			locationError.textContent = "";
 			pollError.textContent = "";
 			parcelError.textContent = "";
+			itemsError.textContent = "";
+
+			if (bar)
+			{
+				ShowAttachMenu(false);
+			}
 
 			if (bar)
 			{
@@ -462,35 +679,43 @@ Owls.Screens.Chat = (() =>
 		const sendButton = Widgets.IconButton(Owls.Icons.send, T("chat.send"), () => Send(), "send-button");
 		const emojiPicker = Owls.EmojiPicker.Create((emoji) => InsertText(emoji));
 		const emojiButton = Widgets.IconButton(Owls.Icons.smile, T("chat.emoji"), () => ToggleEmoji(), "composer-button");
-		const locationButton = Widgets.IconButton(Owls.Icons.location, T("chat.sendYourLocation"), () => ShowBar(locationBar.hidden ? locationBar : null), "composer-button");
-		const pollButton = Widgets.IconButton(Owls.Icons.poll, T("chat.poll"), () => ShowBar(pollBar.hidden ? pollBar : null), "composer-button");
-		const galleonsButton = Widgets.IconButton(Owls.Icons.coins, T("parcel.attach"), () => ShowBar(parcelBar.hidden ? parcelBar : null), "composer-button");
+		const attachButton = Widgets.IconButton(Owls.Icons.paperclip, T("parcel.attachMenu"), () => ShowAttachMenu(attachMenu.hidden), "composer-button");
 		const parcelChipText = Element("span", { className: "reply-name" });
 		const parcelChipIcon = Element("span", { className: "reply-icon" });
-		parcelChipIcon.innerHTML = Owls.Icons.coins;
-		const parcelChip = Element("div", { className: "reply-bar parcel-chip" }, [parcelChipIcon, Element("span", { className: "reply-text" }, [parcelChipText, Element("span", { className: "reply-snippet", text: T("parcel.attachedHint") })]), Widgets.IconButton(Owls.Icons.close, T("parcel.remove"), () => SetGalleons(0))]);
+		parcelChipIcon.innerHTML = Owls.Icons.parcel;
+		const parcelChip = Element("div", { className: "reply-bar parcel-chip" }, [parcelChipIcon, Element("span", { className: "reply-text" }, [parcelChipText, Element("span", { className: "reply-snippet", text: T("parcel.attachedHint") })]), Widgets.IconButton(Owls.Icons.close, T("parcel.remove"), () => ClearParcel())]);
 		const counter = Element("div", { className: "composer-counter" });
 		const replyName = Element("span", { className: "reply-name" });
 		const replySnippet = Element("span", { className: "reply-snippet" });
 		const replyIcon = Element("span", { className: "reply-icon" });
 		replyIcon.innerHTML = Owls.Icons.reply;
 		const replyBar = Element("div", { className: "reply-bar" }, [replyIcon, Element("span", { className: "reply-text" }, [replyName, replySnippet]), Widgets.IconButton(Owls.Icons.close, T("chat.cancelReply"), () => SetReply(null))]);
-		const composer = Element("div", { className: "composer" }, [locationButton, pollButton, galleonsButton, input, emojiButton, sendButton]);
-		const element = Element("div", { className: "screen" }, [header, searchRow, pinnedBar, headerError, muteBar, blockBar, leaveBar, locationBar, pollBar, parcelBar, blockedNotice, unknownBar, searchResults, body, counter, readOnlyNotice, actionBar, replyBar, parcelChip, emojiPicker.element, composer]);
+		const composer = Element("div", { className: "composer" }, [attachButton, input, emojiButton, sendButton]);
+		const element = Element("div", { className: "screen" }, [header, searchRow, pinnedBar, headerError, muteBar, blockBar, leaveBar, locationBar, pollBar, parcelBar, itemsBar, blockedNotice, unknownBar, searchResults, body, counter, readOnlyNotice, actionBar, replyBar, parcelChip, attachMenu, emojiPicker.element, composer]);
 
 		replyBar.hidden = true;
 		parcelChip.hidden = true;
 
 		/// <summary>
-		/// Attach Galleons to the next owl, or take them off (0), and show them above the composer.
+		/// Show what the next owl carries above the composer, or hide the strip when it carries nothing.
 		/// </summary>
-		/// <param name="amount">Galleons; 0 for none</param>
-		function SetGalleons(amount)
+		function UpdateParcelChip()
 		{
-			attachedGalleons = amount;
-			parcelChip.hidden = amount <= 0;
-			parcelChipText.textContent = amount > 0 ? T("parcel.galleons", { count: amount }) : "";
-			galleonsButton.classList.toggle("is-active", amount > 0);
+			const parts = [];
+
+			if (attachedGalleons > 0)
+			{
+				parts.push(T("parcel.galleons", { count: attachedGalleons }));
+			}
+
+			if (attachedItems.size > 0)
+			{
+				parts.push(T("parcel.itemCount", { count: [...attachedItems.values()].reduce((sum, item) => sum + item.amount, 0) }));
+			}
+
+			parcelChip.hidden = parts.length === 0;
+			parcelChipText.textContent = parts.join(" · ");
+			attachButton.classList.toggle("is-active", parts.length > 0);
 		}
 		actionBar.hidden = true;
 		typingRow.hidden = true;
@@ -598,16 +823,22 @@ Owls.Screens.Chat = (() =>
 
 			const canWrite = writeState.canWrite && !isBlocked;
 			composer.hidden = !canWrite;
-			locationButton.hidden = !config.locationsEnabled || isOfficial;
-			pollButton.hidden = chat.kind !== "group" || !config.pollsEnabled;
+			// Parcels travel only on a one-to-one owl to another player.
+			const canCarry = !!parcelConfig && chat.kind === "direct" && !isOfficial;
+			galleonsOption.hidden = !canCarry || !parcelConfig.galleons;
+			itemsOption.hidden = !canCarry || (!parcelConfig.items && !parcelConfig.gear);
+			locationOption.hidden = !config.locationsEnabled || isOfficial;
+			pollOption.hidden = chat.kind !== "group" || !config.pollsEnabled;
+			attachButton.hidden = [galleonsOption, itemsOption, locationOption, pollOption].every((option) => option.hidden);
 
-			// Galleons travel only on a one-to-one owl to another player.
-			const canCarryGalleons = !!galleonsConfig && chat.kind === "direct" && !isOfficial;
-			galleonsButton.hidden = !canCarryGalleons;
-
-			if (!canCarryGalleons && attachedGalleons > 0)
+			if (attachButton.hidden)
 			{
-				SetGalleons(0);
+				ShowAttachMenu(false);
+			}
+
+			if (!canCarry && (attachedGalleons > 0 || attachedItems.size > 0))
+			{
+				ClearParcel();
 			}
 
 			if (!canWrite)
@@ -1367,7 +1598,7 @@ Owls.Screens.Chat = (() =>
 		/// <returns>Card element, or null when the owl carries no parcel</returns>
 		function CreateParcelCard(message, isMine, isPending)
 		{
-			const parcel = isPending ? (message.galleons > 0 ? { galleons: message.galleons, status: "sending" } : null) : message.parcel;
+			const parcel = isPending ? (message.parcel ? { ...message.parcel.display, status: "sending" } : null) : message.parcel;
 
 			if (!parcel)
 			{
@@ -1375,8 +1606,21 @@ Owls.Screens.Chat = (() =>
 			}
 
 			const icon = Element("span", { className: "parcel-icon" });
-			icon.innerHTML = Owls.Icons.coins;
-			const parts = [icon, Element("span", { className: "parcel-amount", text: T("parcel.galleons", { count: parcel.galleons }) })];
+			const items = parcel.items || [];
+			icon.innerHTML = items.length > 0 ? Owls.Icons.parcel : Owls.Icons.coins;
+			const lines = [];
+
+			if (parcel.galleons > 0)
+			{
+				lines.push(Element("span", { className: "parcel-amount", text: T("parcel.galleons", { count: parcel.galleons }) }));
+			}
+
+			for (const item of items)
+			{
+				lines.push(Element("span", { className: "parcel-item", text: T("parcel.itemLine", { label: item.label, count: item.amount }) }));
+			}
+
+			const parts = [icon, Element("span", { className: "parcel-contents" }, lines)];
 
 			if (parcel.status === "waiting" && !isMine && !Owls.Store.IsInFlight(message) && !composer.hidden)
 			{
@@ -1807,14 +2051,14 @@ Owls.Screens.Chat = (() =>
 		/// </summary>
 		/// <param name="text">Message text</param>
 		/// <param name="quote">Quote of the owl it answers, or null</param>
-		/// <param name="galleons">Galleons the owl carries; 0 for none</param>
-		async function Deliver(text, quote, galleons = 0)
+		/// <param name="parcel">{ request, display } of what the owl carries; null for nothing</param>
+		async function Deliver(text, quote, parcel = null)
 		{
 			const clientKey = Owls.Util.NewKey();
-			Owls.Store.AddPending(chatId, clientKey, text, quote, galleons);
+			Owls.Store.AddPending(chatId, clientKey, text, quote, parcel);
 			body.scrollTop = body.scrollHeight;
 
-			const result = await Owls.Bridge.Request("messages.send", { chatId, body: text, clientKey, replyToId: quote ? quote.id : 0, galleons });
+			const result = await Owls.Bridge.Request("messages.send", { chatId, body: text, clientKey, replyToId: quote ? quote.id : 0, parcel: parcel ? parcel.request : null });
 
 			if (!result.ok)
 			{
@@ -1842,15 +2086,16 @@ Owls.Screens.Chat = (() =>
 			}
 
 			const quote = replyTo;
-			const galleons = attachedGalleons;
+			const parcel = GetParcel();
 			input.value = "";
 			Owls.Store.SetDraft(chatId, "");
 			emojiPicker.Hide();
 			emojiButton.classList.remove("is-active");
 			SetReply(null);
-			SetGalleons(0);
+			ClearParcel();
+			ShowAttachMenu(false);
 			UpdateComposer();
-			Deliver(text.slice(0, maxLength), quote, galleons);
+			Deliver(text.slice(0, maxLength), quote, parcel);
 			input.focus();
 		}
 
@@ -1861,7 +2106,7 @@ Owls.Screens.Chat = (() =>
 		function Retry(pending)
 		{
 			Owls.Store.RemovePending(chatId, pending.clientKey);
-			Deliver(pending.body, pending.replyTo || null, pending.galleons || 0);
+			Deliver(pending.body, pending.replyTo || null, pending.parcel || null);
 		}
 
 		/// <summary>
@@ -1934,6 +2179,7 @@ Owls.Screens.Chat = (() =>
 		/// </summary>
 		function ToggleEmoji()
 		{
+			ShowAttachMenu(false);
 			emojiPicker.Toggle();
 			emojiButton.classList.toggle("is-active", emojiPicker.IsOpen());
 			input.focus();

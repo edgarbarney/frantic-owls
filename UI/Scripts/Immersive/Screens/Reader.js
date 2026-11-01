@@ -74,8 +74,16 @@ Owls.DeskScreens.Reader = (() =>
 				return;
 			}
 
-			const icon = Element("i", { className: "fa-solid fa-coins", attributes: { "aria-hidden": "true" } });
-			const parts = [icon, Element("span", { className: "letter-enclosure-amount", text: T("parcel.enclosedAmount", { count: parcel.galleons }) })];
+			const items = parcel.items || [];
+			const icon = Element("i", { className: `fa-solid ${items.length > 0 ? "fa-box-open" : "fa-coins"}`, attributes: { "aria-hidden": "true" } });
+			const lines = parcel.galleons > 0 ? [Element("span", { className: "letter-enclosure-line", text: T("parcel.galleons", { count: parcel.galleons }) })] : [];
+
+			for (const item of items)
+			{
+				lines.push(Element("span", { className: "letter-enclosure-line", text: T("parcel.itemLine", { label: item.label, count: item.amount }) }));
+			}
+
+			const parts = [icon, Element("span", { className: "letter-enclosure-amount" }, [Element("span", { className: "letter-enclosure-title", text: T("parcel.enclosed") }), ...lines])];
 
 			if (parcel.status === "waiting" && opened.box === "inbox")
 			{

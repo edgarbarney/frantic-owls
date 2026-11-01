@@ -314,14 +314,24 @@
 		"error.parcel.collected": "Bu Galleon'ları zaten aldınız.",
 		"error.parcel.dailyCap": "Baykuşlar günde en fazla {max} Galleon'unuzu taşıyabilir. Bugün için {left} kaldı.",
 		"error.parcel.directOnly": "Galleon'lar yalnızca tek bir cadıya ya da büyücüye giden bir baykuşla gönderilebilir.",
+		"error.parcel.galleonsOff": "Baykuşlar burada Galleon taşıyamaz.",
+		"error.parcel.gearOff": "Baykuşlar burada kıyafet taşıyamaz.",
 		"error.parcel.gone": "Bu baykuştan alınacak bir şey kalmadı.",
 		"error.parcel.invalid": "Tam sayı olarak bir Galleon miktarı yazın.",
+		"error.parcel.inventoryFull": "Envanterinizde bu paket için yer yok. Yer açıp yeniden alın.",
+		"error.parcel.itemGone": "Paketteki bir şey artık envanterinizde değil. Yeniden seçin.",
+		"error.parcel.itemsOff": "Baykuşlar burada eşya taşıyamaz.",
 		"error.parcel.notEnough": {
 			"one": "Bunun için posta ücreti dahil {count} Galleon gerekiyor.",
 			"other": "Bunun için posta ücreti dahil {count} Galleon gerekiyor."
 		},
+		"error.parcel.oneRecipient": "Eşya taşıyan bir mektup yalnızca tek bir cadıya ya da büyücüye gidebilir.",
+		"error.parcel.refused": "Bu, baykuşla gönderilemez.",
+		"error.parcel.ruleFailed": "Bu şu anda baykuşla gönderilemez.",
 		"error.parcel.tooMany": "Bir baykuş en fazla {max} Galleon taşıyabilir.",
+		"error.parcel.tooManyItems": "Bir baykuş en fazla {max} farklı eşya taşıyabilir.",
 		"error.parcel.unavailable": "Baykuşlar şu anda Galleon taşıyamıyor.",
+		"error.parcel.worn": "Bunlardan birini giyiyorsunuz. Göndermek için çıkarın.",
 		"error.pictureCredentials": "Görsel bağlantıları kullanıcı adı veya parola içeremez.",
 		"error.pictureFailed": "Görsel kaydedilemedi. Biraz sonra tekrar deneyin.",
 		"error.pictureHost": "Görseller şu sitelerde barındırılmalıdır: {hosts}.",
@@ -653,37 +663,47 @@
 		"owls.search": "Baykuşlarda ara",
 		"owls.sendNew": "Yeni baykuş gönder",
 		"parcel.amountPlaceholder": "Kaç Galleon?",
-		"parcel.attach": "Galleon ekle",
+		"parcel.attachMenu": "Ekle",
 		"parcel.attachShort": "Ekle",
 		"parcel.attachedHint": "Bir sonraki baykuşunuzla gönderilecek",
 		"parcel.collect": "Al",
 		"parcel.collecting": "Alınıyor…",
 		"parcel.enclose": "Galleon iliştir",
 		"parcel.encloseHint": "Bu mektupla Galleon gönderin. Her alıcı alana dek mektupta bekler.",
-		"parcel.enclosedAmount": {
-			"one": "{count} Galleon iliştirildi",
-			"other": "{count} Galleon iliştirildi"
-		},
+		"parcel.enclosed": "İliştirilenler",
 		"parcel.galleons": {
 			"one": "{count} Galleon",
 			"other": "{count} Galleon"
 		},
 		"parcel.intro": "Bir sonraki baykuşunuzla Galleon gönderin. Alıcı alana dek baykuşta bekler.",
+		"parcel.itemCount": {
+			"one": "{count} eşya",
+			"other": "{count} eşya"
+		},
+		"parcel.itemLine": "{label} × {count}",
+		"parcel.itemsIntro": "Yanında ne gideceğini seçin. Giydiğiniz kıyafetler sizde kalır.",
+		"parcel.loading": "Çantanız açılıyor…",
+		"parcel.menu.galleons": "Galleon",
+		"parcel.menu.items": "Eşya ve kıyafet",
+		"parcel.noItems": "Taşıdığınız hiçbir şey baykuşla gönderilemez.",
+		"parcel.owned": "Sizde {count} tane var",
 		"parcel.postage": {
 			"one": "Posta ücreti {count} Galleon'dur ve geri verilmez.",
 			"other": "Posta ücreti {count} Galleon'dur ve geri verilmez."
 		},
 		"parcel.remove": "Galleon'ları çıkar",
+		"parcel.removeAll": "Hepsini çıkar",
+		"parcel.returnWaiting": "Bir paket size geri döndü ama envanteriniz dolu. Yer açın, baykuş yeniden deneyecek.",
 		"parcel.returnedToYou": {
-			"one": "{count} Galleon baykuşla size geri döndü.",
-			"other": "{count} Galleon baykuşla size geri döndü."
+			"one": "Bir paket baykuşla size geri döndü.",
+			"other": "{count} paket baykuşla size geri döndü."
 		},
 		"parcel.status.collected": "Alındı",
 		"parcel.status.returned": "Göndericiye geri döndü.",
 		"parcel.status.waiting": "Alınmayı bekliyor",
 		"parcel.terms": {
-			"one": "{count} gün içinde alınmayan Galleon'lar göndericiye geri döner.",
-			"other": "{count} gün içinde alınmayan Galleon'lar göndericiye geri döner."
+			"one": "{count} gün içinde alınmayan paketler göndericiye geri döner.",
+			"other": "{count} gün içinde alınmayan paketler göndericiye geri döner."
 		},
 		"picker.addButton": "Grup baykuşuna ekle",
 		"picker.addTitle": "Üye ekle",

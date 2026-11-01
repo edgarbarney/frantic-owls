@@ -55,6 +55,8 @@ Writing to several people does not make a group: Each of them receives their own
 
 Half-written letters wait for you: Leave the desk and your letter is still on the sheet when you come back. **Discard** (click it twice) throws one away.
 
+**The paperclip** encloses a parcel: **Galleons** for everyone you write to, or **Items & gear** for a letter to one person (worn clothes stay on you). It all leaves your pockets when the seal is pressed, and the recipient presses **Collect** above the letter. A parcel nobody collects flies back to you after a few days, saying only that it went back to the sender, so an unsigned letter stays unsigned.
+
 ## Correspondents
 
 Everyone you write to is kept under **Correspondents**, starred ones first. For each of them you can:

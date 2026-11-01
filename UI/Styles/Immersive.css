@@ -855,11 +855,194 @@ button
 
 .letter-enclosure-amount
 {
+	display: flex;
+	flex-direction: column;
 	flex: 1;
+	gap: 0.1rem;
+}
+
+.letter-enclosure-title
+{
 	font-family: var(--font-heading);
-	font-size: 0.95rem;
+	font-size: 0.85rem;
 	font-weight: 700;
+	letter-spacing: 0.06em;
 	color: var(--gold);
+}
+
+.letter-enclosure-line
+{
+	color: var(--parchment);
+}
+
+/* The enclose button's menu: what a letter can carry. */
+.enclose-wrap
+{
+	position: relative;
+	display: inline-flex;
+}
+
+.enclose-menu
+{
+	position: absolute;
+	top: calc(100% + 0.4rem);
+	right: 0;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	min-width: 12rem;
+	padding: 0.3rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.35rem;
+	background: #1c1410;
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+
+.enclose-menu[hidden]
+{
+	display: none;
+}
+
+.enclose-option
+{
+	display: flex;
+	align-items: center;
+	gap: 0.7rem;
+	padding: 0.5rem 0.7rem;
+	border-radius: 0.25rem;
+	background: transparent;
+	text-align: left;
+	color: var(--parchment);
+}
+
+.enclose-option:hover
+{
+	background: rgba(var(--gold-rgb), 0.14);
+}
+
+.enclose-option i
+{
+	width: 1.1rem;
+	color: var(--gold);
+}
+
+.enclosure-galleons
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	color: var(--text-dim);
+}
+
+.enclosure-chip
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 999px;
+	font-size: 0.85rem;
+	color: var(--parchment);
+}
+
+.enclosure-chip-remove
+{
+	display: inline-grid;
+	place-items: center;
+	width: 1.3rem;
+	height: 1.3rem;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--text-dim);
+	font-size: 0.75rem;
+}
+
+.enclosure-chip-remove:hover
+{
+	background: rgba(var(--gold-rgb), 0.16);
+	color: var(--parchment);
+}
+
+/* The item picker under the enclosure row. */
+.enclosure-picker
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	width: min(52rem, 100%);
+	margin: -0.35rem auto 0.75rem;
+	padding: 0.6rem 1rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.35rem;
+	background: rgba(0, 0, 0, 0.4);
+	flex: none;
+}
+
+.enclosure-picker-intro,
+.enclosure-picker-note
+{
+	font-size: 0.85rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.enclosure-picker-list
+{
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+	gap: 0.35rem 0.75rem;
+	max-height: 14rem;
+	overflow-y: auto;
+}
+
+.enclosure-picker-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.3rem 0.5rem;
+	border-radius: 0.25rem;
+	background: rgba(var(--gold-rgb), 0.05);
+}
+
+.enclosure-picker-row.is-disabled
+{
+	opacity: 0.55;
+}
+
+.enclosure-picker-text
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.enclosure-picker-label
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--parchment);
+}
+
+.enclosure-picker-detail
+{
+	font-size: 0.8rem;
+	color: var(--text-dim);
+}
+
+.enclosure-picker-row .enclosure-input
+{
+	width: 4.5rem;
+}
+
+.enclosure-picker-actions
+{
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5rem;
 }
 
 .letter-enclosure-status

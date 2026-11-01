@@ -227,6 +227,46 @@ const migrations =
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 		],
 	},
+	{
+		// What a parcel carries, one row per stack, each journalled on its own (see ParcelItemState): Galleons and game items cannot move in one transaction.
+		// Custom items wait in a named hmp-inventory container instead, which is their own record; their rows only describe them.
+		version: 8,
+		name: "create parcel items",
+		statements:
+		[
+			`CREATE TABLE IF NOT EXISTS frantic_owls_parcel_items (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+				parcel_id BIGINT UNSIGNED NOT NULL,
+				source VARCHAR(8) NOT NULL,
+				name VARCHAR(128) NOT NULL DEFAULT '',
+				variation VARCHAR(64) NOT NULL DEFAULT '',
+				amount INT UNSIGNED NOT NULL,
+				state VARCHAR(12) NOT NULL,
+				KEY idx_frantic_owls_parcel_items_parcel (parcel_id)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		],
+	},
+	{
+		// Parcels sent before items existed carried only Galleons, kept on the parcel row; they become one Galleons row each.
+		// A parcel caught mid-collect or mid-return gets a moving row, which the start-up check settles the way that never duplicates (see Recover).
+		version: 9,
+		name: "move parcel galleons to items",
+		statements:
+		[
+			`INSERT INTO frantic_owls_parcel_items (parcel_id, source, name, variation, amount, state)
+				SELECT id, 'galleons', '', '', galleons, CASE state WHEN 'held' THEN 'held' WHEN 'returning' THEN 'held' WHEN 'collecting' THEN 'moving' WHEN 'repaying' THEN 'moving' ELSE 'done' END
+				FROM frantic_owls_parcels WHERE galleons > 0`,
+		],
+	},
+	{
+		// The labels and amounts the pages draw, written once when the parcel leaves, so reading an owl needs no join per item.
+		version: 10,
+		name: "describe parcel contents",
+		statements:
+		[
+			"ALTER TABLE frantic_owls_parcels ADD COLUMN contents_json TEXT NULL",
+		],
+	},
 ];
 
 /// <summary>
@@ -250,6 +290,20 @@ const ParcelState = Object.freeze
 	Returned: "returned",
 	Failed: "failed",
 	Refunded: "refunded",
+	Void: "void",
+});
+
+/// <summary>
+/// Steps of one parcel item's journal. Galleons and game items are written held only after they left the sender, and done only after they reached someone.
+/// A crash leaves pending (it may or may not have left) or moving (it may or may not have arrived); the start-up check settles both without duplicating.
+/// Custom items keep these steps too, but their container is what decides where they are.
+/// </summary>
+const ParcelItemState = Object.freeze
+({
+	Pending: "pending",
+	Held: "held",
+	Moving: "moving",
+	Done: "done",
 	Void: "void",
 });
 
@@ -379,7 +433,7 @@ const chatSummarySelect = `SELECT c.id, c.kind, c.title, c.avatar_url, c.created
 /// </summary>
 const messageColumns = `m.id, m.chat_id, m.sender_number, m.body, m.kind, m.sent_at, m.deliver_at, m.reply_to_id, m.unsent_at, m.forwarded,
 	r.sender_number AS reply_sender, r.kind AS reply_kind, ${QuoteBody("r")} AS reply_body, r.unsent_at AS reply_unsent_at,
-	pc.galleons AS parcel_galleons, pc.state AS parcel_state`;
+	pc.galleons AS parcel_galleons, pc.state AS parcel_state, pc.contents_json AS parcel_contents`;
 const messageSource = `frantic_owls_messages m LEFT JOIN frantic_owls_messages r ON r.id = m.reply_to_id AND r.deleted_at = 0
 	LEFT JOIN frantic_owls_parcels pc ON pc.message_id = m.id`;
 
@@ -542,7 +596,7 @@ function MapMessage(row)
 		replyTo,
 		unsentAt,
 		forwarded: Number(row.forwarded || 0) === 1,
-		parcel: MapParcel(row.parcel_state, row.parcel_galleons),
+		parcel: MapParcel(row.parcel_state, row.parcel_galleons, row.parcel_contents),
 	};
 }
 
@@ -551,11 +605,30 @@ function MapMessage(row)
 /// </summary>
 /// <param name="state">ParcelState value, or null when the owl carries none</param>
 /// <param name="galleons">Galleons in the parcel</param>
-/// <returns>{ galleons, status } or null</returns>
-function MapParcel(state, galleons)
+/// <param name="contents">contents_json: [{ label, amount, kind, icon }] of its items, or null for Galleons alone</param>
+/// <returns>{ galleons, items, status } or null</returns>
+function MapParcel(state, galleons, contents = null)
 {
 	const status = state ? GetParcelStatus(String(state)) : null;
-	return status ? { galleons: Number(galleons || 0), status } : null;
+	return status ? { galleons: Number(galleons || 0), items: ReadParcelContents(contents), status } : null;
+}
+
+/// <summary>
+/// Read a parcel's stored contents. A row written by hand or cut short reads as no items rather than breaking the owl.
+/// </summary>
+/// <param name="contents">contents_json value</param>
+/// <returns>[{ label, amount, kind, icon }]</returns>
+function ReadParcelContents(contents)
+{
+	try
+	{
+		const items = contents ? JSON.parse(String(contents)) : [];
+		return Array.isArray(items) ? items.map((item) => ({ label: String(item.label || ""), amount: Number(item.amount) || 0, kind: String(item.kind || "item"), icon: String(item.icon || "") })) : [];
+	}
+	catch
+	{
+		return [];
+	}
 }
 
 /// <summary>
@@ -2411,20 +2484,58 @@ class OwlDatabase
 	// ========================
 
 	/// <summary>
-	/// Open a parcel's journal before its Galleons leave the sender (ParcelState.Pending).
+	/// Open a parcel's journal, and one row per thing it carries, before anything leaves the sender (ParcelState.Pending, ParcelItemState.Pending).
 	/// </summary>
 	/// <param name="senderNumber">Owl number of the sender</param>
 	/// <param name="recipientNumber">Owl number of the recipient</param>
 	/// <param name="galleons">Galleons it carries</param>
 	/// <param name="postage">Galleons paid for postage, never returned</param>
-	/// <returns>Parcel row ID, or invalidId on failure</returns>
-	async InsertParcel(senderNumber, recipientNumber, galleons, postage)
+	/// <param name="items">[{ source: "native" | "custom", name, variation, amount, label, kind, icon }]</param>
+	/// <returns>{ id, items: [{ id, ... }] } with the rows' IDs, or null on failure</returns>
+	async InsertParcel(senderNumber, recipientNumber, galleons, postage, items = [])
 	{
-		return this.#Run("InsertParcel", async () =>
+		return this.#Run("InsertParcel", () => this.#mysql.transaction(async (tx) =>
 		{
 			const now = Date.now();
-			return Number(await this.#mysql.insert("INSERT INTO frantic_owls_parcels (sender_number, recipient_number, galleons, postage, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [senderNumber, recipientNumber, galleons, postage, ParcelState.Pending, now, now]));
-		}, invalidId);
+			const contents = items.length > 0 ? JSON.stringify(items.map((item) => ({ label: item.label, amount: item.amount, kind: item.kind, icon: item.icon || "" }))) : null;
+			const id = Number(await tx.insert("INSERT INTO frantic_owls_parcels (sender_number, recipient_number, galleons, postage, state, created_at, updated_at, contents_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [senderNumber, recipientNumber, galleons, postage, ParcelState.Pending, now, now, contents]));
+			const rows = galleons > 0 ? [{ source: "galleons", name: "", variation: "", amount: galleons }, ...items] : [...items];
+			const stored = [];
+
+			for (const item of rows)
+			{
+				const itemId = Number(await tx.insert("INSERT INTO frantic_owls_parcel_items (parcel_id, source, name, variation, amount, state) VALUES (?, ?, ?, ?, ?, ?)", [id, item.source, item.name || "", item.variation || "", item.amount, ParcelItemState.Pending]));
+				stored.push({ ...item, id: itemId, parcelId: id, state: ParcelItemState.Pending });
+			}
+
+			return { id, items: stored };
+		}), null);
+	}
+
+	/// <summary>
+	/// Everything a parcel carries, with each row's journal step.
+	/// </summary>
+	/// <param name="parcelId">Parcel row ID</param>
+	/// <returns>[{ id, parcelId, source, name, variation, amount, state }], or null on failure</returns>
+	async ListParcelItems(parcelId)
+	{
+		return this.#Run("ListParcelItems", async () =>
+		{
+			const rows = await this.#mysql.query("SELECT * FROM frantic_owls_parcel_items WHERE parcel_id = ? ORDER BY id", [parcelId]);
+			return rows.map((row) => ({ id: Number(row.id), parcelId: Number(row.parcel_id), source: String(row.source), name: String(row.name), variation: String(row.variation || ""), amount: Number(row.amount), state: String(row.state) }));
+		}, null);
+	}
+
+	/// <summary>
+	/// Move one parcel item from one journal step to the next, only if it is still at the step expected.
+	/// </summary>
+	/// <param name="itemId">Parcel item row ID</param>
+	/// <param name="from">ParcelItemState it must be at</param>
+	/// <param name="to">ParcelItemState to move it to</param>
+	/// <returns>True when this call moved it</returns>
+	async MoveParcelItem(itemId, from, to)
+	{
+		return this.#Run("MoveParcelItem", async () => Number(await this.#mysql.update("UPDATE frantic_owls_parcel_items SET state = ? WHERE id = ? AND state = ?", [to, itemId, from])) === 1, false);
 	}
 
 	/// <summary>
@@ -2513,7 +2624,7 @@ class OwlDatabase
 /// Convert a parcels row into the record the server works with.
 /// </summary>
 /// <param name="row">Raw database row</param>
-/// <returns>{ id, messageId, sender, recipient, galleons, postage, state, createdAt }</returns>
+/// <returns>{ id, messageId, sender, recipient, galleons, postage, state, createdAt, contents }</returns>
 function MapParcelRow(row)
 {
 	return {
@@ -2525,7 +2636,8 @@ function MapParcelRow(row)
 		postage: Number(row.postage || 0),
 		state: String(row.state),
 		createdAt: Number(row.created_at),
+		contents: row.contents_json === undefined ? null : row.contents_json,
 	};
 }
 
-module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll, ParcelState, MapParcel };
+module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll, ParcelState, ParcelItemState, MapParcel, ReadParcelContents };

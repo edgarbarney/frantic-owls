@@ -37,4 +37,15 @@ function Fail(problem, data = null)
 	return { ok: false, error: Lang.Translate("", key, params), errorKey: key, errorParams: params, data };
 }
 
-module.exports = { Ok, Fail };
+/// <summary>
+/// Fail with a problem, or pass on a failed result another part already built (a parcel rule's refusal, worded by the resource behind it), adding data.
+/// </summary>
+/// <param name="problem">A Fail problem, or a failed result</param>
+/// <param name="data">Data to carry (optional)</param>
+/// <returns>Failed result</returns>
+function FailWith(problem, data = null)
+{
+	return problem && typeof problem === "object" && problem.ok === false ? { ...problem, data } : Fail(problem, data);
+}
+
+module.exports = { Ok, Fail, FailWith };

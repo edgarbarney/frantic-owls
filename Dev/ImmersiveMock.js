@@ -116,7 +116,7 @@
 		{ id: 3, sender: "00000001", to: [me.number], text: "By order of the Ministry: duelling in Hogsmeade's high street is forbidden until further notice.", sentAt: now - 26 * 60 * minute, official: "Ministry of Magic", isRead: true },
 		{ id: 4, sender: "20000005", to: [me.number], text: "Who fed the Puffskein?", sentAt: now - 5 * 60 * minute, groupTitle: "Beast Club", isRead: true },
 		{ id: 5, sender: "20000099", to: [me.number], text: "To whoever finds this,\n\n    Something stirs beneath the Forbidden Forest. The centaurs have gone quiet,\n    and the lanterns on the old path burn green at midnight.\n\nTell no one who sent this.", sentAt: now - 40 * minute, isRead: false },
-		{ id: 6, sender: "20000002", to: [me.number], text: "Dear Harriet,\n\nAre you coming to the Three Broomsticks tonight? Sirona says she will save us a table by the fire, and Poppy promised to bring the Puffskein (I told her not to).\n\nIf you are late, I am ordering the butterbeer without you.\n\nSincerely,\nNatsai Onai", sentAt: now - 12 * minute, isRead: false, parcel: { galleons: 25, status: "waiting" } },
+		{ id: 6, sender: "20000002", to: [me.number], text: "Dear Harriet,\n\nAre you coming to the Three Broomsticks tonight? Sirona says she will save us a table by the fire, and Poppy promised to bring the Puffskein (I told her not to).\n\nIf you are late, I am ordering the butterbeer without you.\n\nSincerely,\nNatsai Onai", sentAt: now - 12 * minute, isRead: false, parcel: { galleons: 25, items: [{ label: "Chocolate Frog", amount: 3, kind: "item", icon: "" }], status: "waiting" } },
 	];
 
 	const config =
@@ -142,7 +142,7 @@
 		maxLetterLength: 4000,
 		maxLetterLines: 150,
 		maxRecipients: 8,
-		galleons: { max: 10000, postage: 2, returnAfterDays: 7 },
+		parcels: { galleons: 10000, items: true, gear: true, maxItemStacks: 5, postage: 2, returnAfterDays: 7 },
 		hasPosts: true,
 		avatars: true,
 		maxContacts: 250,
@@ -274,6 +274,32 @@
 	}
 
 	/// <summary>
+	/// What the mock player could enclose, as Server/Parcels.js lists it.
+	/// </summary>
+	const mockCarriable = [
+				{ key: "n:native:wiggenweld_potion|", kind: "item", label: "Wiggenweld Potion", icon: "", amount: 4, reason: "" },
+				{ key: "n:native:edurus_potion|", kind: "item", label: "Edurus Potion", icon: "", amount: 2, reason: "" },
+				{ key: "n:native:head_011_rare|", kind: "gear", label: "Ravenclaw Scholar's Hat", icon: "", amount: 1, reason: "" },
+				{ key: "c:3", kind: "item", label: "Chocolate Frog", icon: "", amount: 6, reason: "" },
+				{ key: "c:7", kind: "item", label: "Recipe: Maxima Potion", icon: "", amount: 1, reason: "Recipes stay with you." },
+			];
+
+	/// <summary>
+	/// The parcel a page asked to send, as the server would describe it on the letter.
+	/// </summary>
+	/// <param name="request">{ galleons, items: [{ key, amount }] }</param>
+	/// <returns>{ galleons, items, status }</returns>
+	function MockParcel(request)
+	{
+		const items = (request.items || []).map((item) =>
+		{
+			const known = mockCarriable.find((entry) => entry.key === item.key);
+			return { label: known ? known.label : item.key, amount: item.amount, kind: known ? known.kind : "item", icon: "" };
+		});
+		return { galleons: Number(request.galleons) || 0, items, status: "waiting" };
+	}
+
+	/// <summary>
 	/// Answer one request.
 	/// </summary>
 	/// <param name="action">Action name</param>
@@ -387,8 +413,7 @@
 					continue;
 				}
 
-				const galleons = isOfficial ? 0 : Number(data.galleons) || 0;
-				letters.push({ id: nextId++, sender: me.number, to: [number], text: data.body, sentAt: Date.now(), isRead: true, parcel: galleons > 0 ? { galleons, status: "waiting" } : null });
+				letters.push({ id: nextId++, sender: me.number, to: [number], text: data.body, sentAt: Date.now(), isRead: true, parcel: !isOfficial && data.parcel ? MockParcel(data.parcel) : null });
 
 				if (target.saveAs && !contacts.some((contact) => contact.realNumber === number))
 				{
@@ -476,6 +501,8 @@
 		}
 		case "mail.officialSenders":
 			return canPostOfficial ? { ok: true, data: { senders: [{ number: "00000001", name: "Ministry of Magic" }, { number: "00000002", name: "Gringotts Wizarding Bank" }] } } : { ok: false, errorKey: "error.mail.officialDenied" };
+		case "parcels.carriable":
+			return { ok: true, data: { items: mockCarriable } };
 		case "parcels.collect":
 		{
 			const letter = letters.find((entry) => entry.id === data.messageId);

@@ -1,7 +1,7 @@
 // FranticDreamer 2026
 "use strict";
 
-const { Ok, Fail } = require("./Result.js");
+const { Ok, Fail, FailWith } = require("./Result.js");
 const Lang = require("./Lang.js");
 const { ClampInteger, maxOfficialRecipients } = require("./Config.js");
 const { IsSenderNumber, MessageKind, ReadPoll } = require("./Database.js");
@@ -759,17 +759,25 @@ class MailService
 			return Fail("error.mail.noRecipients", { clientKey });
 		}
 
-		// Each copy carries its own parcel of the same amount, so the writer needs enough for every recipient before any copy goes.
-		const galleons = this.#parcels.ReadGalleons(data.galleons);
+		// Each copy carries its own parcel of the same Galleons, so the writer needs enough for every recipient before any copy goes. Items go to one recipient only.
+		const request = this.#parcels.ReadRequest(data.parcel);
+		let plan = null;
 
-		if (galleons !== 0)
+		if (request === undefined)
 		{
-			const parcelProblem = galleons < 0 ? "error.parcel.invalid" : await this.#parcels.Check(entry, galleons, targets.size);
+			return Fail("error.parcel.invalid", { clientKey });
+		}
 
-			if (parcelProblem)
+		if (request)
+		{
+			const { problem, items } = await this.#parcels.Check(entry, request, targets.size);
+
+			if (problem)
 			{
-				return Fail(parcelProblem, { clientKey });
+				return FailWith(problem, { clientKey });
 			}
+
+			plan = { galleons: request.galleons, items };
 		}
 
 		let sent = 0;
@@ -778,7 +786,7 @@ class MailService
 
 		for (const [number, target] of targets)
 		{
-			const result = await this.#chats.SendLetter(entry, number, body, galleons);
+			const result = await this.#chats.SendLetter(entry, number, body, plan);
 
 			if (result.error)
 			{

@@ -83,6 +83,8 @@ Owls.Icons = (() =>
 		forward: Fa("share"),
 		poll: Fa("square-poll-vertical"),
 		coins: Fa("coins"),
+		paperclip: Fa("paperclip"),
+		parcel: Fa("box-open"),
 		dial: Fa("hashtag"),
 		radio: Fa("circle", "regular"),
 		radioOn: Fa("circle-check"),

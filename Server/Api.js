@@ -24,11 +24,11 @@ const { AddContactStatus } = require("./Contacts.js");
 /// </para>
 ///
 /// </summary>
-/// <param name="services">{ whenReady: Promise of boolean, senders, chats, directory, database, contacts, OnContactAdded(ownerNumber, contact) }</param>
+/// <param name="services">{ whenReady: Promise of boolean, senders, chats, directory, database, contacts, parcels, OnContactAdded(ownerNumber, contact) }</param>
 /// <returns>The API object</returns>
 function CreateApi(services)
 {
-	const { whenReady, senders, chats, directory, database, contacts, OnContactAdded } = services;
+	const { whenReady, senders, chats, directory, database, contacts, parcels, OnContactAdded } = services;
 	let isReady = false;
 
 	whenReady.then((ready) =>
@@ -113,6 +113,33 @@ function CreateApi(services)
 			}
 
 			return senders.Register(definition);
+		},
+
+		/// <summary>
+		/// Let the calling resource refuse items on owls: what may be sent, and what a recipient may collect. Dropped when that resource stops; calling again replaces them.
+		///
+		/// <para>
+		/// Each hook may be async and returns a refusal shown to the player as it is (in the calling resource's own words), or null to let it through.
+		/// A hook that throws refuses. frantic-owls itself already keeps back Galleons, worn gear, tools and mounts, and whatever the server switched off.
+		/// </para>
+		///
+		/// </summary>
+		/// <param name="resource">Name of the calling resource</param>
+		/// <param name="rules">{ CanAttach?({ player, characterId, item }), CanCollect?({ player, characterId, galleons, items }), OnTaken?({ player, characterId, items }) } where an item is { source: "native" | "custom", name, itemId, variation, kind, label, amount }</param>
+		/// <returns>{ ok, error }</returns>
+		RegisterParcelRules(resource, rules)
+		{
+			return parcels.RegisterRules(resource, rules);
+		},
+
+		/// <summary>
+		/// Drop the calling resource's parcel rules early (they are dropped automatically when it stops).
+		/// </summary>
+		/// <param name="resource">Name of the calling resource</param>
+		/// <returns>True if it had rules</returns>
+		UnregisterParcelRules(resource)
+		{
+			return parcels.UnregisterRules(resource);
 		},
 
 		/// <summary>

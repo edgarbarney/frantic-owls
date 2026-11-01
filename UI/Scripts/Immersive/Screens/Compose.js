@@ -62,6 +62,17 @@ Owls.DeskScreens.Compose = (() =>
 	}
 
 	/// <summary>
+	/// Read the items a saved draft encloses. The server checks them again against the inventory when the letter is sent.
+	/// </summary>
+	/// <param name="list">Saved list</param>
+	/// <returns>[{ key, label, kind, amount }]</returns>
+	function ReadSavedItems(list)
+	{
+		return (Array.isArray(list) ? list : []).filter((item) => item && typeof item.key === "string" && Number.isInteger(item.amount) && item.amount > 0)
+			.map((item) => ({ key: item.key, label: String(item.label || ""), kind: String(item.kind || "item"), amount: item.amount }));
+	}
+
+	/// <summary>
 	/// Build the screen.
 	/// </summary>
 	/// <param name="desk">Owls.Desk, for navigation and messages</param>
@@ -85,19 +96,35 @@ Owls.DeskScreens.Compose = (() =>
 			isFull: !!(saved && saved.isFull),
 			fullText: saved ? String(saved.fullText || "") : "",
 			everyone: !!(official && saved && saved.everyone),
-			// Official letters carry no Galleons.
+			// Official letters carry no parcel.
 			galleons: !official && saved ? Math.max(0, Math.floor(Number(saved.galleons) || 0)) : 0,
+			items: !official && saved ? ReadSavedItems(saved.items) : [],
 		};
 
 		/// <summary>
-		/// What a letter may carry here ({ max, postage, returnAfterDays }), or null when letters carry no Galleons (always for official ones).
+		/// What a letter may carry here ({ galleons (most per letter, 0 when off), items, gear, maxItemStacks, postage, returnAfterDays }), or null when it carries nothing (always for official ones).
 		/// </summary>
-		const galleonsConfig = official ? null : config.galleons || null;
+		const parcelConfig = official ? null : config.parcels || null;
 
 		/// <summary>
-		/// Whether the enclosure row is open, also while its amount is still empty.
+		/// Whether the Galleons field is open in the enclosure row, also while its amount is still empty.
 		/// </summary>
-		let isEnclosureOpen = draft.galleons > 0;
+		let isGalleonsOpen = draft.galleons > 0;
+
+		/// <summary>
+		/// Whether the item picker is open under the enclosure row.
+		/// </summary>
+		let isPickerOpen = false;
+
+		/// <summary>
+		/// The picker's rows as last fetched, in order: { key, kind, label, icon, amount, reason, input }.
+		/// </summary>
+		let carriable = [];
+
+		/// <summary>
+		/// Closes the enclose menu as last built; any click elsewhere on the screen calls it, as a menu does.
+		/// </summary>
+		let closeEncloseMenu = () => {};
 
 		// Answering adds the letter's writer, named the way they signed (or as the official sender they are).
 		if (replyTo && !draft.recipients.some((recipient) => recipient.kind === "reply"))
@@ -120,6 +147,7 @@ Owls.DeskScreens.Compose = (() =>
 		let picker = null;
 
 		const element = Element("section", { className: "compose" });
+		element.addEventListener("click", () => closeEncloseMenu());
 		const counter = Element("span", { className: "compose-counter" });
 		const status = Element("span", { className: "compose-status" });
 		const sealButton = Element("button", { className: "seal", title: T("mail.compose.send"), attributes: { "aria-label": T("mail.compose.send") }, on: { click: Send } });
@@ -164,7 +192,7 @@ Owls.DeskScreens.Compose = (() =>
 		{
 			clearTimeout(saveTimer);
 			saveTimer = null;
-			const isEmpty = draft.body.trim().length === 0 && (!draft.isFull || draft.fullText.trim().length === 0) && draft.recipients.every((recipient) => recipient.kind === "reply") && !draft.everyone && draft.galleons === 0;
+			const isEmpty = draft.body.trim().length === 0 && (!draft.isFull || draft.fullText.trim().length === 0) && draft.recipients.every((recipient) => recipient.kind === "reply") && !draft.everyone && draft.galleons === 0 && draft.items.length === 0;
 			Store.SaveDraft(draftKey, isEmpty ? null : { ...draft, savedAt: Date.now() });
 		}
 
@@ -506,58 +534,250 @@ Owls.DeskScreens.Compose = (() =>
 		}
 
 		/// <summary>
-		/// Open the enclosure row, or close it when it holds nothing.
+		/// Whether the letter encloses anything, or has the enclosure row open to do so.
 		/// </summary>
-		function ToggleEnclosure()
+		/// <returns>True when the row should show</returns>
+		function IsEnclosing()
 		{
-			isEnclosureOpen = !isEnclosureOpen || draft.galleons > 0;
+			return isGalleonsOpen || isPickerOpen || draft.galleons > 0 || draft.items.length > 0;
+		}
+
+		/// <summary>
+		/// Open what the enclose menu chose: the Galleons field, or the item picker.
+		/// </summary>
+		/// <param name="choice">"galleons" or "items"</param>
+		function Enclose(choice)
+		{
+			if (choice === "galleons")
+			{
+				isGalleonsOpen = true;
+			}
+			else
+			{
+				isPickerOpen = true;
+				carriable = [];
+				LoadCarriable();
+			}
+
 			Rebuild();
 		}
 
 		/// <summary>
-		/// The row under the toolbar where Galleons are enclosed with the letter: the amount, and what happens to Galleons nobody collects.
+		/// Fetch what the writer could enclose right now. The server reads the inventory, and checks everything again when the letter is sent.
+		/// </summary>
+		async function LoadCarriable()
+		{
+			const result = await Owls.Bridge.Request("parcels.carriable", {});
+
+			if (!isPickerOpen)
+			{
+				return;
+			}
+
+			if (!result.ok)
+			{
+				desk.ShowError(result.error);
+				isPickerOpen = false;
+				Rebuild();
+				return;
+			}
+
+			carriable = (result.data.items || []).map((item) => ({ ...item }));
+			RenderItemPicker();
+		}
+
+		/// <summary>
+		/// The enclose button and its menu: Galleons, or items and gear, as the server allows.
+		/// </summary>
+		/// <returns>Element holding both</returns>
+		function CreateEncloseMenu()
+		{
+			const button = Element("button", { className: `desk-button is-quiet is-icon ${IsEnclosing() ? "is-active" : ""}`, title: T("parcel.encloseHint"), attributes: { "aria-label": T("parcel.enclose"), "aria-haspopup": "menu" } },
+			[
+				Element("i", { className: "fa-solid fa-paperclip", attributes: { "aria-hidden": "true" } }),
+			]);
+			const options =
+			[
+				parcelConfig.galleons > 0 ? ["galleons", "fa-coins", T("parcel.menu.galleons")] : null,
+				parcelConfig.items || parcelConfig.gear ? ["items", "fa-box-open", T("parcel.menu.items")] : null,
+			].filter(Boolean);
+			const menu = Element("div", { className: "enclose-menu", attributes: { role: "menu" } }, options.map(([choice, icon, label]) =>
+				Element("button", { className: "enclose-option", attributes: { role: "menuitem" }, on: { click: () => Enclose(choice) } },
+				[
+					Element("i", { className: `fa-solid ${icon}`, attributes: { "aria-hidden": "true" } }),
+					Element("span", { text: label }),
+				])));
+			const wrap = Element("span", { className: "enclose-wrap" }, [button, menu]);
+			menu.hidden = true;
+
+			button.addEventListener("click", (event) =>
+			{
+				event.stopPropagation();
+				menu.hidden = !menu.hidden;
+			});
+
+			closeEncloseMenu = () =>
+			{
+				menu.hidden = true;
+			};
+
+			return wrap;
+		}
+
+		/// <summary>
+		/// The row under the toolbar listing what the letter encloses: the Galleons field and the chosen items, with what happens to a parcel nobody collects.
 		/// </summary>
 		/// <returns>Row element</returns>
 		function CreateEnclosure()
 		{
-			const amount = Element("input", { className: "enclosure-input", attributes: { type: "number", min: "1", max: String(galleonsConfig.max), step: "1", placeholder: "0", "aria-label": T("parcel.enclose") } });
-			const terms = T("parcel.terms", { count: galleonsConfig.returnAfterDays });
-			amount.value = draft.galleons > 0 ? String(draft.galleons) : "";
-			amount.addEventListener("input", () =>
-			{
-				const value = Number(amount.value);
-				draft.galleons = Number.isInteger(value) && value > 0 ? value : 0;
-				amount.classList.toggle("is-over", draft.galleons > galleonsConfig.max);
-				QueueSave();
-			});
+			const parts = [Element("i", { className: "fa-solid fa-box-open enclosure-icon", attributes: { "aria-hidden": "true" } }), Element("span", { className: "enclosure-label", text: T("parcel.enclosed") })];
 
-			const remove = Element("button", { className: "desk-button is-quiet is-icon", title: T("parcel.remove"), attributes: { "aria-label": T("parcel.remove") }, on: { click: () =>
+			if (parcelConfig.galleons > 0 && (isGalleonsOpen || draft.galleons > 0))
+			{
+				const amount = Element("input", { className: "enclosure-input", attributes: { type: "number", min: "1", max: String(parcelConfig.galleons), step: "1", placeholder: "0", "aria-label": T("parcel.menu.galleons") } });
+				amount.value = draft.galleons > 0 ? String(draft.galleons) : "";
+				amount.addEventListener("input", () =>
+				{
+					const value = Number(amount.value);
+					draft.galleons = Number.isInteger(value) && value > 0 ? value : 0;
+					amount.classList.toggle("is-over", draft.galleons > parcelConfig.galleons);
+					QueueSave();
+				});
+
+				parts.push(Element("span", { className: "enclosure-galleons" }, [amount, Element("span", { text: T("parcel.menu.galleons") })]));
+
+				requestAnimationFrame(() =>
+				{
+					if (draft.galleons === 0 && !isPickerOpen)
+					{
+						amount.focus();
+					}
+				});
+			}
+
+			for (const item of draft.items)
+			{
+				parts.push(Element("span", { className: "enclosure-chip" },
+				[
+					Element("span", { text: T("parcel.itemLine", { label: item.label, count: item.amount }) }),
+					Element("button", { className: "enclosure-chip-remove", title: T("parcel.remove"), attributes: { "aria-label": T("parcel.remove") }, on: { click: () =>
+					{
+						draft.items = draft.items.filter((other) => other.key !== item.key);
+						SaveNow();
+						Rebuild();
+					} } }, [Element("i", { className: "fa-solid fa-xmark", attributes: { "aria-hidden": "true" } })]),
+				]));
+			}
+
+			const terms = T("parcel.terms", { count: parcelConfig.returnAfterDays });
+			parts.push(Element("span", { className: "enclosure-terms", text: parcelConfig.postage > 0 ? `${terms} ${T("parcel.postage", { count: parcelConfig.postage })}` : terms }));
+			parts.push(Element("button", { className: "desk-button is-quiet is-icon", title: T("parcel.removeAll"), attributes: { "aria-label": T("parcel.removeAll") }, on: { click: () =>
 			{
 				draft.galleons = 0;
-				isEnclosureOpen = false;
+				draft.items = [];
+				isGalleonsOpen = false;
+				isPickerOpen = false;
 				SaveNow();
 				Rebuild();
 			} } },
 			[
 				Element("i", { className: "fa-solid fa-xmark", attributes: { "aria-hidden": "true" } }),
-			]);
+			]));
 
-			requestAnimationFrame(() =>
-			{
-				if (draft.galleons === 0)
-				{
-					amount.focus();
-				}
-			});
+			return Element("div", { className: "compose-enclosure" }, parts);
+		}
 
-			return Element("div", { className: "compose-enclosure" },
+		/// <summary>
+		/// The item picker's panel, filled by RenderItemPicker once the inventory arrives.
+		/// </summary>
+		const itemPickerList = Element("div", { className: "enclosure-picker-list" });
+
+		/// <summary>
+		/// The item picker under the enclosure row: one row per item with an amount to enclose, and the reason under any that cannot travel.
+		/// </summary>
+		/// <returns>Panel element</returns>
+		function CreateItemPicker()
+		{
+			RenderItemPicker();
+
+			return Element("div", { className: "enclosure-picker" },
 			[
-				Element("i", { className: "fa-solid fa-coins enclosure-icon", attributes: { "aria-hidden": "true" } }),
-				Element("label", { className: "enclosure-label", text: T("parcel.enclose") }),
-				amount,
-				Element("span", { className: "enclosure-terms", text: galleonsConfig.postage > 0 ? `${terms} ${T("parcel.postage", { count: galleonsConfig.postage })}` : terms }),
-				remove,
+				Element("span", { className: "enclosure-picker-intro", text: T("parcel.itemsIntro") }),
+				itemPickerList,
+				Element("div", { className: "enclosure-picker-actions" },
+				[
+					Element("button", { className: "desk-button is-quiet", text: T("common.cancel"), on: { click: () =>
+					{
+						isPickerOpen = false;
+						Rebuild();
+					} } }),
+					Element("button", { className: "desk-button is-primary", text: T("parcel.enclose"), on: { click: EncloseItems } }),
+				]),
 			]);
+		}
+
+		/// <summary>
+		/// Draw the picker's rows from what was last fetched.
+		/// </summary>
+		function RenderItemPicker()
+		{
+			if (carriable.length === 0)
+			{
+				itemPickerList.replaceChildren(Element("span", { className: "enclosure-picker-note", text: T(isPickerOpen ? "parcel.loading" : "parcel.noItems") }));
+				return;
+			}
+
+			itemPickerList.replaceChildren(...carriable.map((item) =>
+			{
+				const enclosed = draft.items.find((other) => other.key === item.key);
+				item.input = Element("input", { className: "enclosure-input", attributes: { type: "number", min: "0", max: String(item.amount), step: "1", value: enclosed ? String(enclosed.amount) : "0", "aria-label": item.label } });
+				item.input.disabled = !!item.reason;
+				return Element("label", { className: `enclosure-picker-row${item.reason ? " is-disabled" : ""}` },
+				[
+					Element("i", { className: `fa-solid ${item.kind === "gear" ? "fa-shirt" : "fa-flask"} enclosure-icon`, attributes: { "aria-hidden": "true" } }),
+					Element("span", { className: "enclosure-picker-text" },
+					[
+						Element("span", { className: "enclosure-picker-label", text: item.label }),
+						Element("span", { className: "enclosure-picker-detail", text: item.reason || T("parcel.owned", { count: item.amount }) }),
+					]),
+					item.input,
+				]);
+			}));
+		}
+
+		/// <summary>
+		/// Enclose the amounts chosen in the picker, replacing the items enclosed before.
+		/// </summary>
+		function EncloseItems()
+		{
+			const chosen = [];
+
+			for (const item of carriable)
+			{
+				const amount = item.input ? Number(item.input.value) : 0;
+
+				if (!Number.isInteger(amount) || amount < 0 || amount > item.amount)
+				{
+					desk.ShowError(T("error.parcel.invalid"));
+					return;
+				}
+
+				if (amount > 0 && !item.reason)
+				{
+					chosen.push({ key: item.key, label: item.label, kind: item.kind, amount });
+				}
+			}
+
+			if (chosen.length > parcelConfig.maxItemStacks)
+			{
+				desk.ShowError(T("error.parcel.tooManyItems", { max: parcelConfig.maxItemStacks }));
+				return;
+			}
+
+			draft.items = chosen;
+			isPickerOpen = false;
+			SaveNow();
+			Rebuild();
 		}
 
 		/// <summary>
@@ -633,10 +853,7 @@ Owls.DeskScreens.Compose = (() =>
 			const title = Element("span", { className: "compose-title", text: titleText });
 			// Leaving the letter (back, or throwing it away) sits on the left and the ways of writing it on the right, so both sides stay short enough for the title to sit over the sheet's centre.
 			const start = Element("div", { className: "desk-toolbar-start" }, [backButton, discardButton]);
-			const encloseButton = galleonsConfig ? Element("button", { className: `desk-button is-quiet is-icon ${isEnclosureOpen ? "is-active" : ""}`, title: T("parcel.encloseHint"), attributes: { "aria-label": T("parcel.enclose") }, on: { click: ToggleEnclosure } },
-			[
-				Element("i", { className: "fa-solid fa-coins", attributes: { "aria-hidden": "true" } }),
-			]) : null;
+			const encloseButton = parcelConfig ? CreateEncloseMenu() : null;
 			const actions = Element("div", { className: "desk-toolbar-actions" }, [everyoneButton, encloseButton, modeButton].filter(Boolean));
 			const toolbar = Element("div", { className: `desk-toolbar ${official ? "is-wide" : ""}` }, [start, title, actions]);
 			let sheet = null;
@@ -684,7 +901,8 @@ Owls.DeskScreens.Compose = (() =>
 			const parts =
 			[
 				toolbar,
-				galleonsConfig && isEnclosureOpen ? CreateEnclosure() : null,
+				parcelConfig && IsEnclosing() ? CreateEnclosure() : null,
+				parcelConfig && isPickerOpen ? CreateItemPicker() : null,
 				draft.isFull ? Element("div", { className: "compose-address" }, [picker.element]) : null,
 				stage,
 				Element("div", { className: "compose-footer" }, [status, counter]),
@@ -754,13 +972,23 @@ Owls.DeskScreens.Compose = (() =>
 				return;
 			}
 
-			const galleons = galleonsConfig ? draft.galleons : 0;
+			const galleons = parcelConfig ? draft.galleons : 0;
+			const items = parcelConfig ? draft.items : [];
 
-			if (galleons > (galleonsConfig ? galleonsConfig.max : 0))
+			if (galleons > (parcelConfig ? parcelConfig.galleons : 0))
 			{
-				desk.ShowError(T("error.parcel.tooMany", { max: galleonsConfig.max }));
+				desk.ShowError(T("error.parcel.tooMany", { max: parcelConfig.galleons }));
 				return;
 			}
+
+			// Items cannot be copied, so a letter enclosing them goes to one recipient.
+			if (items.length > 0 && draft.recipients.length > 1)
+			{
+				desk.ShowError(T("error.parcel.oneRecipient"));
+				return;
+			}
+
+			const parcel = galleons > 0 || items.length > 0 ? { galleons, items: items.map((item) => ({ key: item.key, amount: item.amount })) } : null;
 
 			isSending = true;
 			status.textContent = T("mail.compose.sending");
@@ -768,7 +996,7 @@ Owls.DeskScreens.Compose = (() =>
 
 			const result = official
 				? await Owls.Bridge.Request("mail.sendOfficial", { sender: official.number, everyone: draft.everyone, recipients: draft.everyone ? [] : GetRecipientsToSend(), body: text, clientKey: NewKey() })
-				: await Owls.Bridge.Request("mail.send", { recipients: GetRecipientsToSend(), replyToId: reply ? reply.replyToId : 0, replyLabel: reply ? reply.name : "", body: text, galleons, clientKey: NewKey() });
+				: await Owls.Bridge.Request("mail.send", { recipients: GetRecipientsToSend(), replyToId: reply ? reply.replyToId : 0, replyLabel: reply ? reply.name : "", body: text, parcel, clientKey: NewKey() });
 
 			isSending = false;
 			status.textContent = "";

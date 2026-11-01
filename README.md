@@ -118,7 +118,7 @@ The Muggle Phone's house colour schemes.
 ## Requirements
 
 - `hmp-lib`, `hmp-mysql` and `hmp-core` (0.9.0).
-- Optional: `hmp-admin` (announcement permissions), `hmp-inventory` (Galleons sent by owl), `hmp-webhooks` (Discord logging through its queue), `hmp-blips` (location markers that survive its map resyncs and wait for readers in another area), `hmp-activities` (Quiet during duels) and `hmp-interact` (owl post prompts in immersive mode).
+- Optional: `hmp-admin` (announcement permissions), `hmp-inventory` (parcels: Galleons, items and gear sent by owl), `hmp-webhooks` (Discord logging through its queue), `hmp-blips` (location markers that survive its map resyncs and wait for readers in another area), `hmp-activities` (Quiet during duels) and `hmp-interact` (owl post prompts in immersive mode).
 - A working `hmp-mysql` connection. The tables are created automatically on first start through `hmp-mysql`'s migration ledger.
 - A loaded `hmp-core` character: Owls belong to characters, not accounts.
 
@@ -193,8 +193,8 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Lock Screens | ⬜ |
 | Privacy policy every character accepts before their first owl | ⬜ |
 | Howlers: An owl that shouts itself out loud for everyone nearby, then burns | ⬜ |
-| Parcels: Galleons carried by an owl or letter, collected by hand (hmp-inventory) | ⚙️ |
-| Parcels: Items and gear carried by an owl | ⬜ |
+| Parcels: Galleons, items and gear carried by an owl or letter, collected by hand (hmp-inventory) | ⚙️ |
+| Parcels: Photos attached to an owl | ⬜ |
 | Apps from other resources: Their own tiles on the home screen | ⬜ |
 | Public directory of businesses and services | ⬜ |
 | Owl the Ministry: Report in-character emergencies, call Ministry employees and Aurors | ⬜ |
@@ -350,17 +350,20 @@ Owls are never pruned unless the server sets `storage.messageRetentionDays`. The
 
 ## Parcels
 
-An owl can carry Galleons, in both modes: The phone's coin button attaches them to the next one-to-one owl, and the letter desk's coin button encloses them with a letter (each recipient gets the amount). Bulk owls, announcements, official letters and owls to a system sender carry none.
+An owl can carry a parcel, in both modes: Galleons, items and gear. The phone's paperclip opens an attach menu (Galleons, Items & gear, and the location and poll owls), and the letter desk's paperclip opens the same choices for a letter. Bulk owls, announcements, official letters and owls to a system sender carry none.
 
-- The Galleons, and any postage (`attachments.postageGalleons`), leave the sender when the owl is sent. Postage pays the owl and is never returned.
-- The recipient presses **Collect** on the owl, once it has landed, to put them in their inventory. Nothing lands in an inventory unasked. In immersive mode a letter's Galleons follow its reading rules, so a letter read only at an owl post is collected there.
-- Galleons nobody collects within `attachments.returnAfterDays` go back to the sender, paid the next time they are online. Unsending an owl sends its Galleons back at once. So do owls a recipient deleted, blocked or never reached: they simply wait out the days.
+- Everything in the parcel, and any postage (`attachments.postageGalleons`), leaves the sender when the owl is sent. Postage pays the owl and is never returned.
+- The item picker lists what the sender carries, with the reason under anything that cannot travel. Worn gear, tools, mounts and Galleons (which have their own field) are never listed. A piece of gear worn while another copy is stored stays too, since the two cannot be told apart. `attachments.items` and `attachments.gear` switch each kind off, and `attachments.maxItemStacks` caps the different items on one owl.
+- A letter carrying items goes to one recipient, since items cannot be copied. Galleons alone can go to several, each getting the amount.
+- The recipient presses **Collect** on the owl, once it has landed, to put the parcel in their inventory. Nothing lands in an inventory unasked. When it does not all fit, what fits arrives and the rest waits on the owl. In immersive mode a letter's parcel follows its reading rules, so a letter read only at an owl post is collected there.
+- A parcel nobody collects within `attachments.returnAfterDays` goes back to the sender, paid the next time they are online (a full inventory waits for room). Unsending an owl sends its parcel back at once. So do owls a recipient deleted, blocked or never reached: they simply wait out the days.
 - Neither side is told who the other is. Both see only "Waiting to be collected", "Collected" or "Returned to the sender.", so an unsigned letter stays anonymous.
-- `attachments.maxGalleons` caps one owl, and `attachments.dailyGalleonsCap` caps what one character sends in 24 hours (`0` is no cap).
+- `attachments.maxGalleons` caps one owl's Galleons, and `attachments.dailyGalleonsCap` caps what one character sends in 24 hours (`0` is no cap).
+- Other resources can keep things back with [parcel rules](#parcel-rules), for example clothes a gamemode only lends, or gear a recipient has no room for.
 
-Galleons are a game item, and `hmp-inventory`'s own transfers refuse game items, because they live in the game's inventory rather than in one database row. So every step is written to `frantic_owls_parcels` before the Galleons move. A crash between the two is settled at the next start the way that never duplicates Galleons, and the server log names the parcel and amount for staff to check. Without `hmp-inventory` running, parcels are off.
+Galleons and every other game item live in the game's own inventory, and `hmp-inventory`'s transfers refuse them, because they are not one database row. So each of them gets a row in `frantic_owls_parcel_items` that is written before it moves. A crash in between is settled at the next start the way that never duplicates anything: a parcel caught leaving goes back with what is known to have left, and one caught arriving finishes later. The server log names anything left uncertain, with its amount, for staff to check. Custom items (registered by other resources) do move atomically, into a `hmp-inventory` container of the parcel's own (`frantic-owls:parcel:<id>`), which is their record until they arrive. Without `hmp-inventory` running, parcels are off.
 
-A parcel whose sender's character was deleted is never paid back, since nobody can receive it. With `storage.messageRetentionDays` shorter than `attachments.returnAfterDays`, an owl can be pruned before its Galleons are collected; they still go back to the sender.
+A parcel whose sender's character was deleted is never paid back, since nobody can receive it. With `storage.messageRetentionDays` shorter than `attachments.returnAfterDays`, an owl can be pruned before its parcel is collected; the parcel still goes back to the sender.
 
 ## Owl flight
 
@@ -466,6 +469,26 @@ Owls.IsOpen();
 
 The chosen key is kept only in memory on that client, so the server's configuration arriving again never undoes it. The resource that chose it saves the player's choice itself and sets it again when either resource restarts; when it stops, the server's `openKey` comes back and its listeners are dropped.
 
+### Parcel rules
+
+A server keeps things a parcel must not carry, or a recipient must not collect yet, with rules of its own:
+
+```js
+const Owls = Imports.get("frantic-owls").api;
+
+Owls.RegisterParcelRules("my-gamemode",
+{
+	// Before an item leaves: shown in the picker under the item, and checked again when the owl is sent.
+	CanAttach: ({ player, characterId, item }) => item.itemId === "QuestKey" ? "Quest items stay with you." : null,
+	// Before a parcel is collected: the parcel waits on the owl until this lets it through, or it goes back.
+	CanCollect: ({ player, characterId, galleons, items }) => HasRoomFor(player, items) ? null : "Make room in your bag first.",
+	// After items left a sender, for a resource that counts what players give away.
+	OnTaken: ({ player, characterId, items }) => { /* ... */ },
+});
+```
+
+An `item` is `{ source, name, itemId, variation, kind, label, amount }`: `source` is `"native"` for a game item (`name` is its `hmp-inventory` name such as `native:wiggenweld_potion`, `itemId` the game's id) or `"custom"` for an item another resource registered. A hook may be async and returns the refusal to show, in your own words, or `null`. A hook that throws refuses, so a rule that cannot answer never lets through what it meant to keep. Rules are dropped when your resource stops, and frantic-owls starts with none, so register them on start and again whenever frantic-owls starts. Calling it again replaces them; `UnregisterParcelRules("my-gamemode")` drops them early. frantic-owls itself already keeps back Galleons (they have their own field), worn gear, tools, mounts and whatever the server switched off.
+
 To follow calls, listen for the server event `frantic-owls:call`. It fires when a call starts ringing (`state: "ringing"`), is answered (`"active"`) and ends (`"ended"`), with `{ callId, state, outcome, caller, callee, callerPlayerId, calleePlayerId, startedAt, answeredAt }`. `caller` and `callee` are owl numbers, a player ID is `-1` when that owl is offline, and `outcome` is set once it ended: `"answered"`, `"missed"`, `"declined"` or `"cancelled"`.
 
 To react to owls instead of sending them, listen for the server event `frantic-owls:sent`. It carries `{ chatId, chatKind, messageId, kind, sender, origin, recipients, body, forwarded, sentAt, deliverAt }` for every owl sent (not for group notes), where `origin` is `"player"`, `"system"` or `"announcement"` and `forwarded` is `true` for a forwarded copy. `kind` is `"text"`, `"location"` for a location owl, whose `body` is then JSON: `{ x, y, z, areaId, regionId, world, place }` (centimetres, as `player.position`), or `"poll"` for a poll, whose `body` is JSON too: `{ question, options, multiple }`. Votes raise no event.
@@ -498,11 +521,14 @@ Settings only one front end uses carry its prefix (`phonemode_` or `immersivemod
 | `flight.secondsPerHundredMetres` | `3` | Extra flight time per 100 m between the two characters. |
 | `flight.groupSeconds` | `5` | Flight time of bulk owls. |
 | `attachments.galleons` | `true` | Owls and letters can carry Galleons (see [Parcels](#parcels)). Needs `hmp-inventory`. |
+| `attachments.items` | `true` | Owls and letters can carry items (potions, ingredients, custom items). |
+| `attachments.gear` | `true` | Owls and letters can carry gear that is not worn. |
+| `attachments.maxItemStacks` | `5` | Most different items one owl carries. |
 | `attachments.galleonsItem` | `"native:galleons"` | `hmp-inventory` item that is money. |
 | `attachments.maxGalleons` | `10000` | Most Galleons one owl or letter copy carries. |
-| `attachments.postageGalleons` | `0` | Galleons charged per owl carrying Galleons, never returned. `0` is free. |
+| `attachments.postageGalleons` | `0` | Galleons charged per owl carrying a parcel, never returned. `0` is free. |
 | `attachments.dailyGalleonsCap` | `0` | Most Galleons one character sends in 24 hours. `0` is no cap. |
-| `attachments.returnAfterDays` | `7` | Days before uncollected Galleons go back to the sender. |
+| `attachments.returnAfterDays` | `7` | Days before an uncollected parcel goes back to the sender. |
 | `announcements.enabled` | `true` | Register the Ministry sender and `/owl_announce`. |
 | `announcements.command` | `"owl_announce"` | Command that sends an announcement. |
 | `announcements.senderName` / `avatarUrl` | `"Ministry of Magic"` / `""` | Who announcements come from. |

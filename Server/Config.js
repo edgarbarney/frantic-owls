@@ -70,6 +70,9 @@ const defaultConfig = Object.freeze
 	attachments:
 	{
 		galleons: true,
+		items: true,
+		gear: true,
+		maxItemStacks: 5,
 		galleonsItem: "native:galleons",
 		maxGalleons: 10000,
 		postageGalleons: 0,
@@ -496,6 +499,9 @@ function Sanitise(config)
 	// Parcels need hmp-inventory too; without it they stay off whatever this says (see Parcels.js).
 	const attachments = config.attachments;
 	attachments.galleons = attachments.galleons !== false;
+	attachments.items = attachments.items !== false;
+	attachments.gear = attachments.gear !== false;
+	attachments.maxItemStacks = ClampInteger(attachments.maxItemStacks, 1, 20, fallback.attachments.maxItemStacks);
 	attachments.galleonsItem = String(attachments.galleonsItem || fallback.attachments.galleonsItem).trim() || fallback.attachments.galleonsItem;
 	attachments.maxGalleons = ClampInteger(attachments.maxGalleons, 1, 1000000000, fallback.attachments.maxGalleons);
 	attachments.postageGalleons = ClampInteger(attachments.postageGalleons, 0, 1000000, fallback.attachments.postageGalleons);
@@ -720,6 +726,28 @@ function LoadPosts(hmp)
 }
 
 /// <summary>
+/// What the pages need to offer parcels, or null when owls carry nothing.
+/// </summary>
+/// <param name="attachments">The "attachments" section of the server config</param>
+/// <returns>{ galleons (most per owl, 0 when off), items, gear, maxItemStacks, postage, returnAfterDays } or null</returns>
+function GetClientParcels(attachments)
+{
+	if (!attachments.galleons && !attachments.items && !attachments.gear)
+	{
+		return null;
+	}
+
+	return {
+		galleons: attachments.galleons ? attachments.maxGalleons : 0,
+		items: attachments.items,
+		gear: attachments.gear,
+		maxItemStacks: attachments.maxItemStacks,
+		postage: attachments.postageGalleons,
+		returnAfterDays: attachments.returnAfterDays,
+	};
+}
+
+/// <summary>
 /// Pick the settings a client needs to draw its front end. Nothing here is secret, but it is kept minimal.
 /// </summary>
 /// <param name="config">Loaded server configuration</param>
@@ -744,8 +772,8 @@ function GetClientConfig(config, languages)
 		defaultSound: config.notifications.defaultSound,
 		wwiseEvent: config.notifications.wwiseEvent,
 		requestTimeoutMs: config.network.requestTimeoutMs,
-		// Whether parcels can carry Galleons is decided again once hmp-inventory is known to run (see Main.js).
-		galleons: config.attachments.galleons ? { max: config.attachments.maxGalleons, postage: config.attachments.postageGalleons, returnAfterDays: config.attachments.returnAfterDays } : null,
+		// What owls may carry. Main.js clears it once hmp-inventory is known not to run, since nothing can be carried without it.
+		parcels: GetClientParcels(config.attachments),
 	};
 
 	if (config.mode === "immersive")
