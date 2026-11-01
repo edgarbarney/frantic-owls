@@ -96,3 +96,135 @@ test("one failed owl spawn does not prevent prompts or later owls", () =>
 		delete global.WorldObject;
 	}
 });
+
+test("post blips require an explicit boolean independently of owl props", () =>
+{
+	for (const showBlip of [undefined, false, "true", 1])
+	{
+		assert.equal(Clean([{ ...base, showBlip }])[0].showBlip, false);
+	}
+	const post = Clean([{ ...base, showBlip: true }])[0];
+	assert.equal(post.showBlip, true);
+	assert.equal(post.spawnOwl, false);
+});
+
+test("Field Guide post blips remain visible outside their region and preserve map boundaries", async () =>
+{
+	const markers = new Map([["location.42", { label: "Shared location" }]]);
+	const api =
+	{
+		async upsert(marker)
+		{
+			markers.set(marker.id, marker);
+		},
+		remove(id, resource)
+		{
+			assert.equal(resource, "frantic-owls");
+			return markers.delete(id);
+		},
+	};
+	const service = new PostService({}, Clean([{ ...base, label: "The Hall", showBlip: true, areaId: "Castle", regionId: "Hall" }, { ...base, id: "hidden" }]), () => null, () => {}, "Use", () => ({ markers: api }));
+	await service.RefreshBlips();
+	assert.equal(markers.size, 2);
+	const marker = markers.get("post.hall");
+	assert.deepEqual(marker.position, base.position);
+	assert.equal(marker.label, "The Hall");
+	assert.equal(marker.ttl, 0);
+	assert.equal(marker.areaId, "Castle");
+	assert.equal(marker.icon, "UI_T_MiniMap_Waypoint");
+	assert.equal(Object.hasOwn(marker, "regionId"), false);
+	assert.equal(Object.hasOwn(marker, "audience"), false);
+	assert.equal(marker.virtualWorld, 0);
+	service.Forget();
+	assert.ok(markers.has("post.hall"));
+	service.SetPosts(Clean([{ ...base, showBlip: false }]));
+	await service.RefreshBlips();
+	assert.deepEqual([...markers.keys()], ["location.42"]);
+	service.SetPosts(Clean([{ ...base, showBlip: true }]));
+	await service.RefreshBlips();
+	assert.equal(markers.get("post.hall").areaId, "Overland");
+	service.Unregister();
+	assert.deepEqual([...markers.keys()], ["location.42"]);
+});
+
+test("post blips recover when the optional registry starts or restarts", async () =>
+{
+	let registry = null;
+	const published = [];
+	const service = new PostService({}, Clean([{ ...base, showBlip: true }]), () => null, () => {}, "Use", () => registry);
+	await service.RefreshBlips();
+	assert.equal(published.length, 0);
+	registry = { markers: { async upsert(marker) { published.push(marker); }, remove() {} } };
+	await service.RefreshBlips();
+	assert.equal(published.length, 1);
+	service.ClearBlips();
+	await service.RefreshBlips();
+	assert.equal(published.length, 2);
+	service.Unregister();
+});
+
+test("a failed blip does not prevent subsequent post markers", async () =>
+{
+	const published = [];
+	const registry =
+	{
+		markers:
+		{
+			async upsert(marker)
+			{
+				if (marker.id === "post.hall")
+				{
+					throw new Error("Marker quota reached");
+				}
+				published.push(marker.id);
+			},
+			remove() {},
+		},
+	};
+	const service = new PostService({}, Clean([{ ...base, showBlip: true }, { ...base, id: "tower", showBlip: true }]), () => null, () => {}, "Use", () => registry);
+	await service.RefreshBlips();
+	assert.deepEqual(published, ["post.tower"]);
+	service.Unregister();
+});
+
+test("a reload or stop during asynchronous publication cannot leave a stale post marker", async () =>
+{
+	const markers = new Map();
+	let release;
+	let started;
+	const pending = new Promise((resolve) => { started = resolve; });
+	const registry =
+	{
+		markers:
+		{
+			async upsert(marker)
+			{
+				if (marker.label === "Old")
+				{
+					started();
+					await new Promise((resolve) => { release = resolve; });
+				}
+				markers.set(marker.id, marker);
+			},
+			remove(id) { markers.delete(id); },
+		},
+	};
+	const service = new PostService({}, Clean([{ ...base, label: "Old", showBlip: true }]), () => null, () => {}, "Use", () => registry);
+	const oldRefresh = service.RefreshBlips();
+	await pending;
+	service.SetPosts(Clean([{ ...base, label: "New", showBlip: true }]));
+	const newRefresh = service.RefreshBlips();
+	release();
+	await Promise.all([oldRefresh, newRefresh]);
+	assert.equal(markers.get("post.hall").label, "New");
+	service.Unregister();
+	assert.equal(markers.size, 0);
+
+	const stoppedService = new PostService({}, Clean([{ ...base, label: "Old", showBlip: true }]), () => null, () => {}, "Use", () => registry);
+	const stoppingRefresh = stoppedService.RefreshBlips();
+	await new Promise((resolve) => setImmediate(resolve));
+	stoppedService.Unregister();
+	release();
+	await stoppingRefresh;
+	assert.equal(markers.size, 0);
+});

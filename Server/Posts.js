@@ -24,6 +24,11 @@ const interactionPrefix = "frantic-owls.post.";
 /// </summary>
 const owlModel = "/Game/Gameplay/Stations/Interaction/MailInteraction/BP_PropOwl_OwlStation.BP_PropOwl_OwlStation_C";
 
+/// <summary>
+/// Native Field Guide page icon; the game's asset names it Waypoint.
+/// </summary>
+const postBlipIcon = "UI_T_MiniMap_Waypoint";
+
 // ========================
 // Owl Posts
 // ========================
@@ -76,6 +81,26 @@ class PostService
 	#owls = [];
 
 	/// <summary>
+	/// Returns hmp-blips while it is running.
+	/// </summary>
+	#GetBlips;
+
+	/// <summary>
+	/// Marker registrations owned by the posts, separate from shared-location markers.
+	/// </summary>
+	#blips = [];
+
+	/// <summary>
+	/// Serialises asynchronous marker publication so an older reload cannot remove a newer marker with the same ID.
+	/// </summary>
+	#blipQueue = Promise.resolve();
+
+	/// <summary>
+	/// Invalidates queued work when posts reload, the dependency restarts or the resource stops.
+	/// </summary>
+	#blipRevision = 0;
+
+	/// <summary>
 	/// Constructor.
 	/// </summary>
 	/// <param name="hmp">hmp-lib server import</param>
@@ -83,13 +108,15 @@ class PostService
 	/// <param name="GetInteract">Function returning the hmp-interact import, or null</param>
 	/// <param name="OnUse">Function receiving (player, post) when a post's prompt is used</param>
 	/// <param name="promptLabel">Prompt text shown at every post</param>
-	constructor(hmp, posts, GetInteract, OnUse, promptLabel)
+	/// <param name="GetBlips">Function returning the optional hmp-blips import</param>
+	constructor(hmp, posts, GetInteract, OnUse, promptLabel, GetBlips = () => null)
 	{
 		this.#hmp = hmp;
 		this.#posts = posts;
 		this.#GetInteract = GetInteract;
 		this.#OnUse = OnUse;
 		this.#promptLabel = promptLabel;
+		this.#GetBlips = GetBlips;
 	}
 
 	/// <summary>
@@ -121,11 +148,12 @@ class PostService
 	}
 
 	/// <summary>
-	/// Replace owl props and offer every post through hmp-interact when it is running.
+	/// Replace owl props and blips, and offer every post through hmp-interact when it is running.
 	/// </summary>
 	Register()
 	{
 		this.Unregister();
+		this.RefreshBlips();
 
 		for (const post of this.#posts)
 		{
@@ -192,6 +220,104 @@ class PostService
 	}
 
 	/// <summary>
+	/// Replace post markers through hmp-blips without changing props or interaction prompts.
+	/// </summary>
+	/// <returns>Promise settled after this refresh, for callers that need to wait for publication</returns>
+	RefreshBlips()
+	{
+		this.ClearBlips();
+		const revision = this.#blipRevision;
+		const posts = this.#posts.filter((post) => post.showBlip);
+
+		this.#blipQueue = this.#blipQueue.then(async () =>
+		{
+			if (revision !== this.#blipRevision || posts.length === 0)
+			{
+				return;
+			}
+
+			const blips = this.#GetBlips();
+
+			if (!blips || !blips.markers)
+			{
+				Logger.LogWarning("Posts", "hmp-blips is not running, so enabled owl post blips cannot be shown.");
+				return;
+			}
+
+			for (const post of posts)
+			{
+				const id = `post.${post.id}`;
+
+				// Track before awaiting: a reload or stop must also remove a marker whose publication is still in progress.
+				this.#blips.push({ api: blips.markers, id });
+
+				try
+				{
+					await blips.markers.upsert
+					({
+						resource: "frantic-owls",
+						id,
+						kind: "marker",
+						position: { ...post.position },
+						icon: postBlipIcon,
+						label: post.label,
+						ttl: 0,
+						// Keep the marker visible outside the post's region, but only within its own map.
+						areaId: post.areaId || "Overland",
+						virtualWorld: 0,
+						showOnHud: false,
+						showDistance: false,
+					});
+				}
+				catch (error)
+				{
+					Logger.LogWarning("Posts", `Blip for owl post "${post.id}" could not be placed: ${Logger.Describe(error)}`);
+				}
+
+				if (revision !== this.#blipRevision)
+				{
+					// A dependency can finish publishing after removal; remove again before the next refresh reuses this ID.
+					this.#RemoveBlip({ api: blips.markers, id });
+					return;
+				}
+			}
+		}).catch((error) => Logger.LogWarning("Posts", `Owl post blips could not be refreshed: ${Logger.Describe(error)}`));
+
+		return this.#blipQueue;
+	}
+
+	/// <summary>
+	/// Remove only owl post markers and cancel pending publication, including when hmp-blips stops.
+	/// </summary>
+	ClearBlips()
+	{
+		this.#blipRevision++;
+
+		for (const blip of this.#blips)
+		{
+			this.#RemoveBlip(blip);
+		}
+
+		this.#blips = [];
+	}
+
+	/// <summary>
+	/// Remove one owned marker without letting a stopped dependency interrupt other cleanup.
+	/// </summary>
+	/// <param name="blip">Marker API and local ID</param>
+	#RemoveBlip(blip)
+	{
+		try
+		{
+			blip.api.remove(blip.id, "frantic-owls");
+		}
+		catch (error)
+		{
+			Logger.LogWarning("Posts", `An owl post blip could not be removed: ${Logger.Describe(error)}`);
+		}
+	}
+
+	/// <summary>
 	/// Place an owl at the post position plus its world-axis offset.
 	/// </summary>
 	/// <param name="post">Clean post record</param>
@@ -225,10 +351,12 @@ class PostService
 	}
 
 	/// <summary>
-	/// Take every post's prompt and owl prop down again.
+	/// Take every post's prompt, owl prop and blip down again.
 	/// </summary>
 	Unregister()
 	{
+		this.ClearBlips();
+
 		for (const owl of this.#owls)
 		{
 			try

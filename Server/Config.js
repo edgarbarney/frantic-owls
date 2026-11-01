@@ -322,7 +322,7 @@ function CleanSoundList(list, fallback)
 /// <summary>
 /// Read the configured owl posts, dropping entries that are malformed or repeat an ID.
 /// </summary>
-/// <param name="list">Configured list: [{ id, label, position: { x, y, z }, areaId, regionId, radiusMetres, model, yaw, spawnOwl, owlOffset }]</param>
+/// <param name="list">Configured list: [{ id, label, position: { x, y, z }, areaId, regionId, radiusMetres, model, yaw, spawnOwl, owlOffset, showBlip }]</param>
 /// <returns>Clean list, possibly empty</returns>
 function CleanPosts(list)
 {
@@ -358,6 +358,7 @@ function CleanPosts(list)
 			model: String(raw.model || "").trim().slice(0, 256),
 			yaw: ClampNumber(raw.yaw, -360, 360, 0),
 			spawnOwl: raw.spawnOwl === true,
+			showBlip: raw.showBlip === true,
 			owlOffset:
 			{
 				x: Number.isFinite(offset.x) ? offset.x : -1,

@@ -110,7 +110,7 @@ const chats = new ChatService({ database, directory, outbox, hmp, config, blocks
 const inform = new InformService({ directory, contacts, profiles, outbox, hmp, config: config.phonemode_inform, blocks, audit });
 const calls = new CallService({ database, directory, outbox, hmp, config: config.phonemode_calls, blocks, audit, dialler, hooks: { Describe, OnCall } });
 const requests = new RequestDispatcher(hmp, directory, outbox, config.network);
-const posts = new PostService(hmp, config.immersivemode_posts, () => ImportOptional("hmp-interact"), OpenAtPost, Lang.Translate("", "mail.post.prompt"));
+const posts = new PostService(hmp, config.immersivemode_posts, () => ImportOptional("hmp-interact"), OpenAtPost, Lang.Translate("", "mail.post.prompt"), () => ImportOptional("hmp-blips"));
 const roster = new OwlRoster();
 const mail = new MailService({ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial, parcels });
 
@@ -1096,6 +1096,13 @@ async function Start()
 
 Events.on("resourceStart", async (name) =>
 {
+	// Re-publish post markers when the optional marker registry becomes available again.
+	if (name === "hmp-blips" && isImmersive && isReady)
+	{
+		posts.RefreshBlips();
+		return;
+	}
+
 	// hmp-interact forgets every prompt when it restarts, so the owl posts are offered again.
 	if (name === "hmp-interact" && isImmersive && isReady)
 	{
@@ -1118,6 +1125,11 @@ Events.on("resourceStop", (name) =>
 		// Senders and parcel rules belong to the resource that registered them.
 		senders.UnregisterResource(name);
 		parcels.UnregisterRules(name);
+
+		if (name === "hmp-blips")
+		{
+			posts.ClearBlips();
+		}
 
 		// hmp-interact takes its prompts with it when it stops.
 		if (name === "hmp-interact")
