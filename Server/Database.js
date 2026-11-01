@@ -204,7 +204,78 @@ const migrations =
 			"ALTER TABLE frantic_owls_contacts ADD COLUMN identity_known TINYINT(1) NOT NULL DEFAULT 0",
 		],
 	},
+	{
+		// A parcel rides on one owl to one recipient and is journalled through every step (see ParcelState), because Galleons live in the game's own inventory.
+		// No foreign key to the owl: pruning old owls must never take a parcel still waiting to be collected or returned.
+		version: 7,
+		name: "create parcels",
+		statements:
+		[
+			`CREATE TABLE IF NOT EXISTS frantic_owls_parcels (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+				message_id BIGINT UNSIGNED NULL,
+				sender_number CHAR(8) NOT NULL,
+				recipient_number CHAR(8) NOT NULL,
+				galleons INT UNSIGNED NOT NULL DEFAULT 0,
+				postage INT UNSIGNED NOT NULL DEFAULT 0,
+				state VARCHAR(12) NOT NULL,
+				created_at BIGINT NOT NULL,
+				updated_at BIGINT NOT NULL,
+				UNIQUE KEY uq_frantic_owls_parcels_message (message_id),
+				KEY idx_frantic_owls_parcels_state (state, created_at),
+				KEY idx_frantic_owls_parcels_sender (sender_number, created_at)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		],
+	},
 ];
+
+/// <summary>
+/// Steps of a parcel's journal. Each step is written before the inventory change it leads to, so a crash leaves a row that says what may have happened.
+///
+/// <para>
+/// NOTE: Pending (Galleons about to leave the sender), Collecting (about to reach the recipient) and Repaying (about to reach the sender again) are the in-between steps.
+/// A row left in one of them by a crash is settled the way that can never duplicate Galleons: pending becomes Void, collecting Collected and repaying Returned, with an error in the log naming the amount for staff to check.
+/// Failed and Refunded parcels never left with their owl; Void ones may have, and the log says so.
+/// </para>
+///
+/// </summary>
+const ParcelState = Object.freeze
+({
+	Pending: "pending",
+	Held: "held",
+	Collecting: "collecting",
+	Collected: "collected",
+	Returning: "returning",
+	Repaying: "repaying",
+	Returned: "returned",
+	Failed: "failed",
+	Refunded: "refunded",
+	Void: "void",
+});
+
+/// <summary>
+/// What a parcel's journal step means to the players on its owl: "waiting" to be collected, "collected", or "returned" to the sender.
+/// Steps before the owl left (or that it never left with) give null: the owl carries no parcel.
+/// </summary>
+/// <param name="state">ParcelState value</param>
+/// <returns>"waiting", "collected", "returned" or null</returns>
+function GetParcelStatus(state)
+{
+	switch (state)
+	{
+	case ParcelState.Held:
+	case ParcelState.Collecting:
+		return "waiting";
+	case ParcelState.Collected:
+		return "collected";
+	case ParcelState.Returning:
+	case ParcelState.Repaying:
+	case ParcelState.Returned:
+		return "returned";
+	default:
+		return null;
+	}
+}
 
 /// <summary>
 /// Rows touched per statement when pruning old owls, so one prune never holds a long lock on a busy table.
@@ -307,8 +378,10 @@ const chatSummarySelect = `SELECT c.id, c.kind, c.title, c.avatar_url, c.created
 /// A quote of an owl the server deleted is left out of the join, so it shows as "no longer there".
 /// </summary>
 const messageColumns = `m.id, m.chat_id, m.sender_number, m.body, m.kind, m.sent_at, m.deliver_at, m.reply_to_id, m.unsent_at, m.forwarded,
-	r.sender_number AS reply_sender, r.kind AS reply_kind, ${QuoteBody("r")} AS reply_body, r.unsent_at AS reply_unsent_at`;
-const messageSource = "frantic_owls_messages m LEFT JOIN frantic_owls_messages r ON r.id = m.reply_to_id AND r.deleted_at = 0";
+	r.sender_number AS reply_sender, r.kind AS reply_kind, ${QuoteBody("r")} AS reply_body, r.unsent_at AS reply_unsent_at,
+	pc.galleons AS parcel_galleons, pc.state AS parcel_state`;
+const messageSource = `frantic_owls_messages m LEFT JOIN frantic_owls_messages r ON r.id = m.reply_to_id AND r.deleted_at = 0
+	LEFT JOIN frantic_owls_parcels pc ON pc.message_id = m.id`;
 
 /// <summary>
 /// Kinds of message rows. "text" is an owl someone wrote, "location" one carrying where its sender stood and "poll" a question for a bulk owl to vote on (both bodies are JSON).
@@ -469,7 +542,20 @@ function MapMessage(row)
 		replyTo,
 		unsentAt,
 		forwarded: Number(row.forwarded || 0) === 1,
+		parcel: MapParcel(row.parcel_state, row.parcel_galleons),
 	};
+}
+
+/// <summary>
+/// The parcel an owl carries, as both its sender and its recipient see it. It never names either of them: a returned parcel says only that it went back.
+/// </summary>
+/// <param name="state">ParcelState value, or null when the owl carries none</param>
+/// <param name="galleons">Galleons in the parcel</param>
+/// <returns>{ galleons, status } or null</returns>
+function MapParcel(state, galleons)
+{
+	const status = state ? GetParcelStatus(String(state)) : null;
+	return status ? { galleons: Number(galleons || 0), status } : null;
 }
 
 /// <summary>
@@ -2319,6 +2405,127 @@ class OwlDatabase
 			return true;
 		}, false);
 	}
+
+	// ========================
+	// Parcels
+	// ========================
+
+	/// <summary>
+	/// Open a parcel's journal before its Galleons leave the sender (ParcelState.Pending).
+	/// </summary>
+	/// <param name="senderNumber">Owl number of the sender</param>
+	/// <param name="recipientNumber">Owl number of the recipient</param>
+	/// <param name="galleons">Galleons it carries</param>
+	/// <param name="postage">Galleons paid for postage, never returned</param>
+	/// <returns>Parcel row ID, or invalidId on failure</returns>
+	async InsertParcel(senderNumber, recipientNumber, galleons, postage)
+	{
+		return this.#Run("InsertParcel", async () =>
+		{
+			const now = Date.now();
+			return Number(await this.#mysql.insert("INSERT INTO frantic_owls_parcels (sender_number, recipient_number, galleons, postage, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [senderNumber, recipientNumber, galleons, postage, ParcelState.Pending, now, now]));
+		}, invalidId);
+	}
+
+	/// <summary>
+	/// Move a parcel from one journal step to the next, only if it is still at the step expected.
+	/// Two requests racing for the same parcel (a double click, a return during a collect) therefore cannot both win.
+	/// </summary>
+	/// <param name="parcelId">Parcel row ID</param>
+	/// <param name="from">ParcelState it must be at</param>
+	/// <param name="to">ParcelState to move it to</param>
+	/// <param name="messageId">Owl it rides on, set when it leaves (optional)</param>
+	/// <returns>True when this call moved it; false when it was elsewhere or the write failed</returns>
+	async MoveParcel(parcelId, from, to, messageId = 0)
+	{
+		return this.#Run("MoveParcel", async () =>
+		{
+			const setMessage = messageId > 0 ? ", message_id = ?" : "";
+			const parameters = messageId > 0 ? [to, Date.now(), messageId, parcelId, from] : [to, Date.now(), parcelId, from];
+			return Number(await this.#mysql.update(`UPDATE frantic_owls_parcels SET state = ?, updated_at = ?${setMessage} WHERE id = ? AND state = ?`, parameters)) === 1;
+		}, false);
+	}
+
+	/// <summary>
+	/// The parcel riding on an owl, whatever its step.
+	/// </summary>
+	/// <param name="messageId">Message row ID</param>
+	/// <returns>{ id, messageId, sender, recipient, galleons, postage, state }, null when the owl carries none, or undefined on failure</returns>
+	async GetParcelByMessage(messageId)
+	{
+		return this.#Run("GetParcelByMessage", async () =>
+		{
+			const row = await this.#mysql.single("SELECT * FROM frantic_owls_parcels WHERE message_id = ?", [messageId]);
+			return row ? MapParcelRow(row) : null;
+		}, undefined);
+	}
+
+	/// <summary>
+	/// Galleons an owl number has sent in parcels since a time, counting every parcel that left (whatever happened to it after).
+	/// </summary>
+	/// <param name="number">Owl number of the sender</param>
+	/// <param name="since">Epoch milliseconds</param>
+	/// <returns>Galleons sent, or -1 on failure</returns>
+	async SumGalleonsSent(number, since)
+	{
+		return this.#Run("SumGalleonsSent", async () =>
+		{
+			const left = [ParcelState.Pending, ParcelState.Held, ParcelState.Collecting, ParcelState.Collected, ParcelState.Returning, ParcelState.Repaying, ParcelState.Returned, ParcelState.Void];
+			const row = await this.#mysql.single(`SELECT COALESCE(SUM(galleons), 0) AS total FROM frantic_owls_parcels WHERE sender_number = ? AND created_at >= ? AND state IN (${left.map(() => "?").join(", ")})`, [number, since, ...left]);
+			return Number(row ? row.total : 0);
+		}, -1);
+	}
+
+	/// <summary>
+	/// Parcels at one journal step, oldest first.
+	/// </summary>
+	/// <param name="state">ParcelState value</param>
+	/// <param name="createdBefore">Only parcels made before this (epoch milliseconds); 0 for any</param>
+	/// <param name="limit">Most rows returned</param>
+	/// <returns>Parcel records; empty on failure</returns>
+	async ListParcels(state, createdBefore, limit)
+	{
+		return this.#Run("ListParcels", async () =>
+		{
+			const rows = createdBefore > 0
+				? await this.#mysql.query("SELECT * FROM frantic_owls_parcels WHERE state = ? AND created_at < ? ORDER BY id LIMIT ?", [state, createdBefore, limit])
+				: await this.#mysql.query("SELECT * FROM frantic_owls_parcels WHERE state = ? ORDER BY id LIMIT ?", [state, limit]);
+			return rows.map(MapParcelRow);
+		}, []);
+	}
+
+	/// <summary>
+	/// Parcels on their way back to one sender, waiting for that sender to be online.
+	/// </summary>
+	/// <param name="number">Owl number of the sender</param>
+	/// <returns>Parcel records; empty on failure</returns>
+	async ListReturningParcels(number)
+	{
+		return this.#Run("ListReturningParcels", async () =>
+		{
+			const rows = await this.#mysql.query("SELECT * FROM frantic_owls_parcels WHERE sender_number = ? AND state = ? ORDER BY id", [number, ParcelState.Returning]);
+			return rows.map(MapParcelRow);
+		}, []);
+	}
 }
 
-module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll };
+/// <summary>
+/// Convert a parcels row into the record the server works with.
+/// </summary>
+/// <param name="row">Raw database row</param>
+/// <returns>{ id, messageId, sender, recipient, galleons, postage, state, createdAt }</returns>
+function MapParcelRow(row)
+{
+	return {
+		id: Number(row.id),
+		messageId: Number(row.message_id || 0),
+		sender: String(row.sender_number),
+		recipient: String(row.recipient_number),
+		galleons: Number(row.galleons || 0),
+		postage: Number(row.postage || 0),
+		state: String(row.state),
+		createdAt: Number(row.created_at),
+	};
+}
+
+module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll, ParcelState, MapParcel };

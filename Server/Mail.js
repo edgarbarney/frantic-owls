@@ -198,6 +198,11 @@ class MailService
 	#CanPostOfficial;
 
 	/// <summary>
+	/// ParcelService instance, for Galleons sent with a letter.
+	/// </summary>
+	#parcels;
+
+	/// <summary>
 	/// hmp-lib server import, for rate limits and text cleaning.
 	/// </summary>
 	#hmp;
@@ -296,7 +301,7 @@ class MailService
 	/// <param name="letter">Letter record from the database</param>
 	/// <param name="post">Owl post the viewer stands at, or null</param>
 	/// <param name="names">Owl number to correspondent name, for a sent letter's recipients (see #GetCorrespondentNames)</param>
-	/// <returns>{ id, box, sentAt, arrivedAt, isUnread, isReadable, readProblem, official, groupTitle, recipients, excerpt, canReply }</returns>
+	/// <returns>{ id, box, sentAt, arrivedAt, isUnread, isReadable, readProblem, official, groupTitle, recipients, excerpt, canReply, parcel }</returns>
 	#Summarise(entry, letter, post, names)
 	{
 		const box = letter.sender === entry.number ? "sent" : "inbox";
@@ -325,6 +330,8 @@ class MailService
 			recipients: box === "sent" ? (letter.members || []).map((number) => names.get(number) || "") : [],
 			excerpt,
 			canReply: box === "inbox" && this.#CanReply(letter),
+			// A parcel shows only on a letter that can be read where the player stands, like its text: it is collected from the letter itself.
+			parcel: readProblem ? null : letter.parcel || null,
 		};
 	}
 
@@ -458,7 +465,7 @@ class MailService
 	/// <summary>
 	/// Constructor.
 	/// </summary>
-	/// <param name="services">{ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial }</param>
+	/// <param name="services">{ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial, parcels }</param>
 	constructor(services)
 	{
 		this.#database = services.database;
@@ -470,6 +477,7 @@ class MailService
 		this.#roster = services.roster;
 		this.#audit = services.audit;
 		this.#CanPostOfficial = services.CanPostOfficial;
+		this.#parcels = services.parcels;
 		this.#hmp = services.hmp;
 		this.#config = services.config;
 		this.#sendLimiter = this.#hmp.rateLimit.create({ limit: this.#config.messages.rateLimitCount, windowMs: this.#config.messages.rateLimitWindowMs });
@@ -588,6 +596,37 @@ class MailService
 	GetPlace(entry)
 	{
 		return Ok({ post: this.GetPost(entry.player) });
+	}
+
+	/// <summary>
+	/// Collect the Galleons sent with a letter, if it may be read where the reader stands (a parcel is taken from the letter itself).
+	/// </summary>
+	/// <param name="entry">Directory entry of the requesting owl</param>
+	/// <param name="data">{ messageId }</param>
+	/// <returns>Result carrying { messageId, parcel }</returns>
+	async Collect(entry, data)
+	{
+		const messageId = this.#ReadId(data.messageId);
+		const letter = messageId > 0 ? await this.#database.GetLetter(entry.number, messageId) : null;
+
+		if (letter === undefined)
+		{
+			return Fail("error.mail.openFailed");
+		}
+
+		if (!letter || letter.sender === entry.number)
+		{
+			return Fail("error.parcel.gone");
+		}
+
+		const readProblem = this.#GetReadProblem(this.#IsUnread(entry, letter), this.#posts.GetPostAt(entry.player));
+
+		if (readProblem)
+		{
+			return Fail(readProblem);
+		}
+
+		return this.#parcels.Collect(entry, { chatId: letter.chatId, messageId });
 	}
 
 	/// <summary>
@@ -720,13 +759,26 @@ class MailService
 			return Fail("error.mail.noRecipients", { clientKey });
 		}
 
+		// Each copy carries its own parcel of the same amount, so the writer needs enough for every recipient before any copy goes.
+		const galleons = this.#parcels.ReadGalleons(data.galleons);
+
+		if (galleons !== 0)
+		{
+			const parcelProblem = galleons < 0 ? "error.parcel.invalid" : await this.#parcels.Check(entry, galleons, targets.size);
+
+			if (parcelProblem)
+			{
+				return Fail(parcelProblem, { clientKey });
+			}
+		}
+
 		let sent = 0;
 		const failed = [];
 		const added = [];
 
 		for (const [number, target] of targets)
 		{
-			const result = await this.#chats.SendLetter(entry, number, body);
+			const result = await this.#chats.SendLetter(entry, number, body, galleons);
 
 			if (result.error)
 			{

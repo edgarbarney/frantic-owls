@@ -625,6 +625,7 @@ Owls.Desk = (() =>
 	Bridge.On("contact:upsert", (data) => Store.SaveContact(data.contact));
 	Bridge.On("settings:update", (data) => Store.SetSettings(data.settings));
 	Bridge.On("quiet:update", (data) => Store.SetQuiet(data));
+	Bridge.On("parcel:update", (data) => Store.SetParcel(Number(data.messageId), data.parcel || null));
 	Bridge.On("mail:arrived", OnArrival);
 	Bridge.On("ui:open", (data) => Store.SetPost(data.post || null));
 	Bridge.On("admin:postDefinition", ShowPostDefinition);

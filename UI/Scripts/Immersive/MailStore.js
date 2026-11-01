@@ -56,6 +56,11 @@ Owls.MailStore = (() =>
 	const listeners = new Set();
 
 	/// <summary>
+	/// Parcel statuses pushed by the server, by letter ID, so a letter fetched before the push still shows the new one.
+	/// </summary>
+	const parcels = new Map();
+
+	/// <summary>
 	/// Tell every subscriber that something changed.
 	/// </summary>
 	/// <param name="reason">Short tag of what changed (e.g. "letters", "settings")</param>
@@ -337,6 +342,39 @@ Owls.MailStore = (() =>
 	}
 
 	/// <summary>
+	/// Take a letter's parcel's new status (collected, or returned to the sender), wherever the desk lists or shows that letter.
+	/// </summary>
+	/// <param name="messageId">ID of the letter carrying it</param>
+	/// <param name="parcel">{ galleons, status } or null</param>
+	function SetParcel(messageId, parcel)
+	{
+		parcels.set(messageId, parcel);
+
+		for (const box of Object.values(state.boxes))
+		{
+			for (const letter of box.letters)
+			{
+				if (letter.id === messageId)
+				{
+					letter.parcel = parcel;
+				}
+			}
+		}
+
+		Notify("parcel");
+	}
+
+	/// <summary>
+	/// A letter's parcel as last heard of: a status pushed since the letter was fetched wins over the fetched one.
+	/// </summary>
+	/// <param name="letter">Letter as fetched or listed</param>
+	/// <returns>{ galleons, status } or null</returns>
+	function GetParcel(letter)
+	{
+		return parcels.has(letter.id) ? parcels.get(letter.id) : letter.parcel || null;
+	}
+
+	/// <summary>
 	/// Take whether the player may write official letters, which the server checks again each time the desk opens.
 	/// </summary>
 	/// <param name="canPostOfficial">Whether they may</param>
@@ -430,5 +468,5 @@ Owls.MailStore = (() =>
 		}
 	}
 
-	return { state, Subscribe, Reset, Clear, SetReady, ApplyContactsChunk, UpsertContact, SaveContact, RemoveContact, GetContact, GetKnownNumbers, GetContactLabel, GetContactPicture, ApplyPage, ApplyOpened, NoteArrival, NoteSent, SetPost, SetSettings, SetQuiet, SetCanPostOfficial, CanWrite, UsesPosts, LoadDraft, SaveDraft };
+	return { state, Subscribe, Reset, Clear, SetReady, ApplyContactsChunk, UpsertContact, SaveContact, RemoveContact, GetContact, GetKnownNumbers, GetContactLabel, GetContactPicture, ApplyPage, ApplyOpened, NoteArrival, NoteSent, SetPost, SetSettings, SetQuiet, SetCanPostOfficial, SetParcel, GetParcel, CanWrite, UsesPosts, LoadDraft, SaveDraft };
 })();

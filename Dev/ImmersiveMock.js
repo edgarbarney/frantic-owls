@@ -116,7 +116,7 @@
 		{ id: 3, sender: "00000001", to: [me.number], text: "By order of the Ministry: duelling in Hogsmeade's high street is forbidden until further notice.", sentAt: now - 26 * 60 * minute, official: "Ministry of Magic", isRead: true },
 		{ id: 4, sender: "20000005", to: [me.number], text: "Who fed the Puffskein?", sentAt: now - 5 * 60 * minute, groupTitle: "Beast Club", isRead: true },
 		{ id: 5, sender: "20000099", to: [me.number], text: "To whoever finds this,\n\n    Something stirs beneath the Forbidden Forest. The centaurs have gone quiet,\n    and the lanterns on the old path burn green at midnight.\n\nTell no one who sent this.", sentAt: now - 40 * minute, isRead: false },
-		{ id: 6, sender: "20000002", to: [me.number], text: "Dear Harriet,\n\nAre you coming to the Three Broomsticks tonight? Sirona says she will save us a table by the fire, and Poppy promised to bring the Puffskein (I told her not to).\n\nIf you are late, I am ordering the butterbeer without you.\n\nSincerely,\nNatsai Onai", sentAt: now - 12 * minute, isRead: false },
+		{ id: 6, sender: "20000002", to: [me.number], text: "Dear Harriet,\n\nAre you coming to the Three Broomsticks tonight? Sirona says she will save us a table by the fire, and Poppy promised to bring the Puffskein (I told her not to).\n\nIf you are late, I am ordering the butterbeer without you.\n\nSincerely,\nNatsai Onai", sentAt: now - 12 * minute, isRead: false, parcel: { galleons: 25, status: "waiting" } },
 	];
 
 	const config =
@@ -142,6 +142,7 @@
 		maxLetterLength: 4000,
 		maxLetterLines: 150,
 		maxRecipients: 8,
+		galleons: { max: 10000, postage: 2, returnAfterDays: 7 },
 		hasPosts: true,
 		avatars: true,
 		maxContacts: 250,
@@ -268,6 +269,7 @@
 			recipients: box === "sent" ? letter.to.map(GetCorrespondentName) : [],
 			excerpt: readProblem ? null : { first: lines[0] || "", second: lines[1] || "", last: lines.length > 2 ? lines[lines.length - 1] : "" },
 			canReply: box === "inbox" && !letter.official,
+			parcel: readProblem ? null : letter.parcel || null,
 		};
 	}
 
@@ -385,7 +387,8 @@
 					continue;
 				}
 
-				letters.push({ id: nextId++, sender: me.number, to: [number], text: data.body, sentAt: Date.now(), isRead: true });
+				const galleons = isOfficial ? 0 : Number(data.galleons) || 0;
+				letters.push({ id: nextId++, sender: me.number, to: [number], text: data.body, sentAt: Date.now(), isRead: true, parcel: galleons > 0 ? { galleons, status: "waiting" } : null });
 
 				if (target.saveAs && !contacts.some((contact) => contact.realNumber === number))
 				{
@@ -473,6 +476,18 @@
 		}
 		case "mail.officialSenders":
 			return canPostOfficial ? { ok: true, data: { senders: [{ number: "00000001", name: "Ministry of Magic" }, { number: "00000002", name: "Gringotts Wizarding Bank" }] } } : { ok: false, errorKey: "error.mail.officialDenied" };
+		case "parcels.collect":
+		{
+			const letter = letters.find((entry) => entry.id === data.messageId);
+
+			if (!letter || !letter.parcel || letter.sender === me.number || letter.parcel.status !== "waiting")
+			{
+				return { ok: false, errorKey: "error.parcel.gone" };
+			}
+
+			letter.parcel = { ...letter.parcel, status: "collected" };
+			return { ok: true, data: { messageId: letter.id, parcel: letter.parcel } };
+		}
 		case "me.refresh":
 			return { ok: true, data: { canPostOfficial } };
 		case "settings.update":

@@ -793,6 +793,81 @@ button
 	background: rgba(var(--gold-rgb), 0.06);
 }
 
+/* Galleons enclosed with a letter: the row under the toolbar while writing, and the strip above a letter being read. */
+.compose-enclosure,
+.letter-enclosure
+{
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	width: min(52rem, 100%);
+	margin: 0 auto 0.75rem;
+	padding: 0.45rem 0.6rem 0.45rem 1rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.35rem;
+	background: rgba(var(--gold-rgb), 0.06);
+	flex: none;
+}
+
+.letter-enclosure[hidden]
+{
+	display: none;
+}
+
+.enclosure-icon,
+.letter-enclosure > .fa-coins
+{
+	color: var(--gold);
+}
+
+.enclosure-label
+{
+	font-family: var(--font-heading);
+	font-size: 0.85rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	color: var(--gold);
+}
+
+.enclosure-input
+{
+	width: 7rem;
+	padding: 0.3rem 0.5rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.25rem;
+	background: rgba(0, 0, 0, 0.35);
+	font: inherit;
+	color: var(--parchment);
+}
+
+.enclosure-input.is-over
+{
+	border-color: var(--danger);
+}
+
+.enclosure-terms
+{
+	flex: 1;
+	font-size: 0.85rem;
+	font-style: italic;
+	color: var(--text-dim);
+}
+
+.letter-enclosure-amount
+{
+	flex: 1;
+	font-family: var(--font-heading);
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: var(--gold);
+}
+
+.letter-enclosure-status
+{
+	font-style: italic;
+	color: var(--text-dim);
+}
+
 .compose-footer
 {
 	display: flex;

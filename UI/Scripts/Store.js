@@ -1672,10 +1672,37 @@ Owls.Store = (() =>
 	/// <param name="clientKey">Key matching the server's reply</param>
 	/// <param name="body">Message text</param>
 	/// <param name="replyTo">Quote of the owl it answers, or null</param>
-	function AddPending(chatId, clientKey, body, replyTo = null)
+	/// <param name="galleons">Galleons the owl carries, kept for a retry; 0 for none</param>
+	function AddPending(chatId, clientKey, body, replyTo = null, galleons = 0)
 	{
-		GetHistory(chatId).pending.push({ clientKey, chatId, body, replyTo, sentAt: Date.now(), status: "pending" });
+		GetHistory(chatId).pending.push({ clientKey, chatId, body, replyTo, galleons, sentAt: Date.now(), status: "pending" });
 		Notify(`history:${chatId}`);
+	}
+
+	/// <summary>
+	/// Show a parcel's new status (collected, or returned to the sender) on its owl.
+	/// </summary>
+	/// <param name="chatId">Chat ID; 0 when the server did not say, and every loaded chat is searched</param>
+	/// <param name="messageId">Message ID of the owl carrying it</param>
+	/// <param name="parcel">{ galleons, status } or null</param>
+	function SetParcel(chatId, messageId, parcel)
+	{
+		for (const [id, history] of state.histories)
+		{
+			if (chatId > 0 && id !== chatId)
+			{
+				continue;
+			}
+
+			for (const message of history.messages)
+			{
+				if (message.id === messageId)
+				{
+					message.parcel = parcel;
+					Notify(`history:${id}`);
+				}
+			}
+		}
 	}
 
 	/// <summary>
@@ -1739,7 +1766,7 @@ Owls.Store = (() =>
 		NotifyChanged: Notify,
 		ApplyProfilesChunk, SetProfile, EnsureProfiles, GetProfileAvatarUrl, GetAvatarUrl, GetTheme, GetColourScheme,
 		SetDraft, GetDraft,
-		SetServerTime, GetServerNow, IsInFlight, IsNote, ParseLocation, ParsePoll, SetPollVotes, SetShownLocation, IsLocationShown, GetMessageText,
+		SetServerTime, GetServerNow, IsInFlight, IsNote, ParseLocation, ParsePoll, SetPollVotes, SetParcel, SetShownLocation, IsLocationShown, GetMessageText,
 		IsShared, SetReads, SetRead, GetReadBy, SetTyping, ClearTyping, GetTyping, GetTypingText,
 		SetInformRequests, AddInformRequest, RemoveInformRequest, GetInformRequests,
 		SetCall, EndCall, ApplyCallsChunk, AddCallEntry, RemoveCallEntries, MarkCallsSeen, GetMissedCallCount, GetCallState,

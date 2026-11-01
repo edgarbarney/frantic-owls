@@ -845,6 +845,7 @@ Owls.App = (() =>
 	Bridge.On("chat:read", (data) => Store.SetRead(data.chatId, String(data.number), data.messageId));
 	Bridge.On("chat:typing", (data) => Store.SetTyping(data.chatId, String(data.number), data.durationMs));
 	Bridge.On("message:unsent", (data) => Store.MarkUnsent(data.chatId, data.messageId, data.unsentAt));
+	Bridge.On("parcel:update", (data) => Store.SetParcel(Number(data.chatId) || 0, Number(data.messageId), data.parcel || null));
 	Bridge.On("poll:votes", (data) => Store.SetPollVotes(data.chatId, data.messageId, data.votes));
 
 	Bridge.On("chat:removed", (data) =>

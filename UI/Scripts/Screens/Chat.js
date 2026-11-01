@@ -245,6 +245,85 @@ Owls.Screens.Chat = (() =>
 			pollMultiple.setAttribute("aria-checked", String(isOn));
 		});
 
+		// ========================
+		// Parcel Bar
+		// ========================
+
+		/// <summary>
+		/// What owls here may carry ({ max, postage, returnAfterDays }), or null when they carry no Galleons.
+		/// </summary>
+		const galleonsConfig = config.galleons || null;
+
+		/// <summary>
+		/// Galleons attached to the next owl sent from this composer; 0 for none.
+		/// </summary>
+		let attachedGalleons = 0;
+
+		const parcelError = Element("span", { className: "form-error" });
+		const parcelAmount = Element("input", { className: "text-input", attributes: { type: "number", min: "1", max: String(galleonsConfig ? galleonsConfig.max : 1), step: "1", placeholder: T("parcel.amountPlaceholder") } });
+		const parcelAttach = Element("button", { className: "primary-button", text: T("parcel.attachShort") });
+		const parcelBar = Element("div", { className: "leave-bar parcel-bar" },
+		[
+			Element("span", { className: "leave-text", text: T("parcel.intro") }),
+			parcelAmount,
+			Element("span", { className: "parcel-terms", text: GetParcelTerms() }),
+			parcelError,
+			Element("div", { className: "button-row" },
+			[
+				Element("button", { className: "secondary-button", text: T("common.cancel"), on: { click: () => ShowBar(null) } }),
+				parcelAttach,
+			]),
+		]);
+
+		/// <summary>
+		/// The terms shown under the amount: when uncollected Galleons go back, and the postage if there is any.
+		/// </summary>
+		/// <returns>Text</returns>
+		function GetParcelTerms()
+		{
+			if (!galleonsConfig)
+			{
+				return "";
+			}
+
+			const terms = T("parcel.terms", { count: galleonsConfig.returnAfterDays });
+			return galleonsConfig.postage > 0 ? `${terms} ${T("parcel.postage", { count: galleonsConfig.postage })}` : terms;
+		}
+
+		/// <summary>
+		/// Attach the amount typed in the parcel bar to the next owl.
+		/// </summary>
+		function AttachGalleons()
+		{
+			const amount = Number(parcelAmount.value);
+
+			if (!Number.isInteger(amount) || amount < 1)
+			{
+				parcelError.textContent = T("error.parcel.invalid");
+				return;
+			}
+
+			if (amount > galleonsConfig.max)
+			{
+				parcelError.textContent = T("error.parcel.tooMany", { max: galleonsConfig.max });
+				return;
+			}
+
+			SetGalleons(amount);
+			ShowBar(null);
+			input.focus();
+		}
+
+		parcelAttach.addEventListener("click", AttachGalleons);
+		parcelAmount.addEventListener("keydown", (event) =>
+		{
+			if (event.key === "Enter")
+			{
+				event.preventDefault();
+				AttachGalleons();
+			}
+		});
+
 		/// <summary>
 		/// Add one more answer field to the poll being written.
 		/// </summary>
@@ -332,7 +411,7 @@ Owls.Screens.Chat = (() =>
 		/// <param name="bar">Bar element, or null</param>
 		function ShowBar(bar)
 		{
-			for (const candidate of [muteBar, blockBar, leaveBar, locationBar, pollBar])
+			for (const candidate of [muteBar, blockBar, leaveBar, locationBar, pollBar, parcelBar])
 			{
 				candidate.hidden = candidate !== bar;
 			}
@@ -342,6 +421,7 @@ Owls.Screens.Chat = (() =>
 			leaveError.textContent = "";
 			locationError.textContent = "";
 			pollError.textContent = "";
+			parcelError.textContent = "";
 
 			if (bar)
 			{
@@ -351,6 +431,12 @@ Owls.Screens.Chat = (() =>
 			if (bar === pollBar)
 			{
 				pollQuestion.focus();
+			}
+
+			if (bar === parcelBar)
+			{
+				parcelAmount.value = attachedGalleons > 0 ? String(attachedGalleons) : "";
+				parcelAmount.focus();
 			}
 		}
 
@@ -378,16 +464,34 @@ Owls.Screens.Chat = (() =>
 		const emojiButton = Widgets.IconButton(Owls.Icons.smile, T("chat.emoji"), () => ToggleEmoji(), "composer-button");
 		const locationButton = Widgets.IconButton(Owls.Icons.location, T("chat.sendYourLocation"), () => ShowBar(locationBar.hidden ? locationBar : null), "composer-button");
 		const pollButton = Widgets.IconButton(Owls.Icons.poll, T("chat.poll"), () => ShowBar(pollBar.hidden ? pollBar : null), "composer-button");
+		const galleonsButton = Widgets.IconButton(Owls.Icons.coins, T("parcel.attach"), () => ShowBar(parcelBar.hidden ? parcelBar : null), "composer-button");
+		const parcelChipText = Element("span", { className: "reply-name" });
+		const parcelChipIcon = Element("span", { className: "reply-icon" });
+		parcelChipIcon.innerHTML = Owls.Icons.coins;
+		const parcelChip = Element("div", { className: "reply-bar parcel-chip" }, [parcelChipIcon, Element("span", { className: "reply-text" }, [parcelChipText, Element("span", { className: "reply-snippet", text: T("parcel.attachedHint") })]), Widgets.IconButton(Owls.Icons.close, T("parcel.remove"), () => SetGalleons(0))]);
 		const counter = Element("div", { className: "composer-counter" });
 		const replyName = Element("span", { className: "reply-name" });
 		const replySnippet = Element("span", { className: "reply-snippet" });
 		const replyIcon = Element("span", { className: "reply-icon" });
 		replyIcon.innerHTML = Owls.Icons.reply;
 		const replyBar = Element("div", { className: "reply-bar" }, [replyIcon, Element("span", { className: "reply-text" }, [replyName, replySnippet]), Widgets.IconButton(Owls.Icons.close, T("chat.cancelReply"), () => SetReply(null))]);
-		const composer = Element("div", { className: "composer" }, [locationButton, pollButton, input, emojiButton, sendButton]);
-		const element = Element("div", { className: "screen" }, [header, searchRow, pinnedBar, headerError, muteBar, blockBar, leaveBar, locationBar, pollBar, blockedNotice, unknownBar, searchResults, body, counter, readOnlyNotice, actionBar, replyBar, emojiPicker.element, composer]);
+		const composer = Element("div", { className: "composer" }, [locationButton, pollButton, galleonsButton, input, emojiButton, sendButton]);
+		const element = Element("div", { className: "screen" }, [header, searchRow, pinnedBar, headerError, muteBar, blockBar, leaveBar, locationBar, pollBar, parcelBar, blockedNotice, unknownBar, searchResults, body, counter, readOnlyNotice, actionBar, replyBar, parcelChip, emojiPicker.element, composer]);
 
 		replyBar.hidden = true;
+		parcelChip.hidden = true;
+
+		/// <summary>
+		/// Attach Galleons to the next owl, or take them off (0), and show them above the composer.
+		/// </summary>
+		/// <param name="amount">Galleons; 0 for none</param>
+		function SetGalleons(amount)
+		{
+			attachedGalleons = amount;
+			parcelChip.hidden = amount <= 0;
+			parcelChipText.textContent = amount > 0 ? T("parcel.galleons", { count: amount }) : "";
+			galleonsButton.classList.toggle("is-active", amount > 0);
+		}
 		actionBar.hidden = true;
 		typingRow.hidden = true;
 
@@ -496,6 +600,15 @@ Owls.Screens.Chat = (() =>
 			composer.hidden = !canWrite;
 			locationButton.hidden = !config.locationsEnabled || isOfficial;
 			pollButton.hidden = chat.kind !== "group" || !config.pollsEnabled;
+
+			// Galleons travel only on a one-to-one owl to another player.
+			const canCarryGalleons = !!galleonsConfig && chat.kind === "direct" && !isOfficial;
+			galleonsButton.hidden = !canCarryGalleons;
+
+			if (!canCarryGalleons && attachedGalleons > 0)
+			{
+				SetGalleons(0);
+			}
 
 			if (!canWrite)
 			{
@@ -1245,6 +1358,58 @@ Owls.Screens.Chat = (() =>
 		}
 
 		/// <summary>
+		/// Build the parcel an owl carries: its Galleons, and whether they wait, were collected or went back.
+		/// The recipient collects them from here once the owl has landed. Neither side is told who the other is.
+		/// </summary>
+		/// <param name="message">Message record, or a pending owl</param>
+		/// <param name="isMine">Whether the player sent it</param>
+		/// <param name="isPending">Whether it is still on its way to the server</param>
+		/// <returns>Card element, or null when the owl carries no parcel</returns>
+		function CreateParcelCard(message, isMine, isPending)
+		{
+			const parcel = isPending ? (message.galleons > 0 ? { galleons: message.galleons, status: "sending" } : null) : message.parcel;
+
+			if (!parcel)
+			{
+				return null;
+			}
+
+			const icon = Element("span", { className: "parcel-icon" });
+			icon.innerHTML = Owls.Icons.coins;
+			const parts = [icon, Element("span", { className: "parcel-amount", text: T("parcel.galleons", { count: parcel.galleons }) })];
+
+			if (parcel.status === "waiting" && !isMine && !Owls.Store.IsInFlight(message) && !composer.hidden)
+			{
+				const collect = Element("button", { className: "parcel-collect", text: T("parcel.collect") });
+				collect.addEventListener("click", async (event) =>
+				{
+					// The bubble's own click selects it.
+					event.stopPropagation();
+					collect.disabled = true;
+					collect.textContent = T("parcel.collecting");
+					const result = await Owls.Bridge.Request("parcels.collect", { chatId, messageId: message.id });
+					ShowError(result.ok ? "" : result.error);
+
+					if (result.ok)
+					{
+						Owls.Store.SetParcel(chatId, message.id, result.data.parcel);
+						return;
+					}
+
+					collect.disabled = false;
+					collect.textContent = T("parcel.collect");
+				});
+				parts.push(collect);
+			}
+			else if (parcel.status !== "sending")
+			{
+				parts.push(Element("span", { className: "parcel-status", text: T(`parcel.status.${parcel.status}`) }));
+			}
+
+			return Element("div", { className: `parcel-card is-${parcel.status}` }, parts);
+		}
+
+		/// <summary>
 		/// Cast, change or take back the player's vote in a poll.
 		/// </summary>
 		/// <param name="messageId">Poll message ID</param>
@@ -1420,6 +1585,7 @@ Owls.Screens.Chat = (() =>
 				forwarded,
 				message.replyTo && !isUnsent ? CreateQuote(message.replyTo) : null,
 				content,
+				CreateParcelCard(message, isMine, isPending),
 				timeLine,
 			]);
 
@@ -1641,13 +1807,14 @@ Owls.Screens.Chat = (() =>
 		/// </summary>
 		/// <param name="text">Message text</param>
 		/// <param name="quote">Quote of the owl it answers, or null</param>
-		async function Deliver(text, quote)
+		/// <param name="galleons">Galleons the owl carries; 0 for none</param>
+		async function Deliver(text, quote, galleons = 0)
 		{
 			const clientKey = Owls.Util.NewKey();
-			Owls.Store.AddPending(chatId, clientKey, text, quote);
+			Owls.Store.AddPending(chatId, clientKey, text, quote, galleons);
 			body.scrollTop = body.scrollHeight;
 
-			const result = await Owls.Bridge.Request("messages.send", { chatId, body: text, clientKey, replyToId: quote ? quote.id : 0 });
+			const result = await Owls.Bridge.Request("messages.send", { chatId, body: text, clientKey, replyToId: quote ? quote.id : 0, galleons });
 
 			if (!result.ok)
 			{
@@ -1675,13 +1842,15 @@ Owls.Screens.Chat = (() =>
 			}
 
 			const quote = replyTo;
+			const galleons = attachedGalleons;
 			input.value = "";
 			Owls.Store.SetDraft(chatId, "");
 			emojiPicker.Hide();
 			emojiButton.classList.remove("is-active");
 			SetReply(null);
+			SetGalleons(0);
 			UpdateComposer();
-			Deliver(text.slice(0, maxLength), quote);
+			Deliver(text.slice(0, maxLength), quote, galleons);
 			input.focus();
 		}
 
@@ -1692,7 +1861,7 @@ Owls.Screens.Chat = (() =>
 		function Retry(pending)
 		{
 			Owls.Store.RemovePending(chatId, pending.clientKey);
-			Deliver(pending.body, pending.replyTo || null);
+			Deliver(pending.body, pending.replyTo || null, pending.galleons || 0);
 		}
 
 		/// <summary>

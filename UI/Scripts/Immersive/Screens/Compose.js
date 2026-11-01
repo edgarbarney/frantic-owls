@@ -85,7 +85,19 @@ Owls.DeskScreens.Compose = (() =>
 			isFull: !!(saved && saved.isFull),
 			fullText: saved ? String(saved.fullText || "") : "",
 			everyone: !!(official && saved && saved.everyone),
+			// Official letters carry no Galleons.
+			galleons: !official && saved ? Math.max(0, Math.floor(Number(saved.galleons) || 0)) : 0,
 		};
+
+		/// <summary>
+		/// What a letter may carry here ({ max, postage, returnAfterDays }), or null when letters carry no Galleons (always for official ones).
+		/// </summary>
+		const galleonsConfig = official ? null : config.galleons || null;
+
+		/// <summary>
+		/// Whether the enclosure row is open, also while its amount is still empty.
+		/// </summary>
+		let isEnclosureOpen = draft.galleons > 0;
 
 		// Answering adds the letter's writer, named the way they signed (or as the official sender they are).
 		if (replyTo && !draft.recipients.some((recipient) => recipient.kind === "reply"))
@@ -152,7 +164,7 @@ Owls.DeskScreens.Compose = (() =>
 		{
 			clearTimeout(saveTimer);
 			saveTimer = null;
-			const isEmpty = draft.body.trim().length === 0 && (!draft.isFull || draft.fullText.trim().length === 0) && draft.recipients.every((recipient) => recipient.kind === "reply") && !draft.everyone;
+			const isEmpty = draft.body.trim().length === 0 && (!draft.isFull || draft.fullText.trim().length === 0) && draft.recipients.every((recipient) => recipient.kind === "reply") && !draft.everyone && draft.galleons === 0;
 			Store.SaveDraft(draftKey, isEmpty ? null : { ...draft, savedAt: Date.now() });
 		}
 
@@ -494,6 +506,61 @@ Owls.DeskScreens.Compose = (() =>
 		}
 
 		/// <summary>
+		/// Open the enclosure row, or close it when it holds nothing.
+		/// </summary>
+		function ToggleEnclosure()
+		{
+			isEnclosureOpen = !isEnclosureOpen || draft.galleons > 0;
+			Rebuild();
+		}
+
+		/// <summary>
+		/// The row under the toolbar where Galleons are enclosed with the letter: the amount, and what happens to Galleons nobody collects.
+		/// </summary>
+		/// <returns>Row element</returns>
+		function CreateEnclosure()
+		{
+			const amount = Element("input", { className: "enclosure-input", attributes: { type: "number", min: "1", max: String(galleonsConfig.max), step: "1", placeholder: "0", "aria-label": T("parcel.enclose") } });
+			const terms = T("parcel.terms", { count: galleonsConfig.returnAfterDays });
+			amount.value = draft.galleons > 0 ? String(draft.galleons) : "";
+			amount.addEventListener("input", () =>
+			{
+				const value = Number(amount.value);
+				draft.galleons = Number.isInteger(value) && value > 0 ? value : 0;
+				amount.classList.toggle("is-over", draft.galleons > galleonsConfig.max);
+				QueueSave();
+			});
+
+			const remove = Element("button", { className: "desk-button is-quiet is-icon", title: T("parcel.remove"), attributes: { "aria-label": T("parcel.remove") }, on: { click: () =>
+			{
+				draft.galleons = 0;
+				isEnclosureOpen = false;
+				SaveNow();
+				Rebuild();
+			} } },
+			[
+				Element("i", { className: "fa-solid fa-xmark", attributes: { "aria-hidden": "true" } }),
+			]);
+
+			requestAnimationFrame(() =>
+			{
+				if (draft.galleons === 0)
+				{
+					amount.focus();
+				}
+			});
+
+			return Element("div", { className: "compose-enclosure" },
+			[
+				Element("i", { className: "fa-solid fa-coins enclosure-icon", attributes: { "aria-hidden": "true" } }),
+				Element("label", { className: "enclosure-label", text: T("parcel.enclose") }),
+				amount,
+				Element("span", { className: "enclosure-terms", text: galleonsConfig.postage > 0 ? `${terms} ${T("parcel.postage", { count: galleonsConfig.postage })}` : terms }),
+				remove,
+			]);
+		}
+
+		/// <summary>
 		/// Lay the screen out for the current mode.
 		/// </summary>
 		function Build()
@@ -566,7 +633,11 @@ Owls.DeskScreens.Compose = (() =>
 			const title = Element("span", { className: "compose-title", text: titleText });
 			// Leaving the letter (back, or throwing it away) sits on the left and the ways of writing it on the right, so both sides stay short enough for the title to sit over the sheet's centre.
 			const start = Element("div", { className: "desk-toolbar-start" }, [backButton, discardButton]);
-			const actions = Element("div", { className: "desk-toolbar-actions" }, [everyoneButton, modeButton].filter(Boolean));
+			const encloseButton = galleonsConfig ? Element("button", { className: `desk-button is-quiet is-icon ${isEnclosureOpen ? "is-active" : ""}`, title: T("parcel.encloseHint"), attributes: { "aria-label": T("parcel.enclose") }, on: { click: ToggleEnclosure } },
+			[
+				Element("i", { className: "fa-solid fa-coins", attributes: { "aria-hidden": "true" } }),
+			]) : null;
+			const actions = Element("div", { className: "desk-toolbar-actions" }, [everyoneButton, encloseButton, modeButton].filter(Boolean));
 			const toolbar = Element("div", { className: `desk-toolbar ${official ? "is-wide" : ""}` }, [start, title, actions]);
 			let sheet = null;
 			let focusTarget = null;
@@ -613,6 +684,7 @@ Owls.DeskScreens.Compose = (() =>
 			const parts =
 			[
 				toolbar,
+				galleonsConfig && isEnclosureOpen ? CreateEnclosure() : null,
 				draft.isFull ? Element("div", { className: "compose-address" }, [picker.element]) : null,
 				stage,
 				Element("div", { className: "compose-footer" }, [status, counter]),
@@ -682,13 +754,21 @@ Owls.DeskScreens.Compose = (() =>
 				return;
 			}
 
+			const galleons = galleonsConfig ? draft.galleons : 0;
+
+			if (galleons > (galleonsConfig ? galleonsConfig.max : 0))
+			{
+				desk.ShowError(T("error.parcel.tooMany", { max: galleonsConfig.max }));
+				return;
+			}
+
 			isSending = true;
 			status.textContent = T("mail.compose.sending");
 			UpdateCounter();
 
 			const result = official
 				? await Owls.Bridge.Request("mail.sendOfficial", { sender: official.number, everyone: draft.everyone, recipients: draft.everyone ? [] : GetRecipientsToSend(), body: text, clientKey: NewKey() })
-				: await Owls.Bridge.Request("mail.send", { recipients: GetRecipientsToSend(), replyToId: reply ? reply.replyToId : 0, replyLabel: reply ? reply.name : "", body: text, clientKey: NewKey() });
+				: await Owls.Bridge.Request("mail.send", { recipients: GetRecipientsToSend(), replyToId: reply ? reply.replyToId : 0, replyLabel: reply ? reply.name : "", body: text, galleons, clientKey: NewKey() });
 
 			isSending = false;
 			status.textContent = "";

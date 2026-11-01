@@ -39,13 +39,83 @@ Owls.DeskScreens.Reader = (() =>
 			Element("span", { text: T("mail.reader.reply") }),
 		]);
 		const stage = Element("div", { className: "reader-stage" }, [Element("p", { className: "desk-loading", text: T("mail.reader.opening") })]);
+		const enclosure = Element("div", { className: "letter-enclosure" });
 		const element = Element("section", { className: "reader" },
 		[
 			Element("div", { className: "desk-toolbar" }, [backButton, details, Element("div", { className: "desk-toolbar-actions" }, [replyButton])]),
+			enclosure,
 			stage,
 		]);
 
 		replyButton.hidden = true;
+		enclosure.hidden = true;
+
+		/// <summary>
+		/// The letter as opened, once it is; null until then.
+		/// </summary>
+		let opened = null;
+
+		/// <summary>
+		/// Whether a collect request is on its way, so a second click does not send another.
+		/// </summary>
+		let isCollecting = false;
+
+		/// <summary>
+		/// Draw the Galleons enclosed with the letter: Collect for its recipient while they wait, otherwise what became of them.
+		/// Neither side is told who the other is; a parcel that went back says only that it went back to the sender.
+		/// </summary>
+		function RenderEnclosure()
+		{
+			const parcel = opened ? Store.GetParcel(opened) : null;
+			enclosure.hidden = !parcel;
+
+			if (!parcel)
+			{
+				return;
+			}
+
+			const icon = Element("i", { className: "fa-solid fa-coins", attributes: { "aria-hidden": "true" } });
+			const parts = [icon, Element("span", { className: "letter-enclosure-amount", text: T("parcel.enclosedAmount", { count: parcel.galleons }) })];
+
+			if (parcel.status === "waiting" && opened.box === "inbox")
+			{
+				const collect = Element("button", { className: "desk-button is-primary", text: T(isCollecting ? "parcel.collecting" : "parcel.collect"), on: { click: Collect } });
+				collect.disabled = isCollecting;
+				parts.push(collect);
+			}
+			else
+			{
+				parts.push(Element("span", { className: "letter-enclosure-status", text: T(`parcel.status.${parcel.status}`) }));
+			}
+
+			enclosure.className = `letter-enclosure is-${parcel.status}`;
+			enclosure.replaceChildren(...parts);
+		}
+
+		/// <summary>
+		/// Collect the Galleons enclosed with the letter.
+		/// </summary>
+		async function Collect()
+		{
+			if (isCollecting || !opened)
+			{
+				return;
+			}
+
+			isCollecting = true;
+			RenderEnclosure();
+			const result = await Owls.Bridge.Request("parcels.collect", { messageId: opened.id });
+			isCollecting = false;
+
+			if (!result.ok)
+			{
+				desk.ShowError(result.error);
+				RenderEnclosure();
+				return;
+			}
+
+			Store.SetParcel(opened.id, result.data.parcel || null);
+		}
 
 		/// <summary>
 		/// Describe when (and, for a sent letter, to whom) the letter went.
@@ -80,9 +150,11 @@ Owls.DeskScreens.Reader = (() =>
 			}
 
 			const letter = result.data.letter;
+			opened = letter;
 			Store.ApplyOpened(letter, result.data.unread);
 			details.textContent = Describe(letter);
 			stage.replaceChildren(Owls.Sheet.CreateReading(letter.text).slot);
+			RenderEnclosure();
 
 			if (letter.canReply)
 			{
@@ -102,6 +174,11 @@ Owls.DeskScreens.Reader = (() =>
 				if (reason === "post" && !replyButton.hidden)
 				{
 					replyButton.disabled = !Store.CanWrite();
+				}
+
+				if (reason === "parcel")
+				{
+					RenderEnclosure();
 				}
 			},
 			Destroy: () => {},

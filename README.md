@@ -118,7 +118,7 @@ The Muggle Phone's house colour schemes.
 ## Requirements
 
 - `hmp-lib`, `hmp-mysql` and `hmp-core` (0.9.0).
-- Optional: `hmp-admin` (announcement permissions), `hmp-webhooks` (Discord logging through its queue), `hmp-blips` (location markers that survive its map resyncs and wait for readers in another area), `hmp-activities` (Quiet during duels) and `hmp-interact` (owl post prompts in immersive mode).
+- Optional: `hmp-admin` (announcement permissions), `hmp-inventory` (Galleons sent by owl), `hmp-webhooks` (Discord logging through its queue), `hmp-blips` (location markers that survive its map resyncs and wait for readers in another area), `hmp-activities` (Quiet during duels) and `hmp-interact` (owl post prompts in immersive mode).
 - A working `hmp-mysql` connection. The tables are created automatically on first start through `hmp-mysql`'s migration ledger.
 - A loaded `hmp-core` character: Owls belong to characters, not accounts.
 
@@ -193,7 +193,8 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Lock Screens | ⬜ |
 | Privacy policy every character accepts before their first owl | ⬜ |
 | Howlers: An owl that shouts itself out loud for everyone nearby, then burns | ⬜ |
-| Parcels and Galleons: Items (hmp-inventory) or money (hmp-banking) carried by an owl | ⬜ |
+| Parcels: Galleons carried by an owl or letter, collected by hand (hmp-inventory) | ⚙️ |
+| Parcels: Items and gear carried by an owl | ⬜ |
 | Apps from other resources: Their own tiles on the home screen | ⬜ |
 | Public directory of businesses and services | ⬜ |
 | Owl the Ministry: Report in-character emergencies, call Ministry employees and Aurors | ⬜ |
@@ -347,6 +348,20 @@ Clearing the call log follows the same rule: The calls stay in the database, hid
 
 Owls are never pruned unless the server sets `storage.messageRetentionDays`. Then every owl and call log entry older than that many days is deleted once an hour. With soft deletion it is only hidden from every phone; to actually shrink the database, also set `storage.disableSoftDelete`.
 
+## Parcels
+
+An owl can carry Galleons, in both modes: The phone's coin button attaches them to the next one-to-one owl, and the letter desk's coin button encloses them with a letter (each recipient gets the amount). Bulk owls, announcements, official letters and owls to a system sender carry none.
+
+- The Galleons, and any postage (`attachments.postageGalleons`), leave the sender when the owl is sent. Postage pays the owl and is never returned.
+- The recipient presses **Collect** on the owl, once it has landed, to put them in their inventory. Nothing lands in an inventory unasked. In immersive mode a letter's Galleons follow its reading rules, so a letter read only at an owl post is collected there.
+- Galleons nobody collects within `attachments.returnAfterDays` go back to the sender, paid the next time they are online. Unsending an owl sends its Galleons back at once. So do owls a recipient deleted, blocked or never reached: they simply wait out the days.
+- Neither side is told who the other is. Both see only "Waiting to be collected", "Collected" or "Returned to the sender.", so an unsigned letter stays anonymous.
+- `attachments.maxGalleons` caps one owl, and `attachments.dailyGalleonsCap` caps what one character sends in 24 hours (`0` is no cap).
+
+Galleons are a game item, and `hmp-inventory`'s own transfers refuse game items, because they live in the game's inventory rather than in one database row. So every step is written to `frantic_owls_parcels` before the Galleons move. A crash between the two is settled at the next start the way that never duplicates Galleons, and the server log names the parcel and amount for staff to check. Without `hmp-inventory` running, parcels are off.
+
+A parcel whose sender's character was deleted is never paid back, since nobody can receive it. With `storage.messageRetentionDays` shorter than `attachments.returnAfterDays`, an owl can be pruned before its Galleons are collected; they still go back to the sender.
+
 ## Owl flight
 
 With `flight.enabled`, owls take time to fly. A one-to-one owl takes `minSeconds` plus `secondsPerHundredMetres` for every 100 m between the two characters, capped at `maxSeconds`. Owls to someone offline or in another virtual world take `maxSeconds`, and bulk owls take `groupSeconds`. Until an owl lands the recipient sees nothing (no message, preview, unread badge or sound), while the sender sees it marked "In flight...". Owls still in the air when the server restarts land on schedule afterwards.
@@ -364,7 +379,7 @@ In immersive mode, admins (the hmp-admin capability `immersivemode_postadmin.cap
 
 ## Discord logging
 
-Optional (`logging.enabled`, off by default). It logs owls sent, bulk owls created and left, informs, calls (who called whom and for how long, never anything said), blocks, official owls, announcements and owls retired when their character was deleted, each category switchable under `logging.events`. Message text is only included with `logging.includeBodies`. **That makes private owls readable by anyone who can see the Discord channel, so tell your players if you turn it on.**
+Optional (`logging.enabled`, off by default). It logs owls sent, bulk owls created and left, informs, calls (who called whom and for how long, never anything said), blocks, official owls, announcements, parcels (sent, collected, returned and interrupted) and owls retired when their character was deleted, each category switchable under `logging.events`. Message text is only included with `logging.includeBodies`. **That makes private owls readable by anyone who can see the Discord channel, so tell your players if you turn it on.**
 
 Delivery:
 
@@ -482,6 +497,12 @@ Settings only one front end uses carry its prefix (`phonemode_` or `immersivemod
 | `flight.minSeconds` / `maxSeconds` | `3` / `45` | Shortest and longest one-to-one flight. |
 | `flight.secondsPerHundredMetres` | `3` | Extra flight time per 100 m between the two characters. |
 | `flight.groupSeconds` | `5` | Flight time of bulk owls. |
+| `attachments.galleons` | `true` | Owls and letters can carry Galleons (see [Parcels](#parcels)). Needs `hmp-inventory`. |
+| `attachments.galleonsItem` | `"native:galleons"` | `hmp-inventory` item that is money. |
+| `attachments.maxGalleons` | `10000` | Most Galleons one owl or letter copy carries. |
+| `attachments.postageGalleons` | `0` | Galleons charged per owl carrying Galleons, never returned. `0` is free. |
+| `attachments.dailyGalleonsCap` | `0` | Most Galleons one character sends in 24 hours. `0` is no cap. |
+| `attachments.returnAfterDays` | `7` | Days before uncollected Galleons go back to the sender. |
 | `announcements.enabled` | `true` | Register the Ministry sender and `/owl_announce`. |
 | `announcements.command` | `"owl_announce"` | Command that sends an announcement. |
 | `announcements.senderName` / `avatarUrl` | `"Ministry of Magic"` / `""` | Who announcements come from. |
@@ -494,7 +515,7 @@ Settings only one front end uses carry its prefix (`phonemode_` or `immersivemod
 | `logging.username` | `"Owl Post"` | Name the log posts under. |
 | `logging.includeBodies` | `false` | Include message text in the log. |
 | `logging.flushIntervalMs` | `5000` | How often direct posting sends batched entries. |
-| `logging.events.*` | all `true` | Per category: `messages`, `groups`, `informs`, `calls`, `blocks`, `announcements` (official letters too), `system`. |
+| `logging.events.*` | all `true` | Per category: `messages`, `groups`, `informs`, `calls`, `blocks`, `announcements` (official letters too), `parcels`, `system`. |
 | `notifications.toastDurationMs` | `3000` | How long the closed-phone pop-up stays. |
 | `notifications.soundMode` | `"file"` | `"file"` plays the player's chosen sound from the page, `"wwise"` plays `wwiseEvent` through the game's audio, `"none"` is silent. |
 | `notifications.sounds` | the six shipped sounds | Sounds players can choose from: `[{ "id", "label", "file" }]`, where `file` is inside `UI/` (`.wav`, `.mp3` or `.ogg`) and `id` is 1-24 of a-z, 0-9, `_` or `-`. At most 16. Add your own by dropping a file into `UI/Sounds/` and listing it. |

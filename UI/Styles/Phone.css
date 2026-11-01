@@ -3754,3 +3754,100 @@ button.settings-card:hover
 		opacity: 0;
 	}
 }
+
+/* ======================== */
+/* Parcels                  */
+/* ======================== */
+
+/* Galleons an owl carries: drawn under its text, with Collect for the recipient. */
+.parcel-card
+{
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.3rem 0.55rem;
+	margin-top: 0.4rem;
+	padding: 0.4rem 0.5rem;
+	border-radius: 0.6rem;
+	background: rgba(var(--accent-rgb), 0.12);
+	white-space: normal;
+}
+
+.bubble.is-mine .parcel-card
+{
+	background: rgba(42, 33, 22, 0.1);
+}
+
+.parcel-icon
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.9rem;
+	height: 1.9rem;
+	flex: none;
+	border-radius: 50%;
+	background: rgba(var(--accent-rgb), 0.2);
+	color: var(--gold);
+	font-size: 0.9rem;
+}
+
+.bubble.is-mine .parcel-icon
+{
+	background: rgba(42, 33, 22, 0.12);
+	color: var(--bubble-mine-text);
+}
+
+.parcel-amount
+{
+	flex: 1;
+	font-family: var(--font-heading);
+	font-size: 0.85rem;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+/* A long status takes a line of its own under the amount rather than squeezing it. */
+.parcel-status
+{
+	flex: 1 0 auto;
+	text-align: right;
+	font-size: 0.75rem;
+	font-style: italic;
+	opacity: 0.8;
+}
+
+.parcel-collect
+{
+	flex: none;
+	padding: 0.35rem 0.8rem;
+	white-space: nowrap;
+	border-radius: var(--radius);
+	background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+	font-family: var(--font-heading);
+	font-size: 0.75rem;
+	font-weight: 700;
+	color: var(--on-accent);
+}
+
+.parcel-collect:disabled
+{
+	opacity: 0.6;
+	cursor: default;
+}
+
+.parcel-bar .text-input
+{
+	padding: 0.4rem 0.6rem;
+}
+
+.parcel-terms
+{
+	font-size: 0.75rem;
+	color: var(--text-dim);
+}
+
+.parcel-chip .reply-text
+{
+	border-left-color: var(--gold-bright);
+}

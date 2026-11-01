@@ -67,6 +67,15 @@ const defaultConfig = Object.freeze
 		secondsPerHundredMetres: 3,
 		groupSeconds: 5,
 	},
+	attachments:
+	{
+		galleons: true,
+		galleonsItem: "native:galleons",
+		maxGalleons: 10000,
+		postageGalleons: 0,
+		dailyGalleonsCap: 0,
+		returnAfterDays: 7,
+	},
 	announcements:
 	{
 		enabled: true,
@@ -95,6 +104,7 @@ const defaultConfig = Object.freeze
 			calls: true,
 			blocks: true,
 			announcements: true,
+			parcels: true,
 			system: true,
 		},
 	},
@@ -483,6 +493,15 @@ function Sanitise(config)
 	flight.secondsPerHundredMetres = ClampNumber(flight.secondsPerHundredMetres, 0, 600, fallback.flight.secondsPerHundredMetres);
 	flight.groupSeconds = ClampNumber(flight.groupSeconds, 0, 3600, fallback.flight.groupSeconds);
 
+	// Parcels need hmp-inventory too; without it they stay off whatever this says (see Parcels.js).
+	const attachments = config.attachments;
+	attachments.galleons = attachments.galleons !== false;
+	attachments.galleonsItem = String(attachments.galleonsItem || fallback.attachments.galleonsItem).trim() || fallback.attachments.galleonsItem;
+	attachments.maxGalleons = ClampInteger(attachments.maxGalleons, 1, 1000000000, fallback.attachments.maxGalleons);
+	attachments.postageGalleons = ClampInteger(attachments.postageGalleons, 0, 1000000, fallback.attachments.postageGalleons);
+	attachments.dailyGalleonsCap = ClampInteger(attachments.dailyGalleonsCap, 0, 1000000000, fallback.attachments.dailyGalleonsCap);
+	attachments.returnAfterDays = ClampInteger(attachments.returnAfterDays, 1, 365, fallback.attachments.returnAfterDays);
+
 	const announcements = config.announcements;
 	announcements.enabled = announcements.enabled !== false;
 	announcements.command = String(announcements.command || fallback.announcements.command).trim().replace(/^\//, "").toLowerCase() || fallback.announcements.command;
@@ -725,6 +744,8 @@ function GetClientConfig(config, languages)
 		defaultSound: config.notifications.defaultSound,
 		wwiseEvent: config.notifications.wwiseEvent,
 		requestTimeoutMs: config.network.requestTimeoutMs,
+		// Whether parcels can carry Galleons is decided again once hmp-inventory is known to run (see Main.js).
+		galleons: config.attachments.galleons ? { max: config.attachments.maxGalleons, postage: config.attachments.postageGalleons, returnAfterDays: config.attachments.returnAfterDays } : null,
 	};
 
 	if (config.mode === "immersive")

@@ -24,6 +24,7 @@ const { MailService, ToDeskContact } = require("./Mail.js");
 const { OwlRoster } = require("./Roster.js");
 const { CreateApi } = require("./Api.js");
 const { RequestDispatcher } = require("./Requests.js");
+const { ParcelService } = require("./Parcels.js");
 const { Ok } = require("./Result.js");
 
 const resourceName = "frantic-owls";
@@ -104,13 +105,14 @@ const contacts = new ContactService(database, hmp, config.contacts, config.avata
 const profiles = new ProfileService(database, directory, outbox, config.avatars);
 const senders = new SenderRegistry(database, hmp, config.avatars, PushSendersToAll);
 const locations = new LocationService(database, outbox, hmp, config.phonemode_locations, () => ImportOptional("hmp-blips"));
-const chats = new ChatService({ database, directory, outbox, hmp, config, blocks, senders, flight, audit, locations, settings, dialler, hooks: { Describe, OnSent } });
+const parcels = new ParcelService({ database, directory, outbox, audit, config: config.attachments, GetInventory: () => ImportOptional("hmp-inventory"), Describe });
+const chats = new ChatService({ database, directory, outbox, hmp, config, blocks, senders, flight, audit, locations, settings, dialler, parcels, hooks: { Describe, OnSent } });
 const inform = new InformService({ directory, contacts, profiles, outbox, hmp, config: config.phonemode_inform, blocks, audit });
 const calls = new CallService({ database, directory, outbox, hmp, config: config.phonemode_calls, blocks, audit, dialler, hooks: { Describe, OnCall } });
 const requests = new RequestDispatcher(hmp, directory, outbox, config.network);
 const posts = new PostService(hmp, config.immersivemode_posts, () => ImportOptional("hmp-interact"), OpenAtPost, Lang.Translate("", "mail.post.prompt"));
 const roster = new OwlRoster();
-const mail = new MailService({ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial });
+const mail = new MailService({ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial, parcels });
 
 /// <summary>
 /// True when players get the immersive letter desk instead of the phone (mode "immersive").
@@ -546,6 +548,9 @@ async function LoadOwl(player, character)
 
 	const entry = directory.Register(player, character.id, characterName, number, loadedSettings);
 	await SendBootstrap(entry);
+
+	// Parcels that went back while this character was away are paid now they are here to receive them.
+	parcels.PayReturns(entry).catch((error) => Logger.LogError("Main", `Paying returned parcels to ${entry.number} failed: ${Logger.Describe(error)}`));
 }
 
 /// <summary>
@@ -609,6 +614,7 @@ requests.Register("settings.update", async (entry, data) =>
 /// </summary>
 function RegisterPhoneRequests()
 {
+	requests.Register("parcels.collect", (entry, data) => parcels.Collect(entry, data));
 	requests.Register("contacts.update", (entry, data) => contacts.Update(entry, data));
 	requests.Register("contacts.saveFromChat", (entry, data) => contacts.SaveFromChat(entry, data));
 	requests.Register("contacts.favourite", (entry, data) => contacts.SetFavourite(entry, data));
@@ -681,6 +687,8 @@ function RegisterPhoneRequests()
 /// </summary>
 function RegisterImmersiveRequests()
 {
+	// A letter's parcel follows its text's reading rules (owl posts), so the desk collects through the mail service.
+	requests.Register("parcels.collect", (entry, data) => mail.Collect(entry, data));
 	requests.Register("mail.list", (entry, data) => mail.List(entry, data));
 	requests.Register("mail.open", (entry, data) => mail.Open(entry, data));
 	requests.Register("mail.send", (entry, data) => mail.Send(entry, data));
@@ -1009,6 +1017,16 @@ async function Start()
 	}
 
 	audit.Start(ImportOptional("hmp-webhooks"));
+
+	// A crash between a parcel's journal step and its Galleons moving is settled before any owl loads (see ParcelState).
+	await parcels.Recover();
+
+	// Pages offer Galleons only when owls can carry them here: switched on, and hmp-inventory running.
+	if (!parcels.IsAvailable())
+	{
+		clientConfig.galleons = null;
+	}
+
 	isReady = true;
 	outbox.Start();
 	await chats.RestoreFlights();
@@ -1021,6 +1039,7 @@ async function Start()
 		dialler.Sweep();
 		mail.Sweep();
 		requests.Sweep();
+		parcels.Sweep().catch((error) => Logger.LogError("Main", `Returning parcels failed: ${Logger.Describe(error)}`));
 	}, maintenanceIntervalMs);
 
 	// Characters deleted while the owl post was closed never raised hmp:character:deleted for us.

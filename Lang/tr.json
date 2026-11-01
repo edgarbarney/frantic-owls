@@ -310,6 +310,18 @@
 		"error.owlsTired": "Baykuşlarınızın dinlenmesi gerek. Biraz yavaşlayın.",
 		"error.ownNumber": "Bu sizin kendi baykuş numaranız.",
 		"error.ownRole": "Kendi rolünüzü değiştiremezsiniz.",
+		"error.parcel.collectFailed": "Galleon'lar alınamadı. Biraz sonra yeniden deneyin.",
+		"error.parcel.collected": "Bu Galleon'ları zaten aldınız.",
+		"error.parcel.dailyCap": "Baykuşlar günde en fazla {max} Galleon'unuzu taşıyabilir. Bugün için {left} kaldı.",
+		"error.parcel.directOnly": "Galleon'lar yalnızca tek bir cadıya ya da büyücüye giden bir baykuşla gönderilebilir.",
+		"error.parcel.gone": "Bu baykuştan alınacak bir şey kalmadı.",
+		"error.parcel.invalid": "Tam sayı olarak bir Galleon miktarı yazın.",
+		"error.parcel.notEnough": {
+			"one": "Bunun için posta ücreti dahil {count} Galleon gerekiyor.",
+			"other": "Bunun için posta ücreti dahil {count} Galleon gerekiyor."
+		},
+		"error.parcel.tooMany": "Bir baykuş en fazla {max} Galleon taşıyabilir.",
+		"error.parcel.unavailable": "Baykuşlar şu anda Galleon taşıyamıyor.",
 		"error.pictureCredentials": "Görsel bağlantıları kullanıcı adı veya parola içeremez.",
 		"error.pictureFailed": "Görsel kaydedilemedi. Biraz sonra tekrar deneyin.",
 		"error.pictureHost": "Görseller şu sitelerde barındırılmalıdır: {hosts}.",
@@ -640,6 +652,39 @@
 		"owls.previewMine": "Siz: {body}",
 		"owls.search": "Baykuşlarda ara",
 		"owls.sendNew": "Yeni baykuş gönder",
+		"parcel.amountPlaceholder": "Kaç Galleon?",
+		"parcel.attach": "Galleon ekle",
+		"parcel.attachShort": "Ekle",
+		"parcel.attachedHint": "Bir sonraki baykuşunuzla gönderilecek",
+		"parcel.collect": "Al",
+		"parcel.collecting": "Alınıyor…",
+		"parcel.enclose": "Galleon iliştir",
+		"parcel.encloseHint": "Bu mektupla Galleon gönderin. Her alıcı alana dek mektupta bekler.",
+		"parcel.enclosedAmount": {
+			"one": "{count} Galleon iliştirildi",
+			"other": "{count} Galleon iliştirildi"
+		},
+		"parcel.galleons": {
+			"one": "{count} Galleon",
+			"other": "{count} Galleon"
+		},
+		"parcel.intro": "Bir sonraki baykuşunuzla Galleon gönderin. Alıcı alana dek baykuşta bekler.",
+		"parcel.postage": {
+			"one": "Posta ücreti {count} Galleon'dur ve geri verilmez.",
+			"other": "Posta ücreti {count} Galleon'dur ve geri verilmez."
+		},
+		"parcel.remove": "Galleon'ları çıkar",
+		"parcel.returnedToYou": {
+			"one": "{count} Galleon baykuşla size geri döndü.",
+			"other": "{count} Galleon baykuşla size geri döndü."
+		},
+		"parcel.status.collected": "Alındı",
+		"parcel.status.returned": "Göndericiye geri döndü.",
+		"parcel.status.waiting": "Alınmayı bekliyor",
+		"parcel.terms": {
+			"one": "{count} gün içinde alınmayan Galleon'lar göndericiye geri döner.",
+			"other": "{count} gün içinde alınmayan Galleon'lar göndericiye geri döner."
+		},
 		"picker.addButton": "Grup baykuşuna ekle",
 		"picker.addTitle": "Üye ekle",
 		"picker.bulkHint": "Birden fazla kişiye tek baykuş gönder",
