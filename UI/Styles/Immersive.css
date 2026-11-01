@@ -793,8 +793,7 @@ button
 	background: rgba(var(--gold-rgb), 0.06);
 }
 
-/* Galleons enclosed with a letter: the row under the toolbar while writing, and the strip above a letter being read. */
-.compose-enclosure,
+/* Galleons and items enclosed with a letter: the panel under the toolbar while writing, and the strip above a letter being read. */
 .letter-enclosure
 {
 	display: flex;
@@ -807,6 +806,52 @@ button
 	border-radius: 0.35rem;
 	background: rgba(var(--gold-rgb), 0.06);
 	flex: none;
+}
+
+/* Label, then what is enclosed (wrapping onto further lines), then the remove button; the terms run along the bottom. */
+.compose-enclosure
+{
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	align-items: center;
+	gap: 0.5rem 0.9rem;
+	width: min(52rem, 100%);
+	margin: 0 auto 0.75rem;
+	padding: 0.55rem 0.6rem 0.55rem 1rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.35rem;
+	background: rgba(var(--gold-rgb), 0.06);
+	flex: none;
+}
+
+.enclosure-head
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.55rem;
+	align-self: start;
+	padding-top: 0.3rem;
+}
+
+.enclosure-contents
+{
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem 0.5rem;
+	min-width: 0;
+}
+
+.enclosure-remove
+{
+	align-self: start;
+}
+
+.compose-enclosure .enclosure-terms
+{
+	grid-column: 1 / -1;
+	padding-top: 0.4rem;
+	border-top: 1px solid rgba(var(--gold-rgb), 0.15);
 }
 
 .letter-enclosure[hidden]
@@ -847,7 +892,6 @@ button
 
 .enclosure-terms
 {
-	flex: 1;
 	font-size: 0.85rem;
 	font-style: italic;
 	color: var(--text-dim);

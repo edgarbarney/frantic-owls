@@ -3759,13 +3759,14 @@ button.settings-card:hover
 /* Parcels                  */
 /* ======================== */
 
-/* Galleons an owl carries: drawn under its text, with Collect for the recipient. */
+/* What an owl carries, drawn under its text: the icon beside the list (one line per thing), then the status or Collect on a line of its own. */
 .parcel-card
 {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.3rem 0.55rem;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	align-items: start;
+	gap: 0.35rem 0.6rem;
+	min-width: 11rem;
 	margin-top: 0.4rem;
 	padding: 0.4rem 0.5rem;
 	border-radius: 0.6rem;
@@ -3802,8 +3803,9 @@ button.settings-card:hover
 {
 	display: flex;
 	flex-direction: column;
-	flex: 1;
+	gap: 0.15rem;
 	min-width: 0;
+	padding-top: 0.2rem;
 }
 
 .parcel-amount
@@ -3817,14 +3819,14 @@ button.settings-card:hover
 .parcel-item
 {
 	font-size: 0.8rem;
-	line-height: 1.25;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
 }
 
-/* A long status takes a line of its own under the amount rather than squeezing it. */
 .parcel-status
 {
-	flex: 1 0 auto;
-	text-align: right;
+	grid-column: 1 / -1;
+	justify-self: end;
 	font-size: 0.75rem;
 	font-style: italic;
 	opacity: 0.8;
@@ -3832,7 +3834,8 @@ button.settings-card:hover
 
 .parcel-collect
 {
-	flex: none;
+	grid-column: 1 / -1;
+	justify-self: stretch;
 	padding: 0.35rem 0.8rem;
 	white-space: nowrap;
 	border-radius: var(--radius);

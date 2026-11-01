@@ -630,7 +630,10 @@ Owls.DeskScreens.Compose = (() =>
 		/// <returns>Row element</returns>
 		function CreateEnclosure()
 		{
-			const parts = [Element("i", { className: "fa-solid fa-box-open enclosure-icon", attributes: { "aria-hidden": "true" } }), Element("span", { className: "enclosure-label", text: T("parcel.enclosed") })];
+			const head = Element("span", { className: "enclosure-head" }, [Element("i", { className: "fa-solid fa-box-open enclosure-icon", attributes: { "aria-hidden": "true" } }), Element("span", { className: "enclosure-label", text: T("parcel.enclosed") })]);
+
+			// What is enclosed wraps onto as many lines as it needs; the terms take a line of their own underneath.
+			const contents = [];
 
 			if (parcelConfig.galleons > 0 && (isGalleonsOpen || draft.galleons > 0))
 			{
@@ -644,7 +647,7 @@ Owls.DeskScreens.Compose = (() =>
 					QueueSave();
 				});
 
-				parts.push(Element("span", { className: "enclosure-galleons" }, [amount, Element("span", { text: T("parcel.menu.galleons") })]));
+				contents.push(Element("span", { className: "enclosure-galleons" }, [amount, Element("span", { text: T("parcel.menu.galleons") })]));
 
 				requestAnimationFrame(() =>
 				{
@@ -657,7 +660,7 @@ Owls.DeskScreens.Compose = (() =>
 
 			for (const item of draft.items)
 			{
-				parts.push(Element("span", { className: "enclosure-chip" },
+				contents.push(Element("span", { className: "enclosure-chip" },
 				[
 					Element("span", { text: T("parcel.itemLine", { label: item.label, count: item.amount }) }),
 					Element("button", { className: "enclosure-chip-remove", title: T("parcel.remove"), attributes: { "aria-label": T("parcel.remove") }, on: { click: () =>
@@ -670,8 +673,8 @@ Owls.DeskScreens.Compose = (() =>
 			}
 
 			const terms = T("parcel.terms", { count: parcelConfig.returnAfterDays });
-			parts.push(Element("span", { className: "enclosure-terms", text: parcelConfig.postage > 0 ? `${terms} ${T("parcel.postage", { count: parcelConfig.postage })}` : terms }));
-			parts.push(Element("button", { className: "desk-button is-quiet is-icon", title: T("parcel.removeAll"), attributes: { "aria-label": T("parcel.removeAll") }, on: { click: () =>
+			const termsLine = Element("span", { className: "enclosure-terms", text: parcelConfig.postage > 0 ? `${terms} ${T("parcel.postage", { count: parcelConfig.postage })}` : terms });
+			const removeAll = Element("button", { className: "desk-button is-quiet is-icon enclosure-remove", title: T("parcel.removeAll"), attributes: { "aria-label": T("parcel.removeAll") }, on: { click: () =>
 			{
 				draft.galleons = 0;
 				draft.items = [];
@@ -682,9 +685,9 @@ Owls.DeskScreens.Compose = (() =>
 			} } },
 			[
 				Element("i", { className: "fa-solid fa-xmark", attributes: { "aria-hidden": "true" } }),
-			]));
+			]);
 
-			return Element("div", { className: "compose-enclosure" }, parts);
+			return Element("div", { className: "compose-enclosure" }, [head, Element("div", { className: "enclosure-contents" }, contents), removeAll, termsLine]);
 		}
 
 		/// <summary>
