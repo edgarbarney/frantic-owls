@@ -126,6 +126,8 @@
 			"areaId": "Overland",
 			"regionId": "HOG_Ravenclaw_CommonRoom",
 			"radiusMetres": 3,
+			"spawnOwl": false,
+			"owlOffset": { "x": -1, "y": 0, "z": 175 },
 			"yaw": 41.6
 		},
 		{

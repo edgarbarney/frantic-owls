@@ -19,6 +19,11 @@ const toleranceMetres = 1;
 /// </summary>
 const interactionPrefix = "frantic-owls.post.";
 
+/// <summary>
+/// Native perched owl Blueprint placed above enabled posts.
+/// </summary>
+const owlModel = "/Game/Gameplay/Stations/Interaction/MailInteraction/BP_PropOwl_OwlStation.BP_PropOwl_OwlStation_C";
+
 // ========================
 // Owl Posts
 // ========================
@@ -66,6 +71,11 @@ class PostService
 	#registered = [];
 
 	/// <summary>
+	/// Owl props owned by this resource, independently of hmp-interact.
+	/// </summary>
+	#owls = [];
+
+	/// <summary>
 	/// Constructor.
 	/// </summary>
 	/// <param name="hmp">hmp-lib server import</param>
@@ -111,11 +121,19 @@ class PostService
 	}
 
 	/// <summary>
-	/// Offer every post through hmp-interact, replacing any earlier registration. Does nothing when hmp-interact is not running.
+	/// Replace owl props and offer every post through hmp-interact when it is running.
 	/// </summary>
 	Register()
 	{
 		this.Unregister();
+
+		for (const post of this.#posts)
+		{
+			if (post.spawnOwl)
+			{
+				this.#SpawnOwl(post);
+			}
+		}
 
 		const interact = this.#posts.length > 0 ? this.#GetInteract() : null;
 
@@ -174,10 +192,57 @@ class PostService
 	}
 
 	/// <summary>
-	/// Take every post's prompt down again.
+	/// Place an owl at the post position plus its world-axis offset.
+	/// </summary>
+	/// <param name="post">Clean post record</param>
+	#SpawnOwl(post)
+	{
+		try
+		{
+			const owl = WorldObject.create(`${interactionPrefix}${post.id}.owl`, owlModel,
+			{
+				x: post.position.x + post.owlOffset.x,
+				y: post.position.y + post.owlOffset.y,
+				z: post.position.z + post.owlOffset.z,
+				yaw: post.yaw,
+				collision: false,
+			});
+
+			if (!owl)
+			{
+				Logger.LogWarning("Posts", `Owl prop for post "${post.id}" could not be created.`);
+				return;
+			}
+
+			// Keep the handle before setting the map so a failed map assignment can still be cleaned up.
+			this.#owls.push(owl);
+			owl.setVirtualWorld(0, post.areaId || "Overland");
+		}
+		catch (error)
+		{
+			Logger.LogWarning("Posts", `Owl prop for post "${post.id}" could not be placed: ${Logger.Describe(error)}`);
+		}
+	}
+
+	/// <summary>
+	/// Take every post's prompt and owl prop down again.
 	/// </summary>
 	Unregister()
 	{
+		for (const owl of this.#owls)
+		{
+			try
+			{
+				owl.destroy();
+			}
+			catch (error)
+			{
+				Logger.LogWarning("Posts", `An owl prop could not be removed: ${Logger.Describe(error)}`);
+			}
+		}
+
+		this.#owls = [];
+
 		for (const unregister of this.#registered)
 		{
 			// The interaction may already be gone (hmp-interact stopped first); there is nothing left to take down then.
