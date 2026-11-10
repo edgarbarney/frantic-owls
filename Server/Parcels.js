@@ -26,6 +26,11 @@ const sweepBatchSize = 100;
 const maxItemKeyLength = 200;
 
 /// <summary>
+/// How long the game may take to answer a gear give before it counts as uncertain, in milliseconds.
+/// </summary>
+const patchTimeoutMs = 20 * 1000;
+
+/// <summary>
 /// Item kinds an owl can carry, and the attachments switch that allows each. Tools and mounts live in holders of their own and are never carried.
 /// </summary>
 const carriedKinds = Object.freeze({ item: "items", gear: "gear" });
@@ -158,6 +163,172 @@ class ParcelService
 			Logger.LogError("Parcels", `Adding ${amount} ${name} to player ${player.id} failed: ${Logger.Describe(error)}`);
 			return 0;
 		}
+	}
+
+	/// <summary>
+	/// Give a gear piece with its roll (level, stats, upgrades and traits) to an online player, straight through the game's inventory.
+	///
+	/// <para>
+	/// NOTE: hmp-inventory's add gives gear without a roll, so a piece sent through it arrived at level 1 with every stat and upgrade gone.
+	/// The game's own patch carries the roll, so a carried piece is given back through it instead.
+	/// A patch that never answers may have landed; it counts as given and is logged for staff, so a piece is never given twice.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="player">Player to give to</param>
+	/// <param name="itemId">The game's item ID</param>
+	/// <param name="amount">How many</param>
+	/// <param name="variation">Native variation, or an empty string</param>
+	/// <param name="stats">The piece's roll</param>
+	/// <returns>How many were given</returns>
+	async #GiveGear(player, itemId, amount, variation, stats)
+	{
+		const native = player && player.inventory;
+
+		if (!native || typeof native.patch !== "function" || amount <= 0)
+		{
+			return 0;
+		}
+
+		const operation = { op: "give", itemId, count: amount, identified: true, unique: true, stats };
+
+		if (variation)
+		{
+			operation.variation = variation;
+		}
+
+		let result = null;
+
+		try
+		{
+			result = await new Promise((resolve, reject) =>
+			{
+				const timer = setTimeout(() => reject(Object.assign(new Error("the game did not answer"), { uncertain: true })), patchTimeoutMs);
+
+				try
+				{
+					native.patch([operation], {}, (error, value) =>
+					{
+						clearTimeout(timer);
+
+						if (error)
+						{
+							reject(error);
+						}
+						else
+						{
+							resolve(value);
+						}
+					});
+				}
+				catch (error)
+				{
+					clearTimeout(timer);
+					reject(error);
+				}
+			});
+		}
+		catch (error)
+		{
+			if (error && error.uncertain)
+			{
+				Logger.LogError("Parcels", `Giving ${amount} ${itemId} to player ${player.id} did not answer; it may have arrived and is counted as given. Check it by hand.`);
+				return amount;
+			}
+
+			Logger.LogError("Parcels", `Giving ${amount} ${itemId} to player ${player.id} failed: ${Logger.Describe(error)}`);
+			return 0;
+		}
+
+		const revision = Number(result && result.revision);
+
+		if (Number.isSafeInteger(revision) && typeof native.waitForRevision === "function")
+		{
+			try
+			{
+				await native.waitForRevision(revision);
+			}
+			catch (error)
+			{
+				// The server holds the piece now; the game catches up on the player's next load.
+				Logger.LogWarning("Parcels", `Player ${player.id}'s game has not shown ${itemId} yet: ${Logger.Describe(error)}`);
+			}
+		}
+
+		const inventory = this.#GetInventory();
+
+		if (inventory && inventory.native && typeof inventory.native.save === "function")
+		{
+			try
+			{
+				await inventory.native.save(player);
+			}
+			catch (error)
+			{
+				Logger.LogWarning("Parcels", `Saving player ${player.id}'s inventory after ${itemId} arrived failed: ${Logger.Describe(error)}`);
+			}
+		}
+
+		return amount;
+	}
+
+	/// <summary>
+	/// Give a parcel's game item to an online player: a gear piece with its roll, anything else through hmp-inventory.
+	/// </summary>
+	/// <param name="player">Player to give to</param>
+	/// <param name="row">Parcel item row ({ name, variation, nativeId, stats })</param>
+	/// <param name="amount">How many</param>
+	/// <returns>How many were given</returns>
+	async #GiveItem(player, row, amount)
+	{
+		return row.stats && row.nativeId ? this.#GiveGear(player, row.nativeId, amount, row.variation, row.stats) : this.#Give(player, row.name, amount, row.variation);
+	}
+
+	/// <summary>
+	/// The game's own rows of a player's inventory, which carry the gear rolls that hmp-inventory's view leaves out.
+	/// </summary>
+	/// <param name="player">Player</param>
+	/// <returns>HmpNativeInventoryRow[] (empty on a host without them), or null when they cannot be read</returns>
+	#ReadNativeRows(player)
+	{
+		const native = player && player.inventory;
+
+		if (!native || typeof native.list !== "function")
+		{
+			return [];
+		}
+
+		try
+		{
+			const rows = native.list();
+			return Array.isArray(rows) ? rows : [];
+		}
+		catch (error)
+		{
+			Logger.LogError("Parcels", `Reading the game inventory of player ${player.id} failed: ${Logger.Describe(error)}`);
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// The roll of a stored gear piece, read from the game's own rows.
+	/// Copies with different rolls cannot be told apart when taken by name, so none of them travels.
+	/// </summary>
+	/// <param name="rows">HmpNativeInventoryRow[]</param>
+	/// <param name="item">Item record of the piece</param>
+	/// <returns>{ itemId, stats, ambiguous } where stats is null when the game does not know the roll</returns>
+	#FindRoll(rows, item)
+	{
+		const itemId = item.itemId.toLowerCase();
+		const copies = rows.filter((row) => row && row.equipped !== true && String(row.itemId || "").toLowerCase() === itemId && String(row.variation || "") === item.variation);
+		const rolls = copies.map((row) => row.stats && typeof row.stats === "object" ? row.stats : null);
+
+		if (new Set(rolls.map((roll) => JSON.stringify(roll))).size > 1)
+		{
+			return { itemId: item.itemId, stats: null, ambiguous: true };
+		}
+
+		return { itemId: copies.length > 0 ? String(copies[0].itemId) : item.itemId, stats: rolls[0] || null, ambiguous: false };
 	}
 
 	/// <summary>
@@ -372,7 +543,7 @@ class ParcelService
 	/// </summary>
 	/// <param name="entry">Directory entry of the sender</param>
 	/// <param name="view">HmpInventoryView</param>
-	/// <returns>[{ key, source, slot, name, itemId, variation, kind, label, icon, amount, reason }]</returns>
+	/// <returns>[{ key, source, slot, name, itemId, variation, kind, label, icon, amount, stats, reason }] where stats is a gear piece's roll, or null</returns>
 	async #GetCarriable(entry, view)
 	{
 		const language = entry.settings ? entry.settings.language : "";
@@ -381,6 +552,7 @@ class ParcelService
 		// A piece worn while another copy is stored cannot be told apart by name when taken, so neither copy travels.
 		const worn = new Set(rows.filter((item) => item.equipped).map((item) => item.name.toLowerCase()));
 		const items = [];
+		let nativeRows;
 
 		for (const item of rows)
 		{
@@ -393,12 +565,24 @@ class ParcelService
 				: worn.has(item.name.toLowerCase()) ? Lang.Translate(language, "error.parcel.worn")
 				: null;
 
+			let roll = null;
+
+			// A gear piece travels with its roll, read from the game's own rows because hmp-inventory's view leaves it out.
+			if (!reason && item.source === "native" && item.kind === "gear")
+			{
+				nativeRows = nativeRows === undefined ? this.#ReadNativeRows(entry.player) : nativeRows;
+				roll = nativeRows ? this.#FindRoll(nativeRows, item) : null;
+				reason = !nativeRows ? Lang.Translate(language, "error.parcel.gearUnread")
+					: roll.ambiguous ? Lang.Translate(language, "error.parcel.copies")
+					: null;
+			}
+
 			if (!reason)
 			{
 				reason = await this.#AskRules("CanAttach", { player: entry.player, characterId: entry.characterId, item: this.#ForRules(item) });
 			}
 
-			items.push({ ...item, reason: reason || "" });
+			items.push({ ...item, itemId: roll && roll.stats ? roll.itemId : item.itemId, stats: roll ? roll.stats : null, reason: reason || "" });
 		}
 
 		return items.sort((left, right) => left.label.localeCompare(right.label) || left.key.localeCompare(right.key));
@@ -664,7 +848,7 @@ class ParcelService
 	/// </summary>
 	/// <param name="entry">Directory entry of the sender</param>
 	/// <param name="requested">[{ key, amount }]</param>
-	/// <returns>{ problem, items: [{ source, slot, name, itemId, variation, kind, label, icon, amount }] }</returns>
+	/// <returns>{ problem, items: [{ source, slot, name, itemId, variation, kind, label, icon, amount, stats }] }</returns>
 	async #Resolve(entry, requested)
 	{
 		if (requested.length > this.#config.maxItemStacks)
@@ -698,7 +882,7 @@ class ParcelService
 			}
 
 			seen.add(key);
-			items.push({ source: item.source, slot: item.slot, name: item.name, itemId: item.itemId, variation: item.variation, kind: item.kind, label: item.label, icon: item.icon, amount });
+			items.push({ source: item.source, slot: item.slot, name: item.name, itemId: item.itemId, variation: item.variation, kind: item.kind, label: item.label, icon: item.icon, amount, stats: item.stats });
 		}
 
 		return { problem: null, items };
@@ -790,7 +974,7 @@ class ParcelService
 
 			if (taken < row.amount)
 			{
-				if (taken > 0 && await this.#Give(entry.player, row.name, taken, row.variation) < taken)
+				if (taken > 0 && await this.#GiveItem(entry.player, row, taken) < taken)
 				{
 					Logger.LogError("Parcels", `Parcel ${parcel.id}: ${taken} ${row.name} were taken from ${entry.number} and could not all be put back.`);
 				}
@@ -846,7 +1030,7 @@ class ParcelService
 
 		for (const row of parcel.items)
 		{
-			if (row.source === "native" && row.state === ParcelItemState.Held && await this.#Give(entry.player, row.name, row.amount, row.variation) < row.amount)
+			if (row.source === "native" && row.state === ParcelItemState.Held && await this.#GiveItem(entry.player, row, row.amount) < row.amount)
 			{
 				Logger.LogError("Parcels", `Parcel ${parcel.id}: ${row.amount} ${row.name} could not all go back to ${entry.number}.`);
 			}
@@ -929,7 +1113,7 @@ class ParcelService
 			}
 
 			const name = row.source === "galleons" ? this.#config.galleonsItem : row.name;
-			const given = await this.#Give(player, name, row.amount, row.variation);
+			const given = row.source === "galleons" ? await this.#Give(player, name, row.amount) : await this.#GiveItem(player, row, row.amount);
 
 			if (given === 0)
 			{

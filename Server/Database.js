@@ -267,6 +267,15 @@ const migrations =
 			"ALTER TABLE frantic_owls_parcels ADD COLUMN contents_json TEXT NULL",
 		],
 	},
+	{
+		// A gear piece's roll (level, stats, upgrades and traits) travels with it: hmp-inventory's add gives a fresh level-1 copy, so the parcel keeps the roll and the game's own item ID to give it back with.
+		version: 11,
+		name: "keep parcel gear rolls",
+		statements:
+		[
+			"ALTER TABLE frantic_owls_parcel_items ADD COLUMN native_id VARCHAR(96) NOT NULL DEFAULT '', ADD COLUMN stats_json TEXT NULL",
+		],
+	},
 ];
 
 /// <summary>
@@ -628,6 +637,25 @@ function ReadParcelContents(contents)
 	catch
 	{
 		return [];
+	}
+}
+
+/// <summary>
+/// Read a parcel item's stored gear roll.
+/// A missing or unreadable one reads as null, and the piece is then given the way any item is.
+/// </summary>
+/// <param name="stats">stats_json value</param>
+/// <returns>The roll object, or null</returns>
+function ReadStats(stats)
+{
+	try
+	{
+		const value = stats ? JSON.parse(String(stats)) : null;
+		return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+	}
+	catch
+	{
+		return null;
 	}
 }
 
@@ -2490,7 +2518,7 @@ class OwlDatabase
 	/// <param name="recipientNumber">Owl number of the recipient</param>
 	/// <param name="galleons">Galleons it carries</param>
 	/// <param name="postage">Galleons paid for postage, never returned</param>
-	/// <param name="items">[{ source: "native" | "custom", name, variation, amount, label, kind, icon }]</param>
+	/// <param name="items">[{ source: "native" | "custom", name, itemId, variation, amount, label, kind, icon, stats }] where stats is a gear piece's roll, or null</param>
 	/// <returns>{ id, items: [{ id, ... }] } with the rows' IDs, or null on failure</returns>
 	async InsertParcel(senderNumber, recipientNumber, galleons, postage, items = [])
 	{
@@ -2504,8 +2532,9 @@ class OwlDatabase
 
 			for (const item of rows)
 			{
-				const itemId = Number(await tx.insert("INSERT INTO frantic_owls_parcel_items (parcel_id, source, name, variation, amount, state) VALUES (?, ?, ?, ?, ?, ?)", [id, item.source, item.name || "", item.variation || "", item.amount, ParcelItemState.Pending]));
-				stored.push({ ...item, id: itemId, parcelId: id, state: ParcelItemState.Pending });
+				const stats = item.stats && typeof item.stats === "object" ? JSON.stringify(item.stats) : null;
+				const itemId = Number(await tx.insert("INSERT INTO frantic_owls_parcel_items (parcel_id, source, name, variation, amount, state, native_id, stats_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [id, item.source, item.name || "", item.variation || "", item.amount, ParcelItemState.Pending, stats ? String(item.itemId || "") : "", stats]));
+				stored.push({ ...item, id: itemId, parcelId: id, state: ParcelItemState.Pending, nativeId: stats ? String(item.itemId || "") : "", stats: stats ? item.stats : null });
 			}
 
 			return { id, items: stored };
@@ -2516,13 +2545,13 @@ class OwlDatabase
 	/// Everything a parcel carries, with each row's journal step.
 	/// </summary>
 	/// <param name="parcelId">Parcel row ID</param>
-	/// <returns>[{ id, parcelId, source, name, variation, amount, state }], or null on failure</returns>
+	/// <returns>[{ id, parcelId, source, name, variation, amount, state, nativeId, stats }], or null on failure</returns>
 	async ListParcelItems(parcelId)
 	{
 		return this.#Run("ListParcelItems", async () =>
 		{
 			const rows = await this.#mysql.query("SELECT * FROM frantic_owls_parcel_items WHERE parcel_id = ? ORDER BY id", [parcelId]);
-			return rows.map((row) => ({ id: Number(row.id), parcelId: Number(row.parcel_id), source: String(row.source), name: String(row.name), variation: String(row.variation || ""), amount: Number(row.amount), state: String(row.state) }));
+			return rows.map((row) => ({ id: Number(row.id), parcelId: Number(row.parcel_id), source: String(row.source), name: String(row.name), variation: String(row.variation || ""), amount: Number(row.amount), state: String(row.state), nativeId: String(row.native_id || ""), stats: ReadStats(row.stats_json) }));
 		}, null);
 	}
 
@@ -2640,4 +2669,4 @@ function MapParcelRow(row)
 	};
 }
 
-module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll, ParcelState, ParcelItemState, MapParcel, ReadParcelContents };
+module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll, ParcelState, ParcelItemState, MapParcel, ReadParcelContents, ReadStats };
