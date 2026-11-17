@@ -27,7 +27,7 @@ Owls.MailStore = (() =>
 	/// <summary>
 	/// Player settings used until the server sends the saved ones. Same keys as the phone's, so both front ends share one row.
 	/// </summary>
-	const defaultSettings = Object.freeze({ notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true, showOriginalNames: false });
+	const defaultSettings = Object.freeze({ notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true, showOriginalNames: false, colourScheme: "default" });
 
 	/// <summary>
 	/// localStorage key of the letters being written, so a closed desk (or a reconnect) does not lose them, and how many are kept.

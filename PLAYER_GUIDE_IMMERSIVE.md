@@ -101,6 +101,7 @@ Ministry staff (whoever your owlery allows to make announcements) see an **Offic
 - **Arrival sound** (Settings): Pick the hoot, chime or quill scratch you like, and its volume.
 - **Do Not Disturb** (Settings): Silence every hoot and notice. Letters still arrive. It can also switch on by itself during duels.
 - **Language** (Settings): Your desk speaks the languages your owlry offers.
+- **House colours** (Settings): Dress your desk in Gryffindor, Slytherin, Ravenclaw or Hufflepuff colours. Your letters stay on plain parchment.
 - **Show original names** (Settings): See a correspondent's own name in parentheses after the name you gave them, such as "Nat (Natsai Onai)". Only for people you know: never for someone you only know from an unsigned letter.
 
 *Not every owlery offers every service. If something here is missing, your server has turned it off.*

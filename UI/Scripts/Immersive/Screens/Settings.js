@@ -19,6 +19,11 @@ Owls.DeskScreens.Settings = (() =>
 	const Store = Owls.MailStore;
 
 	/// <summary>
+	/// House colour schemes, in the phone's order. Text keys are "scheme." plus the ID.
+	/// </summary>
+	const schemes = Object.freeze(["default", "gryffindor", "slytherin", "ravenclaw", "hufflepuff"]);
+
+	/// <summary>
 	/// Build the screen.
 	/// </summary>
 	/// <param name="desk">Owls.Desk, for navigation, messages and sounds</param>
@@ -127,6 +132,7 @@ Owls.DeskScreens.Settings = (() =>
 			const rows =
 			[
 				Row(T("settings.section.language"), "", Choice("language", [{ value: "", label: T("mail.settings.serverLanguage") }, ...languages.map((language) => ({ value: language.id, label: language.name }))])),
+				Row(T("mail.settings.houseColours"), T("mail.settings.houseColoursHint"), Choice("colourScheme", schemes.map((id) => ({ value: id, label: T(`scheme.${id}`) })))),
 				Row(T("settings.sound"), T("mail.settings.soundHint"), Toggle("notificationSound")),
 				config.soundMode === "file" ? Row(T("mail.settings.soundChoice"), "", soundRow) : null,
 				config.soundMode === "file" ? Row(T("mail.settings.volume"), "", volume) : null,

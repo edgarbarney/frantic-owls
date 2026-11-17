@@ -153,7 +153,7 @@
 		quietActivities: true,
 	};
 
-	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true, showOriginalNames: false };
+	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true, showOriginalNames: false, colourScheme: "default" };
 	let canPostOfficial = true;
 
 	/// <summary>

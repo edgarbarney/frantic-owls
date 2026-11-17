@@ -642,6 +642,8 @@
 		"mail.settings.blockedNone": "You have not blocked any correspondents.",
 		"mail.settings.defaultSound": "Server default",
 		"mail.settings.doNotDisturbHint": "Hold back every sound and notice. Letters still arrive and count as unread.",
+		"mail.settings.houseColours": "House colours",
+		"mail.settings.houseColoursHint": "Dress your desk in your house's colours. Letters stay on plain parchment.",
 		"mail.settings.notices": "Notices",
 		"mail.settings.noticesHint": "Show a slip of parchment at the top of the screen when an owl arrives.",
 		"mail.settings.serverLanguage": "Server default",

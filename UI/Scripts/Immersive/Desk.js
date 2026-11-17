@@ -575,8 +575,23 @@ Owls.Desk = (() =>
 		Close();
 	});
 
+	/// <summary>
+	/// Dress the desk in the player's house colours: the same colourScheme setting the phone's Muggle theme uses, shared by both front ends.
+	/// </summary>
+	function ApplyScheme()
+	{
+		document.documentElement.dataset.scheme = Store.state.settings.colourScheme || "default";
+	}
+
+	ApplyScheme();
+
 	Store.Subscribe((reason) =>
 	{
+		if (reason === "settings" || reason === "reset")
+		{
+			ApplyScheme();
+		}
+
 		if (reason === "post" || reason === "letters" || reason === "reset")
 		{
 			UpdatePostLabel();

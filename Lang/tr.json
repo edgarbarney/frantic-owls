@@ -606,6 +606,8 @@
 		"mail.reader.sentTo": "Alıcı: {names}, {when}",
 		"mail.settings.defaultSound": "Sunucu varsayılanı",
 		"mail.settings.doNotDisturbHint": "Tüm sesleri ve bildirimleri durdur. Mektuplar yine gelir ve okunmamış sayılır.",
+		"mail.settings.houseColours": "Bina renkleri",
+		"mail.settings.houseColoursHint": "Masanı binanın renklerine bürü. Mektuplar sade parşömende kalır.",
 		"mail.settings.notices": "Bildirimler",
 		"mail.settings.noticesHint": "Bir baykuş geldiğinde ekranın üstünde bir parşömen parçası göster.",
 		"mail.settings.serverLanguage": "Sunucu varsayılanı",

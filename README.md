@@ -56,7 +56,7 @@ Set `"mode": "immersive"` and players get a writing desk instead of the phone. T
   The server checks every read and write against where the character stands, and a letter's text never leaves the server while it may not be read there.
 - **Owl posts** are listed in `immersivemode_posts` (see `Examples/frantic-owls.immersive.json`; stand where a post should be and use `/owl_posthere <id> [label]` to get its entry, then `/owl_reloadposts` once it is in the file; see [Placing owl posts](#placing-owl-posts)). With **hmp-interact** running each one is an interaction zone ("Use the owl post"), optionally with a prop of your choice, that opens the desk; without it, players open the desk with `/owl` while standing at one.
 - **Notices**: While the desk is closed, a slip of parchment drops in at the top of the screen when an owl arrives (and once on loading in, if letters are waiting), with the player's notification sound. Do Not Disturb and Quiet during duels apply as on the phone.
-- **Settings** on the desk: Language, the arrival sound and its volume, notices, Do Not Disturb, Quiet during duels and Show original names. They are the same stored settings as the phone's.
+- **Settings** on the desk: Language, house colours, the arrival sound and its volume, notices, Do Not Disturb, Quiet during duels and Show original names. They are the same stored settings as the phone's, so a house picked on the phone dresses the desk too (see [Colour schemes](#colour-schemes)).
 
 Owls from phone mode show as letters too: A bulk owl's owls arrive as letters from their sender (tagged with the bulk owl's name; answering goes to the sender alone), announcements as official letters, and location owls and polls written out in words. Owl flight, blocks, retired characters, announcements, the `api` export, the `frantic-owls:sent` event and Discord logging work as in phone mode.
 
@@ -98,7 +98,7 @@ All in the Muggle Phone theme with the Default colour scheme, unless named other
 
 ### Colour schemes
 
-The Muggle Phone's house colour schemes.
+The Muggle Phone's house colour schemes. Immersive mode's desk offers the same five under **House colours** in its Settings, from the same stored setting: the house's colours tint the backdrop, the panels, the accent and the wax, while letters stay on plain parchment.
 
 <table>
 	<tr>

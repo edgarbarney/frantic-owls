@@ -53,6 +53,62 @@
 	font-size: calc(16px * var(--ui-scale));
 }
 
+/* House colour schemes (data-scheme on <html>, the same colourScheme setting the phone's Muggle theme uses).
+   They dress the desk only: the backdrop, panels, accent and wax. Letters stay on plain parchment in the writer's ink.
+   --gold is each house's metal, so it is silver for Slytherin and bronze for Ravenclaw; --wax is the house colour itself. */
+:root[data-scheme="gryffindor"]
+{
+	--desk-bg: radial-gradient(circle at 50% 0%, rgba(61, 22, 26, 0.9) 0%, rgba(14, 5, 6, 0.88) 65%);
+	--panel: linear-gradient(180deg, rgba(56, 20, 23, 0.96), rgba(32, 11, 13, 0.96));
+	--panel-line: rgba(217, 165, 58, 0.45);
+	--text: #f1e5d5;
+	--text-dim: #b3968b;
+	--gold: #d9a53a;
+	--gold-rgb: 217, 165, 58;
+	--wax: #8a1b20;
+	--wax-bright: #b3262b;
+}
+
+:root[data-scheme="slytherin"]
+{
+	--desk-bg: radial-gradient(circle at 50% 0%, rgba(23, 51, 34, 0.9) 0%, rgba(5, 9, 7, 0.88) 65%);
+	--panel: linear-gradient(180deg, rgba(20, 38, 28, 0.96), rgba(10, 20, 14, 0.96));
+	--panel-line: rgba(185, 195, 200, 0.4);
+	--text: #e5eae7;
+	--text-dim: #8e9b94;
+	--gold: #b9c3c8;
+	--gold-rgb: 185, 195, 200;
+	--wax: #1a472a;
+	--wax-bright: #2a6b40;
+}
+
+:root[data-scheme="ravenclaw"]
+{
+	--desk-bg: radial-gradient(circle at 50% 0%, rgba(29, 43, 81, 0.9) 0%, rgba(6, 9, 18, 0.88) 65%);
+	--panel: linear-gradient(180deg, rgba(24, 34, 60, 0.96), rgba(12, 18, 34, 0.96));
+	--panel-line: rgba(205, 138, 74, 0.45);
+	--text: #e7e5dd;
+	--text-dim: #9198a7;
+	--gold: #cd8a4a;
+	--gold-rgb: 205, 138, 74;
+	--wax: #1e3468;
+	--wax-bright: #2c4a8c;
+}
+
+/* Hufflepuff's yellow is its accent; the wax is a deep mustard so cream text on a wax button stays readable. */
+:root[data-scheme="hufflepuff"]
+{
+	--desk-bg: radial-gradient(circle at 50% 0%, rgba(44, 40, 23, 0.9) 0%, rgba(10, 9, 7, 0.88) 65%);
+	--panel: linear-gradient(180deg, rgba(36, 33, 25, 0.96), rgba(20, 18, 14, 0.96));
+	--panel-line: rgba(236, 185, 57, 0.45);
+	--text: #f0eadb;
+	--text-dim: #9d978b;
+	--gold: #ecb939;
+	--gold-rgb: 236, 185, 57;
+	--wax: #7a5d10;
+	--wax-bright: #a07a16;
+}
+
 *
 {
 	box-sizing: border-box;
@@ -99,7 +155,7 @@ button
 	inset: 0;
 	display: flex;
 	flex-direction: column;
-	background: rgba(0, 0, 0, 0.85);
+	background: var(--desk-bg, rgba(0, 0, 0, 0.85));
 	opacity: 0;
 	transition: opacity 220ms ease;
 }
