@@ -41,7 +41,7 @@ Owls.Desk = (() =>
 	/// <summary>
 	/// The screens that show the tabs along the top of the desk, the official tab among them.
 	/// </summary>
-	const tabScreens = ["Letters", "Correspondents", "Official"];
+	const tabScreens = ["Letters", "Correspondents", "Official", "Reports"];
 
 	const desk = document.getElementById("desk");
 	const view = document.getElementById("desk-view");
@@ -123,6 +123,23 @@ Owls.Desk = (() =>
 	function ShowOfficial()
 	{
 		Show(Store.state.me.canPostOfficial ? "Official" : "Letters");
+	}
+
+	/// <summary>
+	/// Show the reports, for moderators.
+	/// </summary>
+	function ShowReports()
+	{
+		Show(Store.state.moderation.canModerate ? "Reports" : "Letters");
+	}
+
+	/// <summary>
+	/// Open one reported letter thread, for moderators.
+	/// </summary>
+	/// <param name="reportId">Report ID</param>
+	function ShowReport(reportId)
+	{
+		Show(Store.state.moderation.canModerate ? "Report" : "Letters", { reportId });
 	}
 
 	/// <summary>
@@ -473,6 +490,7 @@ Owls.Desk = (() =>
 		if (result.ok)
 		{
 			Store.SetCanPostOfficial(result.data.canPostOfficial === true);
+			Store.SetModeration(result.data.moderation);
 		}
 	}
 
@@ -525,7 +543,7 @@ Owls.Desk = (() =>
 	// Wiring
 	// ========================
 
-	const api = { ShowLetters, ShowCorrespondents, ShowOfficial, Read, Compose, ShowError, ShowNotice, ShowDispatch, PlaySound, GetPlaceHint, Close };
+	const api = { ShowLetters, ShowCorrespondents, ShowOfficial, ShowReports, ShowReport, Read, Compose, ShowError, ShowNotice, ShowDispatch, PlaySound, GetPlaceHint, Close };
 
 	document.getElementById("desk-close").addEventListener("click", Close);
 	document.getElementById("desk-settings").addEventListener("click", () => Show("Settings"));
@@ -579,6 +597,18 @@ Owls.Desk = (() =>
 			return;
 		}
 
+		// The reports tab comes and goes with the moderator permission too, and carries the number of open reports.
+		if (reason === "reports" && current)
+		{
+			if ((current.name === "Reports" || current.name === "Report") && !Store.state.moderation.canModerate)
+			{
+				ShowLetters({});
+				return;
+			}
+
+			Owls.DeskTabs.RenderCurrent();
+		}
+
 		if (current && current.instance.OnStore)
 		{
 			current.instance.OnStore(reason);
@@ -627,6 +657,18 @@ Owls.Desk = (() =>
 	Bridge.On("quiet:update", (data) => Store.SetQuiet(data));
 	Bridge.On("parcel:update", (data) => Store.SetParcel(Number(data.messageId), data.parcel || null));
 	Bridge.On("mail:arrived", OnArrival);
+	Bridge.On("reports:updated", (data) => Store.SetModeration({ canModerate: true, open: data.open }));
+
+	Bridge.On("reports:new", (data) =>
+	{
+		const report = data.report || {};
+		Store.SetModeration({ canModerate: true, open: data.open });
+
+		if (MayDisturb())
+		{
+			ShowNotice(T("report.newTitle", { number: Owls.Moderation.FormatReportNumber(report.id) }), T("report.whoLine", { reporter: report.reporterName || T("report.unnamed"), sender: report.senderName || T("report.unnamed") }));
+		}
+	});
 	Bridge.On("ui:open", (data) => Store.SetPost(data.post || null));
 	Bridge.On("admin:postDefinition", ShowPostDefinition);
 	Bridge.On("ui:opened", OnOpened);

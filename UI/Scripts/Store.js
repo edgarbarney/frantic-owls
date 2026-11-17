@@ -49,6 +49,7 @@ Owls.Store = (() =>
 		profiles: new Map(),
 		profilesKnown: new Set(),
 		blocked: new Set(),
+		moderation: { canModerate: false, open: 0 },
 		retired: new Set(),
 		quiet: { active: false, label: "" },
 		senders: new Map(),
@@ -133,6 +134,7 @@ Owls.Store = (() =>
 		state.profiles.clear();
 		state.profilesKnown.clear();
 		state.blocked = new Set(data.blocks || []);
+		state.moderation = ReadModeration(data.moderation);
 		state.retired = new Set(data.retired || []);
 		state.quiet = { active: !!(data.quiet && data.quiet.active), label: String(data.quiet && data.quiet.label || "") };
 		SetSenders(data.senders || []);
@@ -839,6 +841,26 @@ Owls.Store = (() =>
 	function IsBlocked(number)
 	{
 		return state.blocked.has(number);
+	}
+
+	/// <summary>
+	/// Read what the server says about moderation: whether this player moderates reports, and how many are open.
+	/// </summary>
+	/// <param name="data">{ canModerate, open }, or nothing</param>
+	/// <returns>{ canModerate, open }</returns>
+	function ReadModeration(data)
+	{
+		return { canModerate: !!(data && data.canModerate), open: Math.max(0, Number(data && data.open) || 0) };
+	}
+
+	/// <summary>
+	/// Record what the server says about moderation, and tell the screens a report changed.
+	/// </summary>
+	/// <param name="data">{ canModerate, open }</param>
+	function SetModeration(data)
+	{
+		state.moderation = ReadModeration(data);
+		Notify("reports");
 	}
 
 	/// <summary>
@@ -1770,7 +1792,7 @@ Owls.Store = (() =>
 		IsShared, SetReads, SetRead, GetReadBy, SetTyping, ClearTyping, GetTyping, GetTypingText,
 		SetInformRequests, AddInformRequest, RemoveInformRequest, GetInformRequests,
 		SetCall, EndCall, ApplyCallsChunk, AddCallEntry, RemoveCallEntries, MarkCallsSeen, GetMissedCallCount, GetCallState,
-		IsBlocked, SetBlocked, IsRetired, SetRetired, SetQuiet, IsQuiet, SetSenders, GetSender, IsMuted, SetMuted, GetWriteState,
+		IsBlocked, SetBlocked, SetModeration, IsRetired, SetRetired, SetQuiet, IsQuiet, SetSenders, GetSender, IsMuted, SetMuted, GetWriteState,
 		ApplyContactsChunk, UpsertContact, RemoveContact, GetSortedContacts, GetFavouriteContacts, GetContactLabel,
 		ApplyChatsChunk, UpsertChat, RemoveChat, SetChatPinned, IsAdmin, GetNoteText, GetSortedChats, FindDirectChat, GetTotalUnread, SetUnread,
 		FormatNumber, GetDisplayName, GetOtherMember, GetChatTitle, CreateChatAvatar,

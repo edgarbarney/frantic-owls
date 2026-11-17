@@ -2166,3 +2166,107 @@ button
 	font-size: 0.9rem;
 	color: #4b3b28;
 }
+
+/* ======================== */
+/* Block & Report           */
+/* ======================== */
+
+/* Block and Report sit under a letter someone else wrote, like Answer sits above it. */
+.reader
+{
+	position: relative;
+}
+
+.reader-footer
+{
+	display: flex;
+	justify-content: center;
+	gap: 0.75rem;
+	width: min(52rem, 100%);
+	margin: 0.75rem auto 0;
+	flex: none;
+}
+
+.reader-footer[hidden]
+{
+	display: none;
+}
+
+.desk-dialog-backdrop
+{
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+	display: grid;
+	place-items: center;
+	background: rgba(0, 0, 0, 0.55);
+}
+
+.desk-dialog-backdrop[hidden]
+{
+	display: none;
+}
+
+.desk-dialog
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	width: min(30rem, calc(100% - 2rem));
+	padding: 1.25rem 1.4rem;
+	border: 1px solid var(--panel-line);
+	border-radius: 0.4rem;
+	background: var(--panel);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.desk-dialog-title
+{
+	margin: 0;
+	font-family: var(--font-heading);
+	font-size: 1.05rem;
+	letter-spacing: 0.05em;
+	color: var(--gold);
+}
+
+.desk-dialog-text
+{
+	margin: 0;
+	line-height: 1.45;
+	color: var(--text);
+}
+
+.desk-dialog-actions
+{
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0.5rem;
+}
+
+.correspondent-blocked
+{
+	font-size: 0.8rem;
+	color: var(--danger);
+}
+
+.desk-icon.is-blocked
+{
+	border-color: var(--danger);
+	color: var(--danger);
+}
+
+.settings-heading
+{
+	margin: 1.25rem 0 0.25rem;
+	font-family: var(--font-heading);
+	font-size: 0.95rem;
+	letter-spacing: 0.06em;
+	color: var(--gold);
+}
+
+/* A reported thread scrolls under its toolbar like the letter lists. */
+.report-scroll
+{
+	width: min(52rem, 100%);
+}

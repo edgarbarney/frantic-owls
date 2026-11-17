@@ -42,6 +42,11 @@ You are never told who sent a letter. You learn it the way a muggle would, from 
 
 **Answer** writes back to whoever sent the letter, even an anonymous one. Your greeting addresses them by the name they signed with.
 
+Under the letter sit **Block** and **Report**:
+
+- **Report** sends the letter to the moderators, who read it with the letters around it. The writer is not told.
+- **Block** stops every letter from its writer reaching you. You are still never told who they are, so this block cannot be undone and is not listed anywhere. Choose **Block & Report** to do both at once.
+
 ## Writing a Letter
 
 1. **Dear...** Start typing a name right after "Dear" and pick from the list. You can write to **any witch or wizard** in the land, whether or not they are about right now: Your correspondents come first in the list (with a little address book beside them), then everyone else by that name (a green dot means they are about right now). Add as many as the owlery allows. Click a name to cross it out again.
@@ -64,6 +69,7 @@ Everyone you write to is kept under **Correspondents**, starred ones first. For 
 - **Star** them, so they come first here and among the names when you write.
 - **Write** to them: a fresh sheet already addressed to them.
 - **Edit** the name you know them by (and, on owlries that allow it, give them a picture from a link).
+- **Block** them (click it twice). Their letters are refused until you unblock them, here or under **Blocked correspondents** in Settings.
 - **Forget** them (click it twice). Your letters to and from them stay.
 
 **Add Correspondent** finds any witch or wizard by name and keeps them here without writing first.
@@ -80,6 +86,10 @@ Some owlries only let you handle letters at an owl post:
 - **New letters anywhere, old ones at a post**: An unread letter can be opened wherever you are, but once read, you must visit a post to read it again.
 
 The label at the top of your desk and the line above your letters tell you which rules your owlry uses.
+
+## Reports
+
+Moderators see a **Reports** tab with the number of open reports. Search by report number, name or owl number, open a report to read the letters it came from (with everyone's name and owl number), then **Resolve** or **Dismiss** it.
 
 ## Official Post
 

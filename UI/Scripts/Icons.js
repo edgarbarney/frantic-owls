@@ -51,6 +51,8 @@ Owls.Icons = (() =>
 		bell: Fa("bell"),
 		bellSlash: Fa("bell-slash"),
 		ban: Fa("ban"),
+		flag: Fa("flag"),
+		gavel: Fa("gavel"),
 		location: Fa("location-dot"),
 		map: Fa("map-location-dot"),
 		smile: Fa("face-smile", "regular"),

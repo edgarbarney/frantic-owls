@@ -8,7 +8,7 @@
 /// <summary>
 /// The phone's main screen: apps for Floo-Calls, Contacts, Owls, Inform and Settings, over the player's wallpaper if they set one.
 /// The Floo-Calls app carries the missed calls not yet seen, the Owls app the total unread count and the Inform app the informs waiting for an answer.
-/// Floo-Calls is hidden when the server turned calls off.
+/// Floo-Calls is hidden when the server turned calls off, and Moderation (with the count of open reports) is there for moderators only.
 ///
 /// <para>
 /// NOTE: Both themes share this markup and the stylesheet decides the look.
@@ -53,14 +53,17 @@ Owls.Screens.Home = (() =>
 		const badge = Element("span", { className: "unread-badge" });
 		const callsBadge = Element("span", { className: "unread-badge" });
 		const informBadge = Element("span", { className: "unread-badge" });
+		const reportsBadge = Element("span", { className: "unread-badge" });
 		const owner = Element("div", { className: "crest-owner" });
 		const callsApp = CreateApp(Owls.Icons.flame, T("home.calls"), "Calls", callsBadge);
+		const reportsApp = CreateApp(Owls.Icons.gavel, T("home.moderation"), "Reports", reportsBadge);
 		const grid = Element("div", { className: "home-grid" },
 		[
 			callsApp,
 			CreateApp(Owls.Icons.contacts, T("home.contacts"), "Contacts"),
 			CreateApp(Owls.Icons.owl, T("home.owls"), "Owls", badge),
 			CreateApp(Owls.Icons.inform, T("home.inform"), "Inform", informBadge),
+			reportsApp,
 			CreateApp(Owls.Icons.settings, T("home.settings"), "Settings"),
 		]);
 
@@ -84,8 +87,12 @@ Owls.Screens.Home = (() =>
 			callsBadge.hidden = missed === 0;
 
 			// The screen is built before the server's settings arrive, so whether calls are on is only known here.
-			// The app count lets Parchment fit five large tiles where four used to be.
+			// The app count lets Parchment fit five or six large tiles where four used to be; Settings stays last, so it is the tile that spans an odd row.
 			callsApp.hidden = Owls.Store.state.config.callsEnabled === false;
+			reportsApp.hidden = !Owls.Store.state.moderation.canModerate;
+			const open = Owls.Store.state.moderation.open;
+			reportsBadge.textContent = open > 99 ? "99+" : String(open);
+			reportsBadge.hidden = open === 0;
 			grid.dataset.count = String(grid.querySelectorAll(".home-tile:not([hidden])").length);
 			informBadge.textContent = String(waiting);
 			informBadge.hidden = waiting === 0;

@@ -1,0 +1,424 @@
+/* FranticDreamer 2026 */
+
+/* ======================== */
+/* Moderation               */
+/* ======================== */
+
+/* The moderators' views (UI/Scripts/Moderation.js), loaded by both the phone and the letter desk.
+   Colours come from whichever page they sit in: the phone's tokens first, then the desk's. */
+
+.mod-view
+{
+	--mod-text: var(--text);
+	--mod-dim: var(--text-dim);
+	--mod-line: var(--line, var(--panel-line, rgba(255, 255, 255, 0.15)));
+	--mod-raised: var(--ink-raised, var(--panel, rgba(255, 255, 255, 0.06)));
+	--mod-accent: var(--gold);
+	--mod-danger: var(--danger);
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	padding: 0.75rem;
+	color: var(--mod-text);
+	font-family: var(--font-body);
+}
+
+.mod-search-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.4rem 0.6rem;
+	border: 0.0625rem solid var(--mod-line);
+	border-radius: 0.6rem;
+	background: var(--mod-raised);
+	color: var(--mod-dim);
+}
+
+.mod-search
+{
+	flex: 1;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--mod-text);
+	font: inherit;
+}
+
+.mod-filters
+{
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+.mod-filter
+{
+	padding: 0.25rem 0.7rem;
+	border: 0.0625rem solid var(--mod-line);
+	border-radius: 1rem;
+	background: transparent;
+	color: var(--mod-dim);
+	font: inherit;
+	font-size: 0.85em;
+	cursor: pointer;
+}
+
+.mod-filter.is-active
+{
+	border-color: var(--mod-accent);
+	color: var(--mod-accent);
+}
+
+.mod-error
+{
+	color: var(--mod-danger);
+	font-size: 0.85em;
+}
+
+.mod-error:empty
+{
+	display: none;
+}
+
+.mod-list
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.mod-row
+{
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	width: 100%;
+	padding: 0.6rem 0.7rem;
+	border: 0.0625rem solid var(--mod-line);
+	border-radius: 0.6rem;
+	background: var(--mod-raised);
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.mod-row-text
+{
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 0.15rem;
+	min-width: 0;
+}
+
+.mod-row-title,
+.mod-summary-title
+{
+	font-family: var(--font-heading);
+	font-weight: 600;
+}
+
+.mod-row-subtitle
+{
+	overflow: hidden;
+	color: var(--mod-dim);
+	font-size: 0.85em;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.mod-status
+{
+	flex-shrink: 0;
+	padding: 0.1rem 0.5rem;
+	border-radius: 1rem;
+	font-size: 0.75em;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.mod-status.is-open
+{
+	background: var(--mod-danger);
+	color: #fff;
+}
+
+.mod-status.is-resolved
+{
+	background: var(--success, #3f8f5a);
+	color: #fff;
+}
+
+.mod-status.is-dismissed
+{
+	border: 0.0625rem solid var(--mod-line);
+	color: var(--mod-dim);
+}
+
+.mod-empty
+{
+	padding: 1.5rem 0.5rem;
+	color: var(--mod-dim);
+	text-align: center;
+}
+
+.mod-button
+{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	padding: 0.45rem 0.9rem;
+	border: 0.0625rem solid var(--mod-line);
+	border-radius: 0.5rem;
+	background: var(--mod-raised);
+	color: var(--mod-text);
+	font: inherit;
+	cursor: pointer;
+}
+
+.mod-button.is-primary
+{
+	border-color: var(--mod-accent);
+	color: var(--mod-accent);
+}
+
+.mod-button.is-quiet
+{
+	align-self: center;
+	border-color: transparent;
+	background: transparent;
+	color: var(--mod-dim);
+	font-size: 0.85em;
+}
+
+.mod-button:disabled
+{
+	opacity: 0.5;
+	cursor: default;
+}
+
+.mod-summary
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	padding: 0.7rem;
+	border: 0.0625rem solid var(--mod-line);
+	border-radius: 0.6rem;
+	background: var(--mod-raised);
+}
+
+.mod-summary-head
+{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	font-size: 1.1em;
+}
+
+.mod-summary-line
+{
+	font-size: 0.9em;
+}
+
+.mod-summary-line.is-dim
+{
+	color: var(--mod-dim);
+}
+
+.mod-section-title
+{
+	margin-top: 0.3rem;
+	color: var(--mod-dim);
+	font-size: 0.75em;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+.mod-members
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	max-height: 11rem;
+	overflow-y: auto;
+}
+
+.mod-member
+{
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.35rem 0.6rem;
+	border-radius: 0.5rem;
+	background: var(--mod-raised);
+}
+
+.mod-member-name
+{
+	font-weight: 600;
+}
+
+.mod-member-number
+{
+	color: var(--mod-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.mod-role
+{
+	padding: 0.05rem 0.45rem;
+	border-radius: 1rem;
+	font-size: 0.75em;
+	font-weight: 600;
+}
+
+.mod-role.is-reporter
+{
+	border: 0.0625rem solid var(--mod-accent);
+	color: var(--mod-accent);
+}
+
+.mod-role.is-reported
+{
+	background: var(--mod-danger);
+	color: #fff;
+}
+
+.mod-thread-holder
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.mod-thread
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+
+.mod-day
+{
+	align-self: center;
+	padding: 0.1rem 0.6rem;
+	border-radius: 1rem;
+	background: var(--mod-raised);
+	color: var(--mod-dim);
+	font-size: 0.75em;
+}
+
+.mod-message
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	align-self: flex-start;
+	max-width: 88%;
+	padding: 0.5rem 0.7rem;
+	border: 0.0625rem solid var(--mod-line);
+	border-radius: 0.8rem 0.8rem 0.8rem 0.2rem;
+	background: var(--mod-raised);
+	overflow-wrap: anywhere;
+}
+
+.mod-message.is-reporter
+{
+	align-self: flex-end;
+	border-radius: 0.8rem 0.8rem 0.2rem 0.8rem;
+}
+
+.mod-message.is-reported
+{
+	border: 0.125rem solid var(--mod-danger);
+	box-shadow: 0 0 0.75rem rgba(220, 70, 60, 0.45);
+}
+
+.mod-reported-tag
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	color: var(--mod-danger);
+	font-size: 0.75em;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.mod-message-sender
+{
+	font-size: 0.8em;
+	font-weight: 600;
+}
+
+.mod-message-note,
+.mod-message-time
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	color: var(--mod-dim);
+	font-size: 0.75em;
+}
+
+.mod-message-time
+{
+	align-self: flex-end;
+}
+
+.mod-quote
+{
+	padding: 0.25rem 0.5rem;
+	border-left: 0.2rem solid var(--mod-accent);
+	border-radius: 0.3rem;
+	color: var(--mod-dim);
+	font-size: 0.85em;
+}
+
+.mod-text
+{
+	white-space: pre-wrap;
+}
+
+.mod-unsent
+{
+	color: var(--mod-dim);
+	font-style: italic;
+}
+
+.mod-poll
+{
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+
+.mod-poll-question
+{
+	font-weight: 600;
+}
+
+.mod-actions
+{
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0.5rem;
+	padding-top: 0.4rem;
+	border-top: 0.0625rem solid var(--mod-line);
+}
+
+.mod-actions:empty
+{
+	display: none;
+}

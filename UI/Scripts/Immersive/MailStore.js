@@ -45,6 +45,8 @@ Owls.MailStore = (() =>
 		quiet: { active: false, label: "" },
 		unread: 0,
 		contacts: [],
+		blockedContacts: new Set(),
+		moderation: { canModerate: false, open: 0 },
 		post: null,
 		boxes:
 		{
@@ -97,6 +99,8 @@ Owls.MailStore = (() =>
 		state.quiet = data.quiet || { active: false, label: "" };
 		state.unread = Math.max(0, Number(data.unread) || 0);
 		state.contacts = [];
+		state.blockedContacts = new Set(Array.isArray(data.blockedContacts) ? data.blockedContacts.map(Number) : []);
+		state.moderation = ReadModeration(data.moderation);
 		state.post = null;
 		state.boxes.inbox = { letters: [], hasMore: false, isLoaded: false };
 		state.boxes.sent = { letters: [], hasMore: false, isLoaded: false };
@@ -390,6 +394,66 @@ Owls.MailStore = (() =>
 	}
 
 	/// <summary>
+	/// Read what the server says about moderation: whether this player moderates reports, and how many are open.
+	/// </summary>
+	/// <param name="data">{ canModerate, open }, or nothing</param>
+	/// <returns>{ canModerate, open }</returns>
+	function ReadModeration(data)
+	{
+		return { canModerate: !!(data && data.canModerate), open: Math.max(0, Number(data && data.open) || 0) };
+	}
+
+	/// <summary>
+	/// Take what the server says about moderation, which it checks again each time the desk opens and sends when a report arrives or changes.
+	/// </summary>
+	/// <param name="data">{ canModerate, open }</param>
+	function SetModeration(data)
+	{
+		state.moderation = ReadModeration(data);
+		Notify("reports");
+	}
+
+	/// <summary>
+	/// Whether the player blocked one of their correspondents (an ordinary block; anonymous blocks are never known to the page).
+	/// </summary>
+	/// <param name="contactId">Contact ID</param>
+	/// <returns>True when blocked</returns>
+	function IsContactBlocked(contactId)
+	{
+		return state.blockedContacts.has(Number(contactId));
+	}
+
+	/// <summary>
+	/// Record a correspondent blocked or unblocked, once the server confirmed it.
+	/// </summary>
+	/// <param name="contactId">Contact ID</param>
+	/// <param name="blocked">True when now blocked</param>
+	function SetContactBlocked(contactId, blocked)
+	{
+		if (blocked)
+		{
+			state.blockedContacts.add(Number(contactId));
+		}
+		else
+		{
+			state.blockedContacts.delete(Number(contactId));
+		}
+
+		Notify("blocks");
+	}
+
+	/// <summary>
+	/// Forget the listed letters after a writer was blocked, since some of them are no longer the player's to see; the next list fetches them again.
+	/// </summary>
+	/// <param name="unread">Unread count the server gave after the block</param>
+	function ForgetLetters(unread)
+	{
+		state.boxes.inbox = { letters: [], hasMore: false, isLoaded: false };
+		state.unread = Math.max(0, Number(unread) || 0);
+		Notify("letters");
+	}
+
+	/// <summary>
 	/// Whether letters may be written where the player stands, as far as the page can tell. The server decides for certain.
 	/// </summary>
 	/// <returns>True when writing is allowed</returns>
@@ -468,5 +532,5 @@ Owls.MailStore = (() =>
 		}
 	}
 
-	return { state, Subscribe, Reset, Clear, SetReady, ApplyContactsChunk, UpsertContact, SaveContact, RemoveContact, GetContact, GetKnownNumbers, GetContactLabel, GetContactPicture, ApplyPage, ApplyOpened, NoteArrival, NoteSent, SetPost, SetSettings, SetQuiet, SetCanPostOfficial, SetParcel, GetParcel, CanWrite, UsesPosts, LoadDraft, SaveDraft };
+	return { state, Subscribe, Reset, Clear, SetReady, ApplyContactsChunk, UpsertContact, SaveContact, RemoveContact, GetContact, GetKnownNumbers, GetContactLabel, GetContactPicture, ApplyPage, ApplyOpened, NoteArrival, NoteSent, SetPost, SetSettings, SetQuiet, SetCanPostOfficial, SetModeration, IsContactBlocked, SetContactBlocked, ForgetLetters, SetParcel, GetParcel, CanWrite, UsesPosts, LoadDraft, SaveDraft };
 })();

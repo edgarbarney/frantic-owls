@@ -25,6 +25,7 @@ const { OwlRoster } = require("./Roster.js");
 const { CreateApi } = require("./Api.js");
 const { RequestDispatcher } = require("./Requests.js");
 const { ParcelService } = require("./Parcels.js");
+const { ReportService, ReportSource } = require("./Reports.js");
 const { Ok } = require("./Result.js");
 
 const resourceName = "frantic-owls";
@@ -93,7 +94,7 @@ const config = LoadConfig(hmp);
 Lang.Load(config.defaultLanguage);
 
 const clientConfig = GetClientConfig(config, Lang.List());
-const database = new OwlDatabase(mysql, config.storage);
+const database = new OwlDatabase(mysql, config.storage, config.mode === "immersive");
 const directory = new OwlDirectory();
 const outbox = new Outbox(config.network.flushIntervalMs, config.network.maxBatchBytes);
 const audit = new AuditLog(config.logging);
@@ -112,7 +113,8 @@ const calls = new CallService({ database, directory, outbox, hmp, config: config
 const requests = new RequestDispatcher(hmp, directory, outbox, config.network);
 const posts = new PostService(hmp, config.immersivemode_posts, () => ImportOptional("hmp-interact"), OpenAtPost, Lang.Translate("", "mail.post.prompt"), () => ImportOptional("hmp-blips"));
 const roster = new OwlRoster();
-const mail = new MailService({ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial, parcels });
+const reports = new ReportService({ database, directory, outbox, senders, audit, hmp, config, CanModerate, Describe });
+const mail = new MailService({ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial, parcels, blocks, reports, Describe });
 
 /// <summary>
 /// True when players get the immersive letter desk instead of the phone (mode "immersive").
@@ -383,6 +385,16 @@ async function CanPostOfficial(player)
 }
 
 /// <summary>
+/// Whether a player may read and handle reports (reports.capability), while reports are on.
+/// </summary>
+/// <param name="player">Player asking</param>
+/// <returns>True when allowed</returns>
+async function CanModerate(player)
+{
+	return config.reports.enabled && await HasPermission(player, config.reports, "reports");
+}
+
+/// <summary>
 /// Show a contact on its owner's page straight away, if they are online, after another resource added it (see Api.AddContact).
 /// </summary>
 /// <param name="ownerNumber">Owl number of the owner</param>
@@ -414,7 +426,7 @@ async function SendBootstrap(entry)
 		return;
 	}
 
-	const [contactList, chatList, ownAvatar, visibleProfiles, blockList, retired, callLog] = await Promise.all([contacts.List(entry.number), chats.List(entry.number), profiles.GetOwnAvatar(entry.number), profiles.ListVisible(entry.number), blocks.List(entry.number), database.ListRetiredRelated(entry.number), calls.ListLog(entry.number)]);
+	const [contactList, chatList, ownAvatar, visibleProfiles, blockList, retired, callLog, moderation] = await Promise.all([contacts.List(entry.number), chats.List(entry.number), profiles.GetOwnAvatar(entry.number), profiles.ListVisible(entry.number), blocks.List(entry.number), database.ListRetiredRelated(entry.number), calls.ListLog(entry.number), reports.GetAccess(entry)]);
 
 	// The player may have switched character while the queries ran.
 	if (directory.GetByPlayerId(entry.playerId) !== entry)
@@ -438,6 +450,7 @@ async function SendBootstrap(entry)
 		settings: entry.settings,
 		config: clientConfig,
 		blocks: blockList,
+		moderation,
 		retired,
 		quiet: { active: !!quiet, label: quiet ? quiet.label : "" },
 		senders: senders.GetClientList(),
@@ -459,7 +472,8 @@ async function SendBootstrap(entry)
 /// <param name="entry">Directory entry</param>
 async function SendImmersiveBootstrap(entry)
 {
-	const [contactList, unread, canPostOfficial] = await Promise.all([contacts.List(entry.number), mail.CountUnread(entry.number), CanPostOfficial(entry.player)]);
+	const [contactList, unread, canPostOfficial, moderation] = await Promise.all([contacts.List(entry.number), mail.CountUnread(entry.number), CanPostOfficial(entry.player), reports.GetAccess(entry)]);
+	const blockedContacts = contactList ? await mail.ListBlockedContacts(entry.number, contactList) : [];
 
 	// The player may have switched character while the queries ran.
 	if (directory.GetByPlayerId(entry.playerId) !== entry)
@@ -484,6 +498,8 @@ async function SendImmersiveBootstrap(entry)
 		config: clientConfig,
 		quiet: { active: !!quiet, label: quiet ? quiet.label : "" },
 		unread,
+		moderation,
+		blockedContacts,
 		serverNow: Date.now(),
 	});
 	outbox.PushChunked(entry.player, "contacts:chunk", "contacts", (contactList || []).map((contact) => ToDeskContact(contact, config.immersivemode_avatars)), contactChunkSize);
@@ -609,6 +625,13 @@ requests.Register("settings.update", async (entry, data) =>
 	return result;
 });
 
+// Moderators read reports from either front end; every request checks the permission again.
+requests.Register("reports.access", async (entry) => Ok(await reports.GetAccess(entry)));
+requests.Register("reports.list", (entry, data) => reports.List(entry, data));
+requests.Register("reports.open", (entry, data) => reports.Open(entry, data));
+requests.Register("reports.messages", (entry, data) => reports.Messages(entry, data));
+requests.Register("reports.setStatus", (entry, data) => reports.SetStatus(entry, data));
+
 /// <summary>
 /// The phone's requests, registered only in phone mode so an immersive page cannot reach features it does not offer.
 /// </summary>
@@ -641,6 +664,7 @@ function RegisterPhoneRequests()
 	requests.Register("messages.hide", (entry, data) => chats.Hide(entry, data));
 	requests.Register("messages.pin", (entry, data) => chats.PinMessage(entry, data));
 	requests.Register("messages.forward", (entry, data) => chats.Forward(entry, data));
+	requests.Register("messages.report", (entry, data) => reports.File(entry, data, ReportSource.Phone));
 	requests.Register("messages.sendPoll", (entry, data) => chats.SendPoll(entry, data));
 	requests.Register("polls.vote", (entry, data) => chats.Vote(entry, data));
 	requests.Register("locations.show", (entry, data) => locations.Show(entry, data));
@@ -699,9 +723,16 @@ function RegisterImmersiveRequests()
 	requests.Register("mail.addCorrespondent", (entry, data) => mail.AddCorrespondent(entry, data));
 	requests.Register("mail.officialSenders", (entry) => mail.ListOfficialSenders(entry));
 	requests.Register("mail.sendOfficial", (entry, data) => mail.SendOfficial(entry, data));
+	requests.Register("mail.blockWriter", (entry, data) => mail.BlockWriter(entry, data));
+	requests.Register("mail.report", (entry, data) => mail.ReportLetter(entry, data));
+	requests.Register("mail.setCorrespondentBlocked", (entry, data) => mail.SetCorrespondentBlocked(entry, data));
 
 	// Staff rights can change while a character stays loaded (an /admin unlock, a promotion), so the desk asks again each time it opens.
-	requests.Register("me.refresh", async (entry) => Ok({ canPostOfficial: await CanPostOfficial(entry.player) }));
+	requests.Register("me.refresh", async (entry) =>
+	{
+		const [canPostOfficial, moderation] = await Promise.all([CanPostOfficial(entry.player), reports.GetAccess(entry)]);
+		return Ok({ canPostOfficial, moderation });
+	});
 	requests.Register("contacts.favourite", (entry, data) => contacts.SetFavourite(entry, data));
 
 	// Correspondents are renamed like the phone's contacts, but never moved to another number, and only get pictures where the server allows them.
@@ -1040,6 +1071,7 @@ async function Start()
 		calls.Sweep();
 		dialler.Sweep();
 		mail.Sweep();
+		reports.Sweep();
 		requests.Sweep();
 		parcels.Sweep().catch((error) => Logger.LogError("Main", `Returning parcels failed: ${Logger.Describe(error)}`));
 	}, maintenanceIntervalMs);

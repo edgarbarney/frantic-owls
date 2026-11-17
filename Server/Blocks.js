@@ -20,6 +20,13 @@ const { IsSenderNumber } = require("./Database.js");
 /// System senders (the Ministry, other resources) cannot be blocked; their chats can be muted instead.
 /// </para>
 ///
+/// <para>
+/// NOTE: Immersive mode's readers are never told who wrote a letter, so a block made from a letter is anonymous: it hides every letter from that writer on the desk,
+/// but names nobody, is never listed and can never be lifted, since an undo (or a list) would tell the reader which character wrote it.
+/// The writer is not refused or told anything either; their letters simply never reach the reader. Anonymous blocks only hide owls where writers are never named
+/// (immersive mode); on the phone, where every owl shows its sender, they do nothing. Ordinary blocks are made from a correspondent the reader picked by name.
+/// </para>
+///
 /// </summary>
 class BlockService
 {
@@ -75,10 +82,27 @@ class BlockService
 	/// </summary>
 	/// <param name="blocked">Owl that may be blocked</param>
 	/// <param name="owners">Owls to check</param>
+	/// <param name="includeAnonymous">Also count anonymous blocks, for deciding who an owl reaches (never for refusing its writer, who must not learn of one)</param>
 	/// <returns>Set of owners that blocked it; empty when the read failed</returns>
-	async ListBlockersAmong(blocked, owners)
+	async ListBlockersAmong(blocked, owners, includeAnonymous = false)
 	{
-		return (await this.#database.ListBlockersAmong(blocked, owners)) || new Set();
+		return (await this.#database.ListBlockersAmong(blocked, owners, includeAnonymous)) || new Set();
+	}
+
+	/// <summary>
+	/// Block a letter's writer anonymously (see the class remarks). The number comes from the server's own record of the letter, never from the page.
+	/// </summary>
+	/// <param name="owner">Blocking owl's number</param>
+	/// <param name="writer">Writer's owl number</param>
+	/// <returns>True on success</returns>
+	async AddAnonymous(owner, writer)
+	{
+		if (!writer || writer === owner || IsSenderNumber(writer))
+		{
+			return false;
+		}
+
+		return this.#database.AddBlock(owner, writer, true);
 	}
 
 	/// <summary>

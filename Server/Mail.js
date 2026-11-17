@@ -203,6 +203,21 @@ class MailService
 	#parcels;
 
 	/// <summary>
+	/// BlockService instance, for blocking writers and correspondents.
+	/// </summary>
+	#blocks;
+
+	/// <summary>
+	/// Function (number) => string describing an owl for the audit log.
+	/// </summary>
+	#Describe;
+
+	/// <summary>
+	/// ReportService instance, for reporting letters.
+	/// </summary>
+	#reports;
+
+	/// <summary>
 	/// hmp-lib server import, for rate limits and text cleaning.
 	/// </summary>
 	#hmp;
@@ -465,7 +480,7 @@ class MailService
 	/// <summary>
 	/// Constructor.
 	/// </summary>
-	/// <param name="services">{ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial, parcels }</param>
+	/// <param name="services">{ database, directory, chats, contacts, posts, senders, roster, audit, hmp, config, CanPostOfficial, parcels, blocks, reports, Describe }</param>
 	constructor(services)
 	{
 		this.#database = services.database;
@@ -478,6 +493,9 @@ class MailService
 		this.#audit = services.audit;
 		this.#CanPostOfficial = services.CanPostOfficial;
 		this.#parcels = services.parcels;
+		this.#blocks = services.blocks;
+		this.#reports = services.reports;
+		this.#Describe = services.Describe;
 		this.#hmp = services.hmp;
 		this.#config = services.config;
 		this.#sendLimiter = this.#hmp.rateLimit.create({ limit: this.#config.messages.rateLimitCount, windowMs: this.#config.messages.rateLimitWindowMs });
@@ -928,6 +946,124 @@ class MailService
 
 		this.#audit.Log("announcements", "Official letter", `${writer} wrote to ${sent} character(s) as ${sender.name}.`);
 		return Ok({ everyone: false, sent, failed, clientKey });
+	}
+
+	// ========================
+	// Blocks & Reports
+	// ========================
+
+	/// <summary>
+	/// The correspondents an owl has blocked, by contact ID.
+	///
+	/// <para>
+	/// NOTE: Only ordinary blocks of the owl's own correspondents are listed. Anonymous blocks never are (see BlockService),
+	/// and a block made on the phone of someone who is no correspondent has no name on the desk that would not give away who it is.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="number">Owl number</param>
+	/// <param name="contactList">The owl's contacts, if already read</param>
+	/// <returns>Contact IDs</returns>
+	async ListBlockedContacts(number, contactList = null)
+	{
+		const [blocked, contacts] = await Promise.all([this.#blocks.List(number), contactList ? Promise.resolve(contactList) : this.#contacts.List(number)]);
+		const numbers = new Set(blocked);
+		return (contacts || []).filter((contact) => numbers.has(contact.number)).map((contact) => contact.id);
+	}
+
+	/// <summary>
+	/// Block the writer of a letter anonymously, and report the letter first if asked (see BlockService for what an anonymous block does).
+	/// </summary>
+	/// <param name="entry">Directory entry of the reader</param>
+	/// <param name="data">{ messageId, report }</param>
+	/// <returns>Result carrying { messageId, reportId, unread }</returns>
+	async BlockWriter(entry, data)
+	{
+		const messageId = this.#ReadId(data.messageId);
+		const letter = messageId > 0 ? await this.#database.GetLetter(entry.number, messageId) : null;
+
+		if (letter === undefined)
+		{
+			return Fail("error.blockFailed");
+		}
+
+		if (!letter)
+		{
+			return Fail("error.mail.gone");
+		}
+
+		if (letter.sender === entry.number)
+		{
+			return Fail("error.cannotBlock");
+		}
+
+		if (IsSenderNumber(letter.sender))
+		{
+			return Fail("error.officialBlock");
+		}
+
+		let reportId = 0;
+
+		// The report goes first: once blocked, the letter is no longer one the reader can see, and so no longer one they could report.
+		if (data.report === true)
+		{
+			const report = await this.#reports.File(entry, { messageId }, "letter");
+
+			if (!report.ok)
+			{
+				return report;
+			}
+
+			reportId = report.data.reportId;
+		}
+
+		if (!await this.#blocks.AddAnonymous(entry.number, letter.sender))
+		{
+			return Fail("error.blockFailed");
+		}
+
+		this.#opened.delete(entry.number);
+		this.#audit.Log("blocks", "Letter writer blocked anonymously", `${this.#Describe(entry.number)} blocked the writer of letter #${messageId}, ${this.#Describe(letter.sender)}, without being told who it is.`);
+		return Ok({ messageId, reportId, unread: await this.CountUnread(entry.number) });
+	}
+
+	/// <summary>
+	/// Report a letter. The reader is told only that it was received.
+	/// </summary>
+	/// <param name="entry">Directory entry of the reader</param>
+	/// <param name="data">{ messageId }</param>
+	/// <returns>Result carrying { reportId, isNew }</returns>
+	ReportLetter(entry, data)
+	{
+		return this.#reports.File(entry, data, "letter");
+	}
+
+	/// <summary>
+	/// Block or unblock one of the reader's own correspondents, picked by name, so nothing is given away. This is an ordinary block.
+	/// </summary>
+	/// <param name="entry">Directory entry of the owner</param>
+	/// <param name="data">{ contactId, blocked }</param>
+	/// <returns>Result carrying { contactId, blocked }</returns>
+	async SetCorrespondentBlocked(entry, data)
+	{
+		const contactId = this.#ReadId(data.contactId);
+		const contact = contactId > 0 ? await this.#database.GetContact(entry.number, contactId) : null;
+		const blocked = data.blocked === true;
+
+		if (!contact)
+		{
+			return Fail(blocked ? "error.blockFailed" : "error.unblockFailed");
+		}
+
+		const result = blocked ? await this.#blocks.Add(entry, { number: contact.number }) : await this.#blocks.Remove(entry, { number: contact.number });
+
+		if (!result.ok)
+		{
+			return result;
+		}
+
+		this.#audit.Log("blocks", blocked ? "Owl blocked" : "Owl unblocked", `${this.#Describe(entry.number)} ${blocked ? "blocked" : "unblocked"} ${this.#Describe(contact.number)} from the letter desk.`);
+		return Ok({ contactId, blocked });
 	}
 }
 

@@ -2812,6 +2812,11 @@ button.settings-card:hover
 	animation-delay: 240ms;
 }
 
+.home-grid.is-falling .home-tile:nth-child(6)
+{
+	animation-delay: 300ms;
+}
+
 @keyframes app-fall
 {
 	from
@@ -2840,7 +2845,8 @@ button.settings-card:hover
 /* ======================== */
 
 /* Five apps on Parchment: shorter tiles so three rows fit under the crest, and the odd one out spans the bottom row. */
-:root[data-theme="parchment"] .home-grid[data-count="5"] .home-tile
+:root[data-theme="parchment"] .home-grid[data-count="5"] .home-tile,
+:root[data-theme="parchment"] .home-grid[data-count="6"] .home-tile
 {
 	aspect-ratio: 1.35;
 }

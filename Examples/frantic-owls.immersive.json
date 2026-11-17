@@ -76,6 +76,12 @@
 		"fallbackMinimumGrade": 1,
 		"maxLength": 1000
 	},
+	"reports": {
+		"enabled": true,
+		"capability": "admin.view",
+		"fallbackGroup": "admin",
+		"fallbackMinimumGrade": 1
+	},
 	"logging": {
 		"enabled": false,
 		"destination": "",
@@ -91,6 +97,7 @@
 			"calls": true,
 			"blocks": true,
 			"announcements": true,
+			"reports": true,
 			"system": true
 		}
 	},

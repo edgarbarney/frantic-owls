@@ -847,6 +847,20 @@ Owls.App = (() =>
 	Bridge.On("message:unsent", (data) => Store.MarkUnsent(data.chatId, data.messageId, data.unsentAt));
 	Bridge.On("parcel:update", (data) => Store.SetParcel(Number(data.chatId) || 0, Number(data.messageId), data.parcel || null));
 	Bridge.On("poll:votes", (data) => Store.SetPollVotes(data.chatId, data.messageId, data.votes));
+	Bridge.On("reports:updated", (data) => Store.SetModeration({ canModerate: true, open: data.open }));
+
+	Bridge.On("reports:new", (data) =>
+	{
+		const report = data.report || {};
+		Store.SetModeration({ canModerate: true, open: data.open });
+		Notifications.Announce
+		({
+			title: T("report.newTitle", { number: Owls.Moderation.FormatReportNumber(report.id) }),
+			body: T("report.whoLine", { reporter: report.reporterName || T("report.unnamed"), sender: report.senderName || T("report.unnamed") }),
+			avatar: () => Owls.Util.CreateAvatar("", "", "notify", "is-small", Owls.Icons.flag),
+			onClick: () => Navigate("Report", { reportId: report.id }),
+		});
+	});
 
 	Bridge.On("chat:removed", (data) =>
 	{

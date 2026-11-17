@@ -276,7 +276,103 @@ const migrations =
 			"ALTER TABLE frantic_owls_parcel_items ADD COLUMN native_id VARCHAR(96) NOT NULL DEFAULT '', ADD COLUMN stats_json TEXT NULL",
 		],
 	},
+	{
+		// An anonymous block (made from a letter whose writer the reader is never told) sits beside an ordinary one and is part of the key, so an owl can hold both for one writer.
+		version: 12,
+		name: "add anonymous blocks",
+		statements:
+		[
+			"ALTER TABLE frantic_owls_blocks ADD COLUMN anonymous TINYINT(1) NOT NULL DEFAULT 0, DROP PRIMARY KEY, ADD PRIMARY KEY (owner_number, blocked_number, anonymous)",
+		],
+	},
+	{
+		// One row per report. The chat it came from is copied into the two tables below, so unsending, deleting or pruning owls never takes the evidence.
+		version: 13,
+		name: "create reports",
+		statements:
+		[
+			`CREATE TABLE IF NOT EXISTS frantic_owls_reports (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+				reporter_number CHAR(8) NOT NULL,
+				message_id BIGINT UNSIGNED NOT NULL,
+				sender_number CHAR(8) NOT NULL,
+				chat_id BIGINT UNSIGNED NOT NULL,
+				chat_kind VARCHAR(8) NOT NULL,
+				chat_title VARCHAR(128) NOT NULL DEFAULT '',
+				source VARCHAR(12) NOT NULL,
+				status VARCHAR(12) NOT NULL,
+				created_at BIGINT NOT NULL,
+				handled_by VARCHAR(80) NOT NULL DEFAULT '',
+				handled_at BIGINT NOT NULL DEFAULT 0,
+				UNIQUE KEY uq_frantic_owls_reports_message (reporter_number, message_id),
+				KEY idx_frantic_owls_reports_status (status, id)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		],
+	},
+	{
+		// Everyone in a reported chat when it was reported, with the name they had then, so moderators can search by member name or number.
+		version: 14,
+		name: "create report members",
+		statements:
+		[
+			`CREATE TABLE IF NOT EXISTS frantic_owls_report_members (
+				report_id BIGINT UNSIGNED NOT NULL,
+				owl_number CHAR(8) NOT NULL,
+				name VARCHAR(80) NOT NULL DEFAULT '',
+				PRIMARY KEY (report_id, owl_number),
+				KEY idx_frantic_owls_report_members_number (owl_number),
+				KEY idx_frantic_owls_report_members_name (name),
+				CONSTRAINT fk_frantic_owls_report_members_report FOREIGN KEY (report_id) REFERENCES frantic_owls_reports (id) ON DELETE CASCADE
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		],
+	},
+	{
+		// The reported chat as its reporter saw it when they reported it, around the reported owl.
+		version: 15,
+		name: "create report messages",
+		statements:
+		[
+			`CREATE TABLE IF NOT EXISTS frantic_owls_report_messages (
+				report_id BIGINT UNSIGNED NOT NULL,
+				message_id BIGINT UNSIGNED NOT NULL,
+				sender_number CHAR(8) NOT NULL,
+				kind VARCHAR(8) NOT NULL,
+				body TEXT NOT NULL,
+				sent_at BIGINT NOT NULL,
+				reply_to_id BIGINT UNSIGNED NULL,
+				unsent TINYINT(1) NOT NULL DEFAULT 0,
+				forwarded TINYINT(1) NOT NULL DEFAULT 0,
+				PRIMARY KEY (report_id, message_id),
+				CONSTRAINT fk_frantic_owls_report_messages_report FOREIGN KEY (report_id) REFERENCES frantic_owls_reports (id) ON DELETE CASCADE
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		],
+	},
 ];
+
+/// <summary>
+/// Columns and joins every report summary is read with: the report, plus the names its reporter and reported writer had when it was made.
+/// </summary>
+const reportColumns = `r.id, r.reporter_number, r.sender_number, r.chat_kind, r.chat_title, r.source, r.status, r.created_at, r.handled_by, r.handled_at,
+	rp.name AS reporter_name, sn.name AS sender_name`;
+const reportSource = `frantic_owls_reports r
+	LEFT JOIN frantic_owls_report_members rp ON rp.report_id = r.id AND rp.owl_number = r.reporter_number
+	LEFT JOIN frantic_owls_report_members sn ON sn.report_id = r.id AND sn.owl_number = r.sender_number`;
+
+/// <summary>
+/// What became of a report. Every report starts Open; a moderator marks it Resolved (acted on) or Dismissed (nothing to act on), and may open it again.
+/// </summary>
+const ReportStatus = Object.freeze
+({
+	Open: "open",
+	Resolved: "resolved",
+	Dismissed: "dismissed",
+});
+
+/// <summary>
+/// Whether anonymous blocks hide owls on this server. They do only where readers are never told who wrote (immersive mode); see BlockService.
+/// Set once by OwlDatabase's constructor, because the SQL fragments below are built outside any instance.
+/// </summary>
+let anonymousBlocksApply = false;
 
 /// <summary>
 /// Steps of a parcel's journal. Each step is written before the inventory change it leads to, so a crash leaves a row that says what may have happened.
@@ -377,12 +473,13 @@ function IsSenderNumber(number)
 
 /// <summary>
 /// SQL condition: the message aliased as alias was not written by someone the chat member (alias cm) has blocked.
+/// Anonymous blocks count only where they apply (see anonymousBlocksApply).
 /// </summary>
 /// <param name="alias">Messages table alias</param>
 /// <returns>SQL fragment</returns>
 function NotBlockedBy(alias)
 {
-	return `NOT EXISTS (SELECT 1 FROM frantic_owls_blocks b WHERE b.owner_number = cm.owl_number AND b.blocked_number = ${alias}.sender_number)`;
+	return `NOT EXISTS (SELECT 1 FROM frantic_owls_blocks b WHERE b.owner_number = cm.owl_number AND b.blocked_number = ${alias}.sender_number${anonymousBlocksApply ? "" : " AND b.anonymous = 0"})`;
 }
 
 /// <summary>
@@ -831,10 +928,12 @@ class OwlDatabase
 	/// </summary>
 	/// <param name="mysql">hmp-mysql import</param>
 	/// <param name="storageConfig">The "storage" section of the server config</param>
-	constructor(mysql, storageConfig)
+	/// <param name="anonymousBlocks">Whether anonymous blocks hide owls (immersive mode)</param>
+	constructor(mysql, storageConfig, anonymousBlocks = false)
 	{
 		this.#mysql = mysql;
 		this.#isSoftDelete = !storageConfig.disableSoftDelete;
+		anonymousBlocksApply = anonymousBlocks === true;
 	}
 
 	// ========================
@@ -2209,9 +2308,10 @@ class OwlDatabase
 	/// </summary>
 	/// <param name="owner">Blocking owl's number</param>
 	/// <returns>Blocked numbers, or null on failure</returns>
+	/// <remarks>Anonymous blocks are never listed: they name nobody and cannot be undone.</remarks>
 	async ListBlocks(owner)
 	{
-		return this.#Run("ListBlocks", async () => (await this.#mysql.query("SELECT blocked_number FROM frantic_owls_blocks WHERE owner_number = ? ORDER BY created_at", [owner])).map((row) => String(row.blocked_number)), null);
+		return this.#Run("ListBlocks", async () => (await this.#mysql.query("SELECT blocked_number FROM frantic_owls_blocks WHERE owner_number = ? AND anonymous = 0 ORDER BY created_at", [owner])).map((row) => String(row.blocked_number)), null);
 	}
 
 	/// <summary>
@@ -2219,18 +2319,19 @@ class OwlDatabase
 	/// </summary>
 	/// <param name="owner">Blocking owl's number</param>
 	/// <param name="blocked">Owl number to block</param>
+	/// <param name="anonymous">True for an anonymous block (see BlockService)</param>
 	/// <returns>True on success</returns>
-	async AddBlock(owner, blocked)
+	async AddBlock(owner, blocked, anonymous = false)
 	{
 		return this.#Run("AddBlock", async () =>
 		{
-			await this.#mysql.update("INSERT IGNORE INTO frantic_owls_blocks (owner_number, blocked_number, created_at) VALUES (?, ?, ?)", [owner, blocked, Date.now()]);
+			await this.#mysql.update("INSERT IGNORE INTO frantic_owls_blocks (owner_number, blocked_number, created_at, anonymous) VALUES (?, ?, ?, ?)", [owner, blocked, Date.now(), anonymous ? 1 : 0]);
 			return true;
 		}, false);
 	}
 
 	/// <summary>
-	/// Unblock an owl.
+	/// Unblock an owl. An anonymous block is never lifted.
 	/// </summary>
 	/// <param name="owner">Blocking owl's number</param>
 	/// <param name="blocked">Owl number to unblock</param>
@@ -2239,7 +2340,7 @@ class OwlDatabase
 	{
 		return this.#Run("RemoveBlock", async () =>
 		{
-			await this.#mysql.update("DELETE FROM frantic_owls_blocks WHERE owner_number = ? AND blocked_number = ?", [owner, blocked]);
+			await this.#mysql.update("DELETE FROM frantic_owls_blocks WHERE owner_number = ? AND blocked_number = ? AND anonymous = 0", [owner, blocked]);
 			return true;
 		}, false);
 	}
@@ -2249,15 +2350,228 @@ class OwlDatabase
 	/// </summary>
 	/// <param name="blocked">Owl number that may be blocked</param>
 	/// <param name="owners">Owl numbers to check</param>
+	/// <param name="includeAnonymous">Also count anonymous blocks (only where they apply)</param>
 	/// <returns>Set of the owners that blocked it, or null on failure</returns>
-	async ListBlockersAmong(blocked, owners)
+	async ListBlockersAmong(blocked, owners, includeAnonymous = false)
 	{
 		if (owners.length === 0)
 		{
 			return new Set();
 		}
 
-		return this.#Run("ListBlockersAmong", async () => new Set((await this.#mysql.query("SELECT owner_number FROM frantic_owls_blocks WHERE blocked_number = ? AND owner_number IN (?)", [blocked, owners])).map((row) => String(row.owner_number))), null);
+		const kind = includeAnonymous && anonymousBlocksApply ? "" : " AND anonymous = 0";
+		return this.#Run("ListBlockersAmong", async () => new Set((await this.#mysql.query(`SELECT owner_number FROM frantic_owls_blocks WHERE blocked_number = ? AND owner_number IN (?)${kind}`, [blocked, owners])).map((row) => String(row.owner_number))), null);
+	}
+
+	// ========================
+	// Reports
+	// ========================
+
+	/// <summary>
+	/// The owls of a chat around one owl, as one member sees them (see VisibleToMember), oldest first: what a report copies.
+	/// Only owls are copied (written owls, locations and polls), never notes about the chat.
+	/// </summary>
+	/// <param name="chatId">Chat row ID</param>
+	/// <param name="viewer">Owl number of the reporting member</param>
+	/// <param name="messageId">Reported owl</param>
+	/// <param name="before">Most owls kept before it</param>
+	/// <param name="after">Most owls kept after it</param>
+	/// <returns>Message records, or null on failure</returns>
+	async ListMessagesAround(chatId, viewer, messageId, before, after)
+	{
+		return this.#Run("ListMessagesAround", async () =>
+		{
+			const source = `${messageSource} JOIN frantic_owls_chat_members cm ON cm.chat_id = m.chat_id AND cm.owl_number = ? JOIN frantic_owls_chats c ON c.id = m.chat_id`;
+			const condition = `m.chat_id = ? AND m.kind IN ('text', 'location', 'poll') AND ${VisibleToMember("m")}`;
+			const now = Date.now();
+			const older = await this.#mysql.query(`SELECT ${messageColumns} FROM ${source} WHERE ${condition} AND m.id <= ? ORDER BY m.id DESC LIMIT ?`, [viewer, chatId, now, messageId, before + 1]);
+			const newer = await this.#mysql.query(`SELECT ${messageColumns} FROM ${source} WHERE ${condition} AND m.id > ? ORDER BY m.id LIMIT ?`, [viewer, chatId, now, messageId, after]);
+			return [...older.reverse(), ...newer].map(MapMessage);
+		}, null);
+	}
+
+	/// <summary>
+	/// Store a report with its copy of the chat, in one transaction.
+	/// </summary>
+	/// <param name="report">{ reporter, messageId, sender, chatId, chatKind, chatTitle, source }</param>
+	/// <param name="members">[{ number, name }] of everyone in the chat</param>
+	/// <param name="messages">Message records to copy (see ListMessagesAround)</param>
+	/// <returns>{ id, isNew } where isNew is false when this owl already reported this owl, or null on failure</returns>
+	async InsertReport(report, members, messages)
+	{
+		return this.#Run("InsertReport", () => this.#mysql.transaction(async (tx) =>
+		{
+			const existing = await tx.query("SELECT id FROM frantic_owls_reports WHERE reporter_number = ? AND message_id = ?", [report.reporter, report.messageId]);
+
+			if (existing.length > 0)
+			{
+				return { id: Number(existing[0].id), isNew: false };
+			}
+
+			const id = Number(await tx.insert(
+				"INSERT INTO frantic_owls_reports (reporter_number, message_id, sender_number, chat_id, chat_kind, chat_title, source, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				[report.reporter, report.messageId, report.sender, report.chatId, report.chatKind, String(report.chatTitle || "").slice(0, 128), report.source, ReportStatus.Open, Date.now()]));
+
+			for (const member of members)
+			{
+				await tx.update("INSERT IGNORE INTO frantic_owls_report_members (report_id, owl_number, name) VALUES (?, ?, ?)", [id, member.number, String(member.name || "").slice(0, 80)]);
+			}
+
+			for (const message of messages)
+			{
+				await tx.update("INSERT IGNORE INTO frantic_owls_report_messages (report_id, message_id, sender_number, kind, body, sent_at, reply_to_id, unsent, forwarded) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+					[id, message.id, message.sender, message.kind, message.body, Math.max(message.sentAt, message.deliverAt), message.replyTo ? message.replyTo.id : null, message.unsentAt > 0 ? 1 : 0, message.forwarded ? 1 : 0]);
+			}
+
+			return { id, isNew: true };
+		}), null);
+	}
+
+	/// <summary>
+	/// One page of reports, newest first, optionally narrowed by status and a search.
+	///
+	/// <para>
+	/// NOTE: The search matches a report number, any member's owl number (in part) or any member's name (in part).
+	/// A search starting with "#" ("#12", "#0012") is a report number alone, since nearly every owl number holds a short run of digits.
+	/// Members are the names kept when the report was made, so a renamed character is still found under the name they had then.
+	/// </para>
+	///
+	/// </summary>
+	/// <param name="query">Search text, already trimmed; "" for every report</param>
+	/// <param name="status">ReportStatus value, or "" for every status</param>
+	/// <param name="beforeId">Only reports older than this ID; 0 for the newest page</param>
+	/// <param name="limit">Page size</param>
+	/// <returns>{ reports, hasMore } where each report is a summary (see MapReportRow), or null on failure</returns>
+	async ListReports(query, status, beforeId, limit)
+	{
+		return this.#Run("ListReports", async () =>
+		{
+			const conditions = [];
+			const params = [];
+
+			if (status)
+			{
+				conditions.push("r.status = ?");
+				params.push(status);
+			}
+
+			if (beforeId > 0)
+			{
+				conditions.push("r.id < ?");
+				params.push(beforeId);
+			}
+
+			if (query)
+			{
+				// "!" escapes LIKE's wildcards, as in SearchMessages.
+				const pattern = `%${query.replace(/[!%_]/g, (character) => `!${character}`)}%`;
+				const digits = /^#?\d{1,8}$/.test(query) ? query.replace("#", "") : "";
+				const memberMatch = "EXISTS (SELECT 1 FROM frantic_owls_report_members sm WHERE sm.report_id = r.id AND (sm.name LIKE ? ESCAPE '!' OR sm.owl_number LIKE ? ESCAPE '!'))";
+
+				if (digits && query.startsWith("#"))
+				{
+					conditions.push("r.id = ?");
+					params.push(Number(digits));
+				}
+				else if (digits)
+				{
+					conditions.push(`(r.id = ? OR ${memberMatch})`);
+					params.push(Number(digits), pattern, `%${digits}%`);
+				}
+				else
+				{
+					conditions.push(memberMatch);
+					params.push(pattern, pattern);
+				}
+			}
+
+			params.push(limit + 1);
+
+			const rows = await this.#mysql.query(
+				`SELECT ${reportColumns} FROM ${reportSource}
+				${conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""}
+				ORDER BY r.id DESC LIMIT ?`,
+				params);
+
+			return { reports: rows.slice(0, limit).map(MapReportRow), hasMore: rows.length > limit };
+		}, null);
+	}
+
+	/// <summary>
+	/// One report with everyone who was in its chat.
+	/// </summary>
+	/// <param name="reportId">Report row ID</param>
+	/// <returns>Report summary plus messageId and members [{ number, name }], null when missing, or undefined on failure</returns>
+	async GetReport(reportId)
+	{
+		return this.#Run("GetReport", async () =>
+		{
+			const row = await this.#mysql.single(`SELECT ${reportColumns}, r.message_id FROM ${reportSource} WHERE r.id = ?`, [reportId]);
+
+			if (!row)
+			{
+				return null;
+			}
+
+			const members = await this.#mysql.query("SELECT owl_number, name FROM frantic_owls_report_members WHERE report_id = ? ORDER BY name, owl_number", [reportId]);
+			return { ...MapReportRow(row), messageId: Number(row.message_id), members: members.map((member) => ({ number: String(member.owl_number), name: String(member.name || "") })) };
+		}, undefined);
+	}
+
+	/// <summary>
+	/// Part of a report's copy of its chat, oldest first.
+	/// </summary>
+	/// <param name="reportId">Report row ID</param>
+	/// <param name="anchorId">Message ID the page starts from</param>
+	/// <param name="direction">"older" (before the anchor), "newer" (after it) or "around" (the anchor and both sides of it)</param>
+	/// <param name="limit">Most messages on each side</param>
+	/// <returns>{ messages, hasOlder, hasNewer } where a side not asked for is null, or null on failure</returns>
+	async ListReportMessages(reportId, anchorId, direction, limit)
+	{
+		return this.#Run("ListReportMessages", async () =>
+		{
+			const columns = "message_id, sender_number, kind, body, sent_at, reply_to_id, unsent, forwarded";
+			const older = direction === "newer" ? [] : await this.#mysql.query(`SELECT ${columns} FROM frantic_owls_report_messages WHERE report_id = ? AND message_id ${direction === "around" ? "<=" : "<"} ? ORDER BY message_id DESC LIMIT ?`, [reportId, anchorId, limit + 1]);
+			const newer = direction === "older" ? [] : await this.#mysql.query(`SELECT ${columns} FROM frantic_owls_report_messages WHERE report_id = ? AND message_id > ? ORDER BY message_id LIMIT ?`, [reportId, anchorId, limit + 1]);
+			const messages = [...older.slice(0, limit).reverse(), ...newer.slice(0, limit)].map((row) => ({
+				id: Number(row.message_id),
+				sender: String(row.sender_number),
+				kind: String(row.kind),
+				body: String(row.body || ""),
+				sentAt: Number(row.sent_at),
+				replyToId: Number(row.reply_to_id || 0),
+				unsent: Number(row.unsent) === 1,
+				forwarded: Number(row.forwarded) === 1,
+			}));
+
+			return { messages, hasOlder: direction === "newer" ? null : older.length > limit, hasNewer: direction === "older" ? null : newer.length > limit };
+		}, null);
+	}
+
+	/// <summary>
+	/// Change what became of a report.
+	/// </summary>
+	/// <param name="reportId">Report row ID</param>
+	/// <param name="status">ReportStatus value</param>
+	/// <param name="handledBy">Name of the moderator; kept on the report until it is opened again</param>
+	/// <returns>True when the report exists, false when it does not or on failure</returns>
+	async SetReportStatus(reportId, status, handledBy)
+	{
+		return this.#Run("SetReportStatus", async () =>
+		{
+			const isOpen = status === ReportStatus.Open;
+			await this.#mysql.update("UPDATE frantic_owls_reports SET status = ?, handled_by = ?, handled_at = ? WHERE id = ?", [status, isOpen ? "" : String(handledBy || "").slice(0, 80), isOpen ? 0 : Date.now(), reportId]);
+			return (await this.#mysql.scalar("SELECT COUNT(*) FROM frantic_owls_reports WHERE id = ?", [reportId])) > 0;
+		}, false);
+	}
+
+	/// <summary>
+	/// How many reports are still open.
+	/// </summary>
+	/// <returns>Count, or -1 on failure</returns>
+	async CountOpenReports()
+	{
+		return this.#Run("CountOpenReports", async () => Number(await this.#mysql.scalar("SELECT COUNT(*) FROM frantic_owls_reports WHERE status = ?", [ReportStatus.Open]) || 0), -1);
 	}
 
 	// ========================
@@ -2669,4 +2983,27 @@ function MapParcelRow(row)
 	};
 }
 
-module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll, ParcelState, ParcelItemState, MapParcel, ReadParcelContents, ReadStats };
+/// <summary>
+/// Convert a reports row into the summary moderators see.
+/// </summary>
+/// <param name="row">Raw row selected with reportColumns</param>
+/// <returns>{ id, reporter, reporterName, sender, senderName, chatKind, chatTitle, source, status, createdAt, handledBy, handledAt }</returns>
+function MapReportRow(row)
+{
+	return {
+		id: Number(row.id),
+		reporter: String(row.reporter_number),
+		reporterName: String(row.reporter_name || ""),
+		sender: String(row.sender_number),
+		senderName: String(row.sender_name || ""),
+		chatKind: String(row.chat_kind),
+		chatTitle: String(row.chat_title || ""),
+		source: String(row.source),
+		status: String(row.status),
+		createdAt: Number(row.created_at),
+		handledBy: String(row.handled_by || ""),
+		handledAt: Number(row.handled_at || 0),
+	};
+}
+
+module.exports = { OwlDatabase, invalidId, MessageKind, MemberRole, CallOutcome, ContactWrite, IsSenderNumber, ToQuote, ReadPoll, ParcelState, ParcelItemState, MapParcel, ReadParcelContents, ReadStats, ReportStatus };

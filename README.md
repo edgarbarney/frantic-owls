@@ -41,10 +41,12 @@ Set `"mode": "immersive"` and players get a writing desk instead of the phone. T
 - **Letters** are written and read on a sheet of parchment (`UI/Textures/MailParchment.png`) in one bundled handwriting font (Caveat). The sheet is laid out at one fixed size and only then scaled to the screen, so a letter breaks its lines in exactly the same places on every player's screen, with its spaces, indents and blank lines kept.
 - **Writing**: The greeting ("Dear Ominis and Natsai,") is filled in from the recipients picked right in it, and the sign-off and the writer's name below the body. The quill button (**Edit Whole Letter**) turns all of it into one page of text so the greeting and signature can be reworded or dropped. Either way the database stores the finished letter as one text, nothing else.
 - **Recipients** can be any character with an owl, online or not. Typing a name shows one list: the writer's matching **correspondents** first, then every other character by that name, with a dot on those online. A character already among the writer's correspondents is only listed once, as that correspondent. Everyone a character writes to becomes their contact (not the other way round). Under the hood owl numbers still identify everyone; players never see them.
-- **Correspondents** is the desk's address book: Star, rename, write to or forget each one, give them a picture where `immersivemode_avatars` allows it, and **Add Correspondent** to save any character by name without writing first.
+- **Correspondents** is the desk's address book: Star, rename, write to, block or forget each one, give them a picture where `immersivemode_avatars` allows it, and **Add Correspondent** to save any character by name without writing first.
 - **Several recipients** do not make a bulk owl. Each gets a copy of their own, in the one-to-one chat they share with the writer, and answers only to the writer.
 - **Anonymity**: Readers are never told who wrote a letter (official senders aside); they see what the letter says, and the list of letters shows its first and last lines (usually the greeting and signature). A writer who drops their name in full edit sends it unsigned. The database still records the sender of every owl, as always, so staff can look it up and the Discord log names them.
 - **Answering** a letter names the letter, not its writer: The server works out who wrote it, so an anonymous writer stays anonymous to the one answering. The writer is saved among the answerer's correspondents under the name they signed with, as a correspondent whose identity is unknown: The page gets no owl number, character name or profile picture for them, so it cannot match them to a character found by name. Two gaps remain by design: Adding that same character again by name is refused (without naming the correspondent), and a letter later written to them by name is listed in the sent box under the correspondent's name.
+- **Blocking and reporting a letter**: Under every letter someone else wrote sit **Block** and **Report**. Because readers are never told who wrote a letter, Block is always *anonymous*: a pop-up warns that it blocks every letter from that writer and cannot be undone, and offers **Cancel**, **Block** and **Block & Report**. An anonymous block hides that writer's letters on the desk (new and old, unread counts and notices included), is never listed and can never be lifted, since an undo or a list would tell the reader who the writer is. The writer is not refused or told anything; their letters simply never reach the reader. Anonymous blocks do nothing on a phone-mode server, where every owl shows its sender. An ordinary block is made from **Correspondents** instead (the reader picked them by name, so nothing is given away): It refuses their letters as on the phone, is listed under **Blocked correspondents** in the desk's Settings and can be undone there or in Correspondents.
+- **Reports** is a tab for moderators (see [Reports and moderation](#reports-and-moderation)), showing the number of open reports.
 - **Official Post** is for whoever may announce (the same permission as `/owl_announce`, while `announcements.enabled`): They write as the Ministry, or as any other resource's sender that is running, to **Everyone** (an announcement) or to up to 50 characters by name, one copy each. Official letters keep the letter's length and layout, are not tied to owl posts, and are logged under `logging.events.announcements`. The desk checks the permission again each time it opens, so the tab appears or goes away without reloading the character (for example after an `hmp-admin` session unlock).
 - **Where** letters can be read and written is up to the server (`immersivemode_readmode` and `immersivemode_writemode`, both `"free"` by default):
   - `"free"`: Anywhere.
@@ -158,6 +160,7 @@ Want to help with one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Emoji picker with recently used emoji | ✅ |
 | Inform: Share your owl with someone nearby, with Accept, Exchange or Decline | ✅ |
 | Blocking and muting | ✅ |
+| Reporting owls and letters, with a Moderation app (phone) and Reports tab (desk) | ✅ |
 | Owl flight: Owls take time to fly, depending on distance | ✅ |
 | Ministry announcements (`/owl_announce`) | ✅ |
 | Optional Discord logging | ✅ |
@@ -315,6 +318,24 @@ Nobody can remove the creator or take their adminship, and admins cannot change 
 
 Official senders (the Ministry and senders of other resources) cannot be blocked; mute their chats instead.
 
+For blocking on immersive mode's desk, which works differently because readers are never told who wrote a letter, see [Immersive mode](#immersive-mode).
+
+## Reports and moderation
+
+Players can report an owl someone else sent them: On the phone, **Report** is among the owl actions (tap an owl, then Report and Tap again); on the desk, **Report** sits under the letter, or **Block & Report** in the block pop-up. Official owls and a player's own owls cannot be reported, and reporting the same owl twice keeps the first report. The reporter is only told the report was received.
+
+A report copies the chat as its reporter saw it then: up to 200 owls before the reported one and 100 after it, with the name and owl number of everyone in it. Unsending, deleting or pruning owls afterwards does not change the copy, and it holds nothing the reporter could not see.
+
+Moderators are decided by the hmp-admin capability `reports.capability` (`admin.view` by default) when hmp-admin is running, otherwise by the hmp-core group `reports.fallbackGroup` at `fallbackMinimumGrade` or above, checked again on every request. They get:
+
+- a **Moderation** app on the phone's home screen, or a **Reports** tab on the desk, with the number of open reports;
+- a list of reports ("Reported chat #0001"), filtered by **Open**, **Resolved**, **Dismissed** or **All**, and a search by report number, member name or owl number (a search starting with `#` matches report numbers only);
+- each reported chat read-only, like the messaging app without a way to write: Who reported whom and when, everyone in the chat with their full name and owl number, and the copied owls with the reported one highlighted; earlier and later owls load on request;
+- **Resolve** and **Dismiss** (and **Open again**), which record the moderator's name;
+- a pop-up for every new report while they are online.
+
+Filing, reading and marking reports are logged under `logging.events.reports`. `reports.enabled: false` removes reporting and the moderation views.
+
 ## Do Not Disturb
 
 **Do Not Disturb** in Settings holds back every sound, pop-up and banner. Owls still arrive and count as unread, calls still ring silently (open the phone to answer) and a moon in the status bar shows the phone is quiet.
@@ -386,7 +407,7 @@ Set `"showBlip": true` on an `immersivemode_posts` entry to show that post on th
 
 ## Discord logging
 
-Optional (`logging.enabled`, off by default). It logs owls sent, bulk owls created and left, informs, calls (who called whom and for how long, never anything said), blocks, official owls, announcements, parcels (sent, collected, returned and interrupted) and owls retired when their character was deleted, each category switchable under `logging.events`. Message text is only included with `logging.includeBodies`. **That makes private owls readable by anyone who can see the Discord channel, so tell your players if you turn it on.**
+Optional (`logging.enabled`, off by default). It logs owls sent, bulk owls created and left, informs, calls (who called whom and for how long, never anything said), blocks, official owls, announcements, parcels (sent, collected, returned and interrupted), reports (filed, read and marked) and owls retired when their character was deleted, each category switchable under `logging.events`. Message text is only included with `logging.includeBodies`. **That makes private owls readable by anyone who can see the Discord channel, so tell your players if you turn it on.**
 
 Delivery:
 
@@ -539,13 +560,16 @@ Settings only one front end uses carry its prefix (`phonemode_` or `immersivemod
 | `announcements.capability` | `"admin.announce"` | hmp-admin capability needed to announce, when hmp-admin is running. |
 | `announcements.fallbackGroup` / `fallbackMinimumGrade` | `"admin"` / `1` | hmp-core group and grade needed to announce without hmp-admin. |
 | `announcements.maxLength` | `1000` | Longest announcement or official owl from another resource. |
+| `reports.enabled` | `true` | Let players report owls and letters, and moderators read the reports. |
+| `reports.capability` | `"admin.view"` | hmp-admin capability needed to read and handle reports, when hmp-admin is running. |
+| `reports.fallbackGroup` / `fallbackMinimumGrade` | `"admin"` / `1` | hmp-core group and grade needed to moderate without hmp-admin. |
 | `logging.enabled` | `false` | Log owl activity to Discord (see [Discord logging](#discord-logging)). |
 | `logging.destination` | `""` | hmp-webhooks destination to log through, e.g. `"discord"`. Empty posts directly. |
 | `logging.urlEnv` / `url` | `"FRANTIC_OWLS_WEBHOOK_URL"` / `""` | Where the direct webhook URL comes from. Prefer the environment variable. |
 | `logging.username` | `"Owl Post"` | Name the log posts under. |
 | `logging.includeBodies` | `false` | Include message text in the log. |
 | `logging.flushIntervalMs` | `5000` | How often direct posting sends batched entries. |
-| `logging.events.*` | all `true` | Per category: `messages`, `groups`, `informs`, `calls`, `blocks`, `announcements` (official letters too), `parcels`, `system`. |
+| `logging.events.*` | all `true` | Per category: `messages`, `groups`, `informs`, `calls`, `blocks`, `announcements` (official letters too), `parcels`, `reports`, `system`. |
 | `notifications.toastDurationMs` | `3000` | How long the closed-phone pop-up stays. |
 | `notifications.soundMode` | `"file"` | `"file"` plays the player's chosen sound from the page, `"wwise"` plays `wwiseEvent` through the game's audio, `"none"` is silent. |
 | `notifications.sounds` | the six shipped sounds | Sounds players can choose from: `[{ "id", "label", "file" }]`, where `file` is inside `UI/` (`.wav`, `.mp3` or `.ogg`) and `id` is 1-24 of a-z, 0-9, `_` or `-`. At most 16. Add your own by dropping a file into `UI/Sounds/` and listing it. |

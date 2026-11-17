@@ -155,6 +155,12 @@
 
 	let settings = { notificationSound: true, notificationVolume: 0.6, popups: true, sound: "", language: "", doNotDisturb: false, quietDuringActivities: true, showOriginalNames: false };
 	let canPostOfficial = true;
+
+	/// <summary>
+	/// Writers the player blocked from a letter (by number; the page never learns them), and correspondents blocked by contact ID.
+	/// </summary>
+	const anonymousBlocks = new Set();
+	const blockedContacts = new Set();
 	let isAtPost = false;
 	let isOpen = false;
 	let nextId = 100;
@@ -285,6 +291,28 @@
 			];
 
 	/// <summary>
+	/// What a mock report of a letter copies: every letter between the reader and its writer, and both their names.
+	/// </summary>
+	/// <param name="letter">Reported letter</param>
+	/// <returns>Report for OwlsReportsMock.File</returns>
+	function MockLetterReport(letter)
+	{
+		const nameOf = (number) => (number === me.number ? me.name : (roster.find((entry) => entry.number === number) || {}).name || "");
+		const thread = letters.filter((entry) => !entry.official && (entry.sender === letter.sender || entry.to.includes(letter.sender))).sort((first, second) => first.id - second.id);
+
+		return {
+			reporter: me.number,
+			sender: letter.sender,
+			messageId: letter.id,
+			chatKind: letter.groupTitle ? "group" : "direct",
+			chatTitle: letter.groupTitle || "",
+			source: "letter",
+			members: [me.number, letter.sender].map((number) => ({ number, name: nameOf(number) })),
+			messages: thread.map((entry) => ({ id: entry.id, sender: entry.sender, kind: "text", body: entry.text, sentAt: entry.sentAt, replyToId: 0, unsent: false, forwarded: false })),
+		};
+	}
+
+	/// <summary>
 	/// The parcel a page asked to send, as the server would describe it on the letter.
 	/// </summary>
 	/// <param name="request">{ galleons, items: [{ key, amount }] }</param>
@@ -307,19 +335,86 @@
 	/// <returns>{ ok, errorKey, data }</returns>
 	function Handle(action, data)
 	{
-		const unread = () => letters.filter((letter) => letter.sender !== me.number && !letter.isRead).length;
+		const unread = () => letters.filter((letter) => letter.sender !== me.number && !letter.isRead && !anonymousBlocks.has(letter.sender)).length;
+		const reportAnswer = OwlsReportsMock.Handle(action, data, me.name);
+
+		if (reportAnswer)
+		{
+			if (action === "reports.setStatus" && reportAnswer.ok)
+			{
+				setTimeout(() => Push([{ type: "reports:updated", data: { report: reportAnswer.data.report, open: OwlsReportsMock.CountOpen() } }]), 50);
+			}
+
+			return reportAnswer;
+		}
 
 		switch (action)
 		{
+		case "mail.report":
+		case "mail.blockWriter":
+		{
+			const letter = letters.find((entry) => entry.id === data.messageId && !anonymousBlocks.has(entry.sender));
+
+			if (!letter)
+			{
+				return { ok: false, errorKey: "error.mail.gone" };
+			}
+
+			if (letter.sender === me.number || letter.official)
+			{
+				return { ok: false, errorKey: letter.official ? "error.report.official" : "error.report.own" };
+			}
+
+			let reportId = 0;
+			let isNew = false;
+
+			if (action === "mail.report" || data.report === true)
+			{
+				const filed = OwlsReportsMock.File(MockLetterReport(letter));
+				reportId = filed.reportId;
+				isNew = filed.isNew;
+
+				if (filed.item)
+				{
+					setTimeout(() => Push([filed.item]), 300);
+				}
+			}
+
+			if (action === "mail.report")
+			{
+				return { ok: true, data: { reportId, isNew } };
+			}
+
+			anonymousBlocks.add(letter.sender);
+			return { ok: true, data: { messageId: letter.id, reportId, unread: unread() } };
+		}
+		case "mail.setCorrespondentBlocked":
+		{
+			if (!contacts.some((contact) => contact.id === data.contactId))
+			{
+				return { ok: false, errorKey: "error.blockFailed" };
+			}
+
+			if (data.blocked)
+			{
+				blockedContacts.add(data.contactId);
+			}
+			else
+			{
+				blockedContacts.delete(data.contactId);
+			}
+
+			return { ok: true, data: { contactId: data.contactId, blocked: !!data.blocked } };
+		}
 		case "mail.list":
 		{
 			const box = data.box === "sent" ? "sent" : "inbox";
-			const listed = letters.filter((letter) => (box === "sent") === (letter.sender === me.number) && (!data.beforeId || letter.id < data.beforeId)).sort((first, second) => second.id - first.id);
+			const listed = letters.filter((letter) => (box === "sent") === (letter.sender === me.number) && !anonymousBlocks.has(letter.sender) && (!data.beforeId || letter.id < data.beforeId)).sort((first, second) => second.id - first.id);
 			return { ok: true, data: { box, beforeId: data.beforeId || 0, letters: listed.slice(0, 40).map(Summarise), hasMore: listed.length > 40, post: isAtPost ? post : null, unread: unread(), serverNow: Date.now() } };
 		}
 		case "mail.open":
 		{
-			const letter = letters.find((entry) => entry.id === data.messageId);
+			const letter = letters.find((entry) => entry.id === data.messageId && !anonymousBlocks.has(entry.sender));
 
 			if (!letter)
 			{
@@ -516,7 +611,7 @@
 			return { ok: true, data: { messageId: letter.id, parcel: letter.parcel } };
 		}
 		case "me.refresh":
-			return { ok: true, data: { canPostOfficial } };
+			return { ok: true, data: { canPostOfficial, moderation: OwlsReportsMock.Access() } };
 		case "settings.update":
 		{
 			const languageBefore = settings.language;
@@ -548,7 +643,7 @@
 				Push
 				([
 					...GetLanguageItems(),
-					{ type: "state:reset", data: { me: { name: me.name, canPostOfficial }, settings, config, quiet: { active: false, label: "" }, unread, serverNow: Date.now() } },
+					{ type: "state:reset", data: { me: { name: me.name, canPostOfficial }, settings, config, quiet: { active: false, label: "" }, unread, moderation: OwlsReportsMock.Access(), blockedContacts: [...blockedContacts], serverNow: Date.now() } },
 					{ type: "contacts:chunk", data: { reset: true, contacts: contacts.map(ToDesk) } },
 					{ type: "state:ready", data: {} },
 				]);

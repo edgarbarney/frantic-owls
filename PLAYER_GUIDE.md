@@ -30,13 +30,14 @@ Your slab locks itself whenever you put it away. On the Muggle Phone, touch the 
 
 ## The Apps
 
-Your home screen holds five apps with these icons:
+Your home screen holds these apps:
 
 - 🔥 **Floo-Calls**: The call log and new calls. Missed calls show as a badge.
 - 📖 **Contacts**: Every wizard whose owl you hold. Star the dearest ones as **Favourites**. Where the server allows it, the plus adds someone by their owl number, a contact's page lets you change their number, and **Send New Owl** and **New Floo-Call** take a number too. One number, one contact: Edit or delete the old one first.
 - 🦉 **Owls**: All your chats. The badge counts owls you have not read yet.
 - 📜 **Inform**: Offer your owl to someone nearby, or answer someone offering theirs (**Accept**, **Exchange** to give yours back, or **Decline**).
 - ⚙️ **Settings**: Your picture, theme, house colours, sounds, ringtone, language, privacy and blocked owls.
+- 🔨 **Moderation** (moderators only): Every report, searchable by report number, name or owl number. Open one to read the chat it came from, with the reported owl highlighted, then **Resolve** or **Dismiss** it.
 
 ## During a Floo-Call
 
@@ -47,6 +48,7 @@ Your home screen holds five apps with these icons:
 ## Inside a Chat
 
 - **Tap an owl** to **Reply**, **Forward** it to other chats, **Pin** it under the chat's header, **Unsend** it or **Delete for yourself**.
+- **Report** (tap it twice) sends someone else's owl to the moderators, who read the chat around it. Nobody in the chat is told.
 - **The magnifying glass** searches the whole chat, not only what is on screen. Tap a result to fly back to it.
 - **The smiling face** opens the emoji picker. Muggles invented them; we added a Magic page.
 - **The paperclip** opens what an owl can carry:

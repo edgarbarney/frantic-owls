@@ -585,6 +585,7 @@ Owls.Screens.Chat = (() =>
 		const pinAction = ActionButton(Owls.Icons.thumbtack, T("chat.pin"), () => TogglePinSelected());
 		const hideAction = ActionButton(Owls.Icons.trash, T("chat.deleteForMe"), () => Confirm("hide", hideAction, HideSelected));
 		const unsendAction = ActionButton(Owls.Icons.unsend, T("chat.unsend"), () => Confirm("unsend", unsendAction, UnsendSelected));
+		const reportAction = ActionButton(Owls.Icons.flag, T("chat.report"), () => Confirm("report", reportAction, ReportSelected));
 		const actionBar = Element("div", { className: "leave-bar action-bar" },
 		[
 			actionText,
@@ -596,6 +597,7 @@ Owls.Screens.Chat = (() =>
 				pinAction,
 				hideAction,
 				unsendAction,
+				reportAction,
 				Element("button", { className: "secondary-button", text: T("common.close"), on: { click: () => Select(0) } }),
 			]),
 		]);
@@ -1016,6 +1018,21 @@ Owls.Screens.Chat = (() =>
 		}
 
 		/// <summary>
+		/// Whether an owl can be reported: someone else's written owl, location or poll, not unsent, and never an official sender's.
+		/// </summary>
+		/// <param name="message">Message record</param>
+		/// <returns>True when Report is offered</returns>
+		function CanReport(message)
+		{
+			if (config.reportsEnabled === false || Number(message.unsentAt) > 0 || message.sender === Owls.Store.state.me.number || Owls.Store.GetSender(message.sender))
+			{
+				return false;
+			}
+
+			return !message.kind || message.kind === "text" || message.kind === "location" || message.kind === "poll";
+		}
+
+		/// <summary>
 		/// Whether an owl can be forwarded: written owls and locations, not polls (which belong to their bulk owl) or unsent owls.
 		/// </summary>
 		/// <param name="message">Message record</param>
@@ -1085,8 +1102,9 @@ Owls.Screens.Chat = (() =>
 			pinAction.hidden = isUnsent || !CanPinOwls();
 			pinAction.lastChild.textContent = isPinned ? T("chat.unpin") : T("chat.pin");
 			unsendAction.hidden = !CanUnsend(message);
+			reportAction.hidden = !CanReport(message);
 
-			for (const button of [hideAction, unsendAction])
+			for (const button of [hideAction, unsendAction, reportAction])
 			{
 				button.lastChild.textContent = button.dataset.label;
 			}
@@ -1111,6 +1129,7 @@ Owls.Screens.Chat = (() =>
 			pendingConfirm = key;
 			hideAction.lastChild.textContent = hideAction.dataset.label;
 			unsendAction.lastChild.textContent = unsendAction.dataset.label;
+			reportAction.lastChild.textContent = reportAction.dataset.label;
 			button.lastChild.textContent = T("chat.tapAgain");
 			clearTimeout(confirmTimer);
 			confirmTimer = setTimeout(() =>
@@ -1194,6 +1213,30 @@ Owls.Screens.Chat = (() =>
 
 			Select(0);
 			Owls.Store.RemoveMessage(chatId, messageId);
+		}
+
+		/// <summary>
+		/// Report the selected owl to the server's moderators, who then read the chat around it.
+		/// </summary>
+		async function ReportSelected()
+		{
+			const messageId = selectedId;
+			const result = await Owls.Bridge.Request("messages.report", { messageId });
+
+			if (!result.ok)
+			{
+				actionError.textContent = result.error;
+				return;
+			}
+
+			Select(0);
+			Owls.Notifications.Announce
+			({
+				title: T("report.sentTitle"),
+				body: result.data.isNew ? T("report.sentBody") : T("report.alreadySent"),
+				avatar: () => Owls.Util.CreateAvatar("", "", "notify", "is-small", Owls.Icons.flag),
+				silent: true,
+			});
 		}
 
 		/// <summary>

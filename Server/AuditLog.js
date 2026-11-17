@@ -27,6 +27,7 @@ const categoryColours = Object.freeze
 	blocks: 0xc96a5c,
 	announcements: 0x9b59b6,
 	parcels: 0xd4af37,
+	reports: 0xe67e22,
 	system: 0x95a5a6,
 });
 
@@ -219,7 +220,7 @@ class AuditLog
 	/// <summary>
 	/// Record one event, if logging is on and its category is enabled.
 	/// </summary>
-	/// <param name="category">"messages", "groups", "informs", "calls", "blocks", "announcements", "parcels" or "system"</param>
+	/// <param name="category">"messages", "groups", "informs", "calls", "blocks", "announcements", "parcels", "reports" or "system"</param>
 	/// <param name="title">Short headline</param>
 	/// <param name="description">One or more lines of detail</param>
 	/// <param name="fields">Extra [{ name, value, inline }] (optional)</param>

@@ -90,6 +90,13 @@ const defaultConfig = Object.freeze
 		fallbackMinimumGrade: 1,
 		maxLength: 1000,
 	},
+	reports:
+	{
+		enabled: true,
+		capability: "admin.view",
+		fallbackGroup: "admin",
+		fallbackMinimumGrade: 1,
+	},
 	logging:
 	{
 		enabled: false,
@@ -108,6 +115,7 @@ const defaultConfig = Object.freeze
 			blocks: true,
 			announcements: true,
 			parcels: true,
+			reports: true,
 			system: true,
 		},
 	},
@@ -526,6 +534,12 @@ function Sanitise(config)
 	announcements.capability = String(announcements.capability ?? fallback.announcements.capability).trim();
 	announcements.fallbackGroup = String(announcements.fallbackGroup ?? fallback.announcements.fallbackGroup).trim();
 	announcements.fallbackMinimumGrade = ClampInteger(announcements.fallbackMinimumGrade, 0, 1000000, fallback.announcements.fallbackMinimumGrade);
+
+	const reports = config.reports;
+	reports.enabled = reports.enabled !== false;
+	reports.capability = String(reports.capability ?? fallback.reports.capability).trim();
+	reports.fallbackGroup = String(reports.fallbackGroup ?? fallback.reports.fallbackGroup).trim();
+	reports.fallbackMinimumGrade = ClampInteger(reports.fallbackMinimumGrade, 0, 1000000, fallback.reports.fallbackMinimumGrade);
 	announcements.maxLength = ClampInteger(announcements.maxLength, 1, 4000, fallback.announcements.maxLength);
 
 	const logging = config.logging;
@@ -782,6 +796,7 @@ function GetClientConfig(config, languages)
 		defaultSound: config.notifications.defaultSound,
 		wwiseEvent: config.notifications.wwiseEvent,
 		requestTimeoutMs: config.network.requestTimeoutMs,
+		reportsEnabled: config.reports.enabled,
 		// What owls may carry. Main.js clears it once hmp-inventory is known not to run, since nothing can be carried without it.
 		parcels: GetClientParcels(config.attachments),
 	};

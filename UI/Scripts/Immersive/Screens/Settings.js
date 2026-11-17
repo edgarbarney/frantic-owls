@@ -136,7 +136,40 @@ Owls.DeskScreens.Settings = (() =>
 				Row(T("settings.showOriginalNames"), T("mail.settings.showOriginalNamesHint"), Toggle("showOriginalNames")),
 			];
 
-			body.replaceChildren(...rows.filter(Boolean));
+			body.replaceChildren(...rows.filter(Boolean), ...RenderBlocked());
+		}
+
+		/// <summary>
+		/// The correspondents the player blocked, each with Unblock. Writers blocked from a letter are never listed: the page does not know who they are.
+		/// </summary>
+		/// <returns>Elements: a heading, its hint and one row per blocked correspondent (or a line saying there are none)</returns>
+		function RenderBlocked()
+		{
+			const blocked = Store.state.contacts.filter((contact) => Store.IsContactBlocked(contact.id));
+			const rows = blocked.map((contact) => Row(Store.GetContactLabel(contact), "", Element("button", { className: "desk-button", on: { click: () => Unblock(contact) } }, [Element("span", { text: T("mail.correspondents.unblock") })])));
+
+			return [
+				Element("h3", { className: "settings-heading", text: T("mail.settings.blocked") }),
+				Element("p", { className: "settings-hint", text: T("mail.settings.blockedHint") }),
+				...(rows.length > 0 ? rows : [Element("p", { className: "settings-hint", text: T("mail.settings.blockedNone") })]),
+			];
+		}
+
+		/// <summary>
+		/// Unblock a correspondent.
+		/// </summary>
+		/// <param name="contact">Correspondent</param>
+		async function Unblock(contact)
+		{
+			const result = await Owls.Bridge.Request("mail.setCorrespondentBlocked", { contactId: contact.id, blocked: false });
+
+			if (!result.ok)
+			{
+				desk.ShowError(result.error);
+				return;
+			}
+
+			Store.SetContactBlocked(contact.id, false);
 		}
 
 		Render();
@@ -145,7 +178,7 @@ Owls.DeskScreens.Settings = (() =>
 			element,
 			OnStore: (reason) =>
 			{
-				if (reason === "settings")
+				if (reason === "settings" || reason === "blocks" || reason === "contacts")
 				{
 					Render();
 				}

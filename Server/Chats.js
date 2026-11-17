@@ -258,7 +258,8 @@ class ChatService
 	{
 		const isChannel = chat.kind === "channel";
 		const candidates = (isChannel ? this.#directory.All().map((entry) => entry.number) : chat.members).filter((number) => includeSender || number !== message.sender);
-		const blockers = IsSenderNumber(message.sender) || !owlKinds.includes(message.kind) ? new Set() : await this.#blocks.ListBlockersAmong(message.sender, candidates);
+		// Anonymous blocks count here: the reader is never told such an owl arrived, while its writer, as with any delivered owl, sees nothing amiss.
+		const blockers = IsSenderNumber(message.sender) || !owlKinds.includes(message.kind) ? new Set() : await this.#blocks.ListBlockersAmong(message.sender, candidates, true);
 		const audience = candidates.filter((number) => !blockers.has(number));
 
 		// Recipients may not have this chat yet (e.g. the first owl of a direct chat), so the descriptor travels with the message.

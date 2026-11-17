@@ -10,7 +10,8 @@ Owls.DeskScreens = Owls.DeskScreens || {};
 
 /// <summary>
 /// The player's correspondents (their contacts): everyone they have written to, anyone they added by name, and anyone another resource introduced them to.
-/// Each can be renamed, starred, written to or forgotten, and given a picture where the server allows pictures (immersivemode_avatars).
+/// Each can be renamed, starred, written to, blocked or forgotten, and given a picture where the server allows pictures (immersivemode_avatars).
+/// Blocking here is an ordinary block, listed in Settings and undone here or there, since the player picked this correspondent by name and nothing is given away.
 ///
 /// <para>
 /// NOTE: A correspondent first reached by answering an unsigned letter is listed by the name the player gave them and nothing else: no character name and no picture of their own,
@@ -66,6 +67,7 @@ Owls.DeskScreens.Correspondents = (() =>
 		let isAdding = false;
 		let editingId = 0;
 		let confirmingId = 0;
+		let blockingId = 0;
 		let confirmTimer = null;
 		let found = { query: "", owls: [], isPending: false };
 		const searcher = Search.CreateSearcher((answer) =>
@@ -161,11 +163,54 @@ Owls.DeskScreens.Correspondents = (() =>
 		}
 
 		/// <summary>
+		/// Block a correspondent, on the second click, or unblock them at once. Their letters are refused while blocked.
+		/// </summary>
+		/// <param name="contact">Correspondent</param>
+		async function ToggleBlocked(contact)
+		{
+			const blocked = !Store.IsContactBlocked(contact.id);
+
+			if (blocked && blockingId !== contact.id)
+			{
+				blockingId = contact.id;
+				confirmingId = 0;
+				clearTimeout(confirmTimer);
+				confirmTimer = setTimeout(() =>
+				{
+					blockingId = 0;
+					Render();
+				}, confirmMs);
+				Render();
+				return;
+			}
+
+			clearTimeout(confirmTimer);
+			blockingId = 0;
+			const result = await Owls.Bridge.Request("mail.setCorrespondentBlocked", { contactId: contact.id, blocked });
+
+			if (!result.ok)
+			{
+				desk.ShowError(result.error);
+				Render();
+				return;
+			}
+
+			Store.SetContactBlocked(contact.id, result.data.blocked);
+		}
+
+		/// <summary>
 		/// Forget a correspondent, on the second click. Letters to and from them stay.
+		/// A blocked correspondent is unblocked first, or the block would stay with no way to see or undo it from the desk.
 		/// </summary>
 		/// <param name="contact">Correspondent</param>
 		async function Forget(contact)
 		{
+			if (Store.IsContactBlocked(contact.id))
+			{
+				desk.ShowError(T("mail.correspondents.unblockFirst"));
+				return;
+			}
+
 			if (confirmingId !== contact.id)
 			{
 				confirmingId = contact.id;
@@ -229,6 +274,10 @@ Owls.DeskScreens.Correspondents = (() =>
 		function CreateRow(contact)
 		{
 			const isConfirming = confirmingId === contact.id;
+			const isBlocked = Store.IsContactBlocked(contact.id);
+			const blockControl = blockingId === contact.id
+				? Element("button", { className: "desk-button is-confirming", on: { click: () => ToggleBlocked(contact) } }, [Element("span", { text: T("mail.correspondents.blockConfirm") })])
+				: IconButton("fa-solid fa-ban", T(isBlocked ? "mail.correspondents.unblock" : "mail.correspondents.block"), () => ToggleBlocked(contact), isBlocked ? "is-blocked" : "");
 
 			return Element("li", { className: `correspondent-row ${contact.favourite ? "is-favourite" : ""}` },
 			[
@@ -236,11 +285,13 @@ Owls.DeskScreens.Correspondents = (() =>
 				Element("span", { className: "correspondent-lines" },
 				[
 					Element("span", { className: "correspondent-name", text: Store.GetContactLabel(contact) }),
+					isBlocked ? Element("span", { className: "correspondent-blocked", text: T("mail.correspondents.blocked") }) : null,
 				]),
 				Element("span", { className: "correspondent-actions" },
 				[
 					IconButton(contact.favourite ? "fa-solid fa-star" : "fa-regular fa-star", T(contact.favourite ? "mail.correspondents.unstar" : "mail.correspondents.star"), () => ToggleFavourite(contact), contact.favourite ? "is-on" : ""),
 					IconButton("fa-solid fa-feather-pointed", T("mail.correspondents.write"), () => desk.Compose({ to: contact })),
+					blockControl,
 					IconButton("fa-solid fa-pen", T("mail.correspondents.edit"), () =>
 					{
 						editingId = contact.id;
@@ -372,7 +423,7 @@ Owls.DeskScreens.Correspondents = (() =>
 			element,
 			OnStore: (reason) =>
 			{
-				if (reason === "contacts" || reason === "settings" || reason === "letters" || reason === "arrived")
+				if (reason === "contacts" || reason === "settings" || reason === "letters" || reason === "arrived" || reason === "blocks")
 				{
 					Render();
 

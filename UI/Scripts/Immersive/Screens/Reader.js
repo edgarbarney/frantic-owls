@@ -11,6 +11,13 @@ Owls.DeskScreens = Owls.DeskScreens || {};
 /// <summary>
 /// One letter, laid out on its sheet exactly as its writer wrote it.
 /// The server only sends a letter's text when it may be read where the player stands, and opening an unread letter marks it read.
+///
+/// <para>
+/// NOTE: Under a letter someone else wrote sit Block and Report. The reader is never told who wrote a letter, so Block is always anonymous:
+/// it stops every letter from that writer, names nobody, and cannot be undone or listed (an undo or a list would unmask the writer).
+/// Its pop-up offers to report the letter in the same step. Known correspondents are blocked, and unblocked, from the Correspondents tab instead.
+/// </para>
+///
 /// </summary>
 Owls.DeskScreens.Reader = (() =>
 {
@@ -40,15 +47,139 @@ Owls.DeskScreens.Reader = (() =>
 		]);
 		const stage = Element("div", { className: "reader-stage" }, [Element("p", { className: "desk-loading", text: T("mail.reader.opening") })]);
 		const enclosure = Element("div", { className: "letter-enclosure" });
+		const blockButton = Element("button", { className: "desk-button", on: { click: () => ShowDialog("block") } },
+		[
+			Element("i", { className: "fa-solid fa-ban", attributes: { "aria-hidden": "true" } }),
+			Element("span", { text: T("mail.reader.block") }),
+		]);
+		const reportButton = Element("button", { className: "desk-button", on: { click: () => ShowDialog("report") } },
+		[
+			Element("i", { className: "fa-solid fa-flag", attributes: { "aria-hidden": "true" } }),
+			Element("span", { text: T("mail.reader.report") }),
+		]);
+		const footer = Element("div", { className: "reader-footer" }, [blockButton, reportButton]);
+		const dialog = Element("div", { className: "desk-dialog-backdrop" });
 		const element = Element("section", { className: "reader" },
 		[
 			Element("div", { className: "desk-toolbar" }, [backButton, details, Element("div", { className: "desk-toolbar-actions" }, [replyButton])]),
 			enclosure,
 			stage,
+			footer,
+			dialog,
 		]);
 
 		replyButton.hidden = true;
 		enclosure.hidden = true;
+		footer.hidden = true;
+		dialog.hidden = true;
+
+		/// <summary>
+		/// Whether a block or report request is on its way, so the dialog's buttons cannot send a second one.
+		/// </summary>
+		let isSending = false;
+
+		/// <summary>
+		/// Hide the block or report dialog.
+		/// </summary>
+		function HideDialog()
+		{
+			dialog.hidden = true;
+			dialog.replaceChildren();
+		}
+
+		/// <summary>
+		/// Ask before blocking the letter's writer or reporting the letter.
+		/// </summary>
+		/// <param name="kind">"block" or "report"</param>
+		function ShowDialog(kind)
+		{
+			if (!opened)
+			{
+				return;
+			}
+
+			/// <summary>
+			/// One button of the dialog.
+			/// </summary>
+			/// <param name="label">Text</param>
+			/// <param name="className">Extra classes</param>
+			/// <param name="OnClick">Click handler</param>
+			/// <returns>Button</returns>
+			function DialogButton(label, className, OnClick)
+			{
+				return Element("button", { className: `desk-button ${className}`.trim(), on: { click: OnClick } }, [Element("span", { text: label })]);
+			}
+
+			const buttons = kind === "block"
+				? [
+					DialogButton(T("common.cancel"), "is-quiet", HideDialog),
+					DialogButton(T("mail.reader.blockConfirm"), "", () => Block(false)),
+					DialogButton(T("mail.reader.blockAndReport"), "is-primary", () => Block(true)),
+				]
+				: [
+					DialogButton(T("common.cancel"), "is-quiet", HideDialog),
+					DialogButton(T("mail.reader.reportConfirm"), "is-primary", Report),
+				];
+
+			dialog.replaceChildren(Element("div", { className: "desk-dialog", attributes: { role: "alertdialog", "aria-modal": "true" } },
+			[
+				Element("p", { className: "desk-dialog-title", text: T(kind === "block" ? "mail.reader.blockTitle" : "mail.reader.reportTitle") }),
+				Element("p", { className: "desk-dialog-text", text: T(kind === "block" ? "mail.reader.blockWarning" : "mail.reader.reportWarning") }),
+				Element("div", { className: "desk-dialog-actions" }, buttons),
+			]));
+			dialog.hidden = false;
+		}
+
+		/// <summary>
+		/// Block the letter's writer anonymously, reporting the letter first if asked, then go back to the inbox, which no longer holds their letters.
+		/// </summary>
+		/// <param name="report">Whether to report the letter too</param>
+		async function Block(report)
+		{
+			if (isSending || !opened)
+			{
+				return;
+			}
+
+			isSending = true;
+			const result = await Owls.Bridge.Request("mail.blockWriter", { messageId: opened.id, report });
+			isSending = false;
+			HideDialog();
+
+			if (!result.ok)
+			{
+				desk.ShowError(result.error);
+				return;
+			}
+
+			Store.ForgetLetters(result.data.unread);
+			desk.ShowNotice(T("mail.reader.blocked"), T(result.data.reportId > 0 ? "mail.reader.blockedAndReported" : "mail.reader.blockedHint"));
+			desk.ShowLetters({ box: "inbox" });
+		}
+
+		/// <summary>
+		/// Report the letter to the moderators.
+		/// </summary>
+		async function Report()
+		{
+			if (isSending || !opened)
+			{
+				return;
+			}
+
+			isSending = true;
+			const result = await Owls.Bridge.Request("mail.report", { messageId: opened.id });
+			isSending = false;
+			HideDialog();
+
+			if (!result.ok)
+			{
+				desk.ShowError(result.error);
+				return;
+			}
+
+			desk.ShowNotice(T("report.sentTitle"), T(result.data.isNew ? "report.sentBody" : "report.alreadySent"));
+		}
 
 		/// <summary>
 		/// The letter as opened, once it is; null until then.
@@ -163,6 +294,10 @@ Owls.DeskScreens.Reader = (() =>
 			details.textContent = Describe(letter);
 			stage.replaceChildren(Owls.Sheet.CreateReading(letter.text).slot);
 			RenderEnclosure();
+
+			// Only a letter someone else wrote can be blocked or reported; official letters come from no character.
+			footer.hidden = letter.box !== "inbox" || !!letter.official;
+			reportButton.hidden = Store.state.config.reportsEnabled === false;
 
 			if (letter.canReply)
 			{

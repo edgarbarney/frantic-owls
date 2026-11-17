@@ -348,6 +348,36 @@
 	}
 
 	/// <summary>
+	/// What a mock report copies: the chat's members with their characters' names, and its owls.
+	/// </summary>
+	/// <param name="chat">Chat</param>
+	/// <param name="messageId">Reported owl</param>
+	/// <param name="sender">Its writer</param>
+	/// <param name="reporter">Reporter's number, or "" for the previewing player</param>
+	/// <returns>Report for OwlsReportsMock.File</returns>
+	function MockReport(chat, messageId, sender, reporter = "")
+	{
+		const nameOf = (number) =>
+		{
+			const contact = contacts.find((entry) => entry.number === number);
+			return number === me.number ? me.name : contact ? contact.originalName || contact.name : `Character ${number.slice(-2)}`;
+		};
+		const copied = messages.filter((entry) => entry.chatId === chat.id && (!entry.kind || ["text", "location", "poll"].includes(entry.kind))).sort((first, second) => first.id - second.id);
+		const numbers = [...new Set([...(chat.members || []), ...copied.map((entry) => entry.sender)])];
+
+		return {
+			reporter: reporter || me.number,
+			sender,
+			messageId,
+			chatKind: chat.kind,
+			chatTitle: chat.title || "",
+			source: "phone",
+			members: numbers.map((number) => ({ number, name: nameOf(number) })),
+			messages: copied.map((entry) => ({ id: entry.id, sender: entry.sender, kind: entry.kind || "text", body: entry.unsentAt ? "" : entry.body, sentAt: entry.sentAt, replyToId: entry.replyTo ? entry.replyTo.id : 0, unsent: !!entry.unsentAt, forwarded: !!entry.forwarded })),
+		};
+	}
+
+	/// <summary>
 	/// Answer one request.
 	/// </summary>
 	/// <param name="action">Action name</param>
@@ -363,8 +393,49 @@
 			return { ok: false, error: "That contact no longer exists." };
 		}
 
+		const reportAnswer = OwlsReportsMock.Handle(action, data, me.name);
+
+		if (reportAnswer)
+		{
+			if (action === "reports.setStatus" && reportAnswer.ok)
+			{
+				setTimeout(() => Push([{ type: "reports:updated", data: { report: reportAnswer.data.report, open: OwlsReportsMock.CountOpen() } }]), 50);
+			}
+
+			return reportAnswer;
+		}
+
 		switch (action)
 		{
+		case "messages.report":
+		{
+			const message = messages.find((entry) => entry.id === data.messageId);
+			const chat = message ? chats.find((entry) => entry.id === message.chatId) : null;
+
+			if (!message || !chat)
+			{
+				return { ok: false, errorKey: "error.report.gone" };
+			}
+
+			if (message.sender === me.number)
+			{
+				return { ok: false, errorKey: "error.report.own" };
+			}
+
+			if (message.sender.startsWith("0"))
+			{
+				return { ok: false, errorKey: "error.report.official" };
+			}
+
+			const filed = OwlsReportsMock.File(MockReport(chat, message.id, message.sender));
+
+			if (filed.item)
+			{
+				setTimeout(() => Push([filed.item]), 300);
+			}
+
+			return { ok: true, data: { reportId: filed.reportId, isNew: filed.isNew } };
+		}
 		case "calls.start":
 		{
 			const contact = data.contactId ? contacts.find((entry) => entry.id === data.contactId) : null;
@@ -913,7 +984,7 @@
 			LoadLanguages().then(() => Push
 			([
 				...GetLanguageItems(),
-				{ type: "state:reset", data: { me, settings, config, blocks: [...blocks], retired: [...retired], quiet: { active: false, label: "" }, senders, serverNow: Date.now() } },
+				{ type: "state:reset", data: { me, settings, config, blocks: [...blocks], moderation: OwlsReportsMock.Access(), retired: [...retired], quiet: { active: false, label: "" }, senders, serverNow: Date.now() } },
 				{ type: "profiles:chunk", data: { reset: true, profiles: [{ number: "20000002", avatarUrl: sampleAvatar }] } },
 				{ type: "contacts:chunk", data: { reset: true, contacts } },
 				{ type: "chats:chunk", data: { reset: true, chats: chats.map(Summarise) } },
@@ -990,6 +1061,17 @@
 			Push([{ type: "message:new", data: { chat: { id: chat.id, kind: chat.kind, title: chat.title, members: chat.members, createdAt: chat.createdAt, lastActivityAt: message.sentAt }, message } }]);
 		},
 		Close: () => window.dispatchEvent(new CustomEvent("frantic-owls:closed")),
+		SomeoneReports: () =>
+		{
+			// Poppy reports Ambrose's answer in the Beast Club.
+			const chat = chats.find((entry) => entry.id === 3);
+			const filed = OwlsReportsMock.File(MockReport(chat, 6, "20000001", "20000004"));
+
+			if (filed.item)
+			{
+				Push([filed.item]);
+			}
+		},
 		Typing: (chatId = 1) =>
 		{
 			const chat = chats.find((entry) => entry.id === chatId);
