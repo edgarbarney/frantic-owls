@@ -326,7 +326,7 @@ Players can report an owl someone else sent them: On the phone, **Report** is am
 
 A report copies the chat as its reporter saw it then: up to 200 owls before the reported one and 100 after it, with the name and owl number of everyone in it. Unsending, deleting or pruning owls afterwards does not change the copy, and it holds nothing the reporter could not see.
 
-Moderators are decided by the hmp-admin capability `reports.capability` (`admin.view` by default) when hmp-admin is running, otherwise by the hmp-core group `reports.fallbackGroup` at `fallbackMinimumGrade` or above, checked again on every request. They get:
+Moderators are decided by the hmp-admin capability `reports.capability` (`admin.view` by default) when hmp-admin is running, otherwise by the hmp-core group `reports.fallbackGroup` at `fallbackMinimumGrade` or above, checked again on every request; a resource with staff roles of its own can decide instead (see [Permission rules](#permission-rules)). They get:
 
 - a **Moderation** app on the phone's home screen, or a **Reports** tab on the desk, with the number of open reports;
 - a list of reports ("Reported chat #0001"), filtered by **Open**, **Resolved**, **Dismissed** or **All**, and a search by report number, member name or owl number (a search starting with `#` matches report numbers only);
@@ -513,6 +513,20 @@ Owls.RegisterParcelRules("my-gamemode",
 ```
 
 An `item` is `{ source, name, itemId, variation, kind, label, amount }`: `source` is `"native"` for a game item (`name` is its `hmp-inventory` name such as `native:wiggenweld_potion`, `itemId` the game's id) or `"custom"` for an item another resource registered. A hook may be async and returns the refusal to show, in your own words, or `null`. A hook that throws refuses, so a rule that cannot answer never lets through what it meant to keep. Rules are dropped when your resource stops, and frantic-owls starts with none, so register them on start and again whenever frantic-owls starts. Calling it again replaces them; `UnregisterParcelRules("my-gamemode")` drops them early. frantic-owls itself already keeps back Galleons (they have their own field), worn gear, tools, mounts and whatever the server switched off.
+
+### Permission rules
+
+A server with staff roles of its own can decide who holds frantic-owls' staff permissions, instead of mirroring them in hmp-admin capabilities or hmp-core groups:
+
+```js
+Owls.RegisterPermissionRules("my-gamemode",
+{
+	// permission is "announce" (/owl_announce and official letters), "reports" (reading and handling reports) or "postadmin" (placing owl posts).
+	Allows: async ({ player, characterId, permission }) => permission === "reports" ? IsModerator(player) : null,
+});
+```
+
+`Allows` may be async and answers `true` or `false`, or `null` for no opinion, in which case the configuration's own rule (`announcements.*`, `reports.*`, `immersivemode_postadmin`) decides as before. Rules are asked in the order they were registered and the first answer wins. A hook that throws refuses, so a broken check never grants staff rights. frantic-owls asks on every staff action and when a player loads (the Moderation app and the Reports tab show for those it allows), and once per player online when a report arrives, to tell moderators, so keep `Allows` cheap. Like parcel rules, they are dropped when your resource stops: register them on start and again whenever frantic-owls starts. `UnregisterPermissionRules("my-gamemode")` drops them early.
 
 To follow calls, listen for the server event `frantic-owls:call`. It fires when a call starts ringing (`state: "ringing"`), is answered (`"active"`) and ends (`"ended"`), with `{ callId, state, outcome, caller, callee, callerPlayerId, calleePlayerId, startedAt, answeredAt }`. `caller` and `callee` are owl numbers, a player ID is `-1` when that owl is offline, and `outcome` is set once it ended: `"answered"`, `"missed"`, `"declined"` or `"cancelled"`.
 

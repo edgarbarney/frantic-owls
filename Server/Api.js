@@ -28,7 +28,7 @@ const { AddContactStatus } = require("./Contacts.js");
 /// <returns>The API object</returns>
 function CreateApi(services)
 {
-	const { whenReady, senders, chats, directory, database, contacts, parcels, OnContactAdded } = services;
+	const { whenReady, senders, chats, directory, database, contacts, parcels, permissions, OnContactAdded } = services;
 	let isReady = false;
 
 	whenReady.then((ready) =>
@@ -140,6 +140,34 @@ function CreateApi(services)
 		UnregisterParcelRules(resource)
 		{
 			return parcels.UnregisterRules(resource);
+		},
+
+		/// <summary>
+		/// Let the calling resource decide who holds frantic-owls' staff permissions: "announce" (/owl_announce and official letters), "reports" (reading and handling reports)
+		/// and "postadmin" (placing owl posts). Dropped when that resource stops; calling again replaces them.
+		///
+		/// <para>
+		/// Allows may be async and answers true, false, or null for no opinion, in which case the configuration's own rule decides as before.
+		/// A hook that throws refuses. frantic-owls asks again on every staff action, so a change applies at the next one.
+		/// </para>
+		///
+		/// </summary>
+		/// <param name="resource">Name of the calling resource</param>
+		/// <param name="rules">{ Allows({ player, characterId, permission }) }</param>
+		/// <returns>{ ok, error }</returns>
+		RegisterPermissionRules(resource, rules)
+		{
+			return permissions.Register(resource, rules);
+		},
+
+		/// <summary>
+		/// Drop the calling resource's permission rules early (they are dropped automatically when it stops).
+		/// </summary>
+		/// <param name="resource">Name of the calling resource</param>
+		/// <returns>True if it had rules</returns>
+		UnregisterPermissionRules(resource)
+		{
+			return permissions.Unregister(resource);
 		},
 
 		/// <summary>

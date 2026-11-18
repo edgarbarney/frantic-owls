@@ -26,6 +26,7 @@ const { CreateApi } = require("./Api.js");
 const { RequestDispatcher } = require("./Requests.js");
 const { ParcelService } = require("./Parcels.js");
 const { ReportService, ReportSource } = require("./Reports.js");
+const { PermissionRegistry, Permission } = require("./Permissions.js");
 const { Ok } = require("./Result.js");
 
 const resourceName = "frantic-owls";
@@ -99,6 +100,7 @@ const directory = new OwlDirectory();
 const outbox = new Outbox(config.network.flushIntervalMs, config.network.maxBatchBytes);
 const audit = new AuditLog(config.logging);
 const blocks = new BlockService(database);
+const permissions = new PermissionRegistry();
 const flight = new FlightPlanner(hmp, directory, config.flight);
 const dialler = new NumberDialler(database, hmp, config.phonemode_numbers);
 const settings = new SettingsService(database, config.phonemode_ui, directory, config.avatars);
@@ -333,14 +335,25 @@ function PushSendersToAll()
 }
 
 /// <summary>
-/// Whether a player passes a permission rule: the hmp-admin capability when hmp-admin is running, otherwise the hmp-core group.
+/// Whether a player holds one of frantic-owls' staff permissions.
+/// A resource that registered permission rules (api.RegisterPermissionRules) decides first; without one, or when none has an opinion,
+/// the configuration's rule decides: the hmp-admin capability when hmp-admin is running, otherwise the hmp-core group.
 /// </summary>
 /// <param name="player">Player asking</param>
+/// <param name="permission">A Permission value, as registered rules are asked</param>
 /// <param name="rule">{ capability, fallbackGroup, fallbackMinimumGrade }</param>
 /// <param name="what">What is being checked, for the log</param>
 /// <returns>True when allowed</returns>
-async function HasPermission(player, rule, what)
+async function HasPermission(player, permission, rule, what)
 {
+	const entry = directory.GetByPlayerId(player.id);
+	const decided = await permissions.Ask(player, entry ? entry.characterId : null, permission);
+
+	if (decided !== null)
+	{
+		return decided;
+	}
+
 	const admin = ImportOptional("hmp-admin");
 
 	// Permission backends reject on internal failures; a failed check simply means "no".
@@ -371,7 +384,7 @@ async function HasPermission(player, rule, what)
 /// <returns>True when allowed</returns>
 async function CanAnnounce(player)
 {
-	return HasPermission(player, config.announcements, "announcement");
+	return HasPermission(player, Permission.Announce, config.announcements, "announcement");
 }
 
 /// <summary>
@@ -391,7 +404,7 @@ async function CanPostOfficial(player)
 /// <returns>True when allowed</returns>
 async function CanModerate(player)
 {
-	return config.reports.enabled && await HasPermission(player, config.reports, "reports");
+	return config.reports.enabled && await HasPermission(player, Permission.Reports, config.reports, "reports");
 }
 
 /// <summary>
@@ -600,7 +613,7 @@ function UnloadOwl(player, notifyClient)
 /// <summary>
 /// The "api" export, also behind the "frantic-owls:addContact" event.
 /// </summary>
-const api = CreateApi({ whenReady, senders, chats, directory, database, contacts, parcels, OnContactAdded });
+const api = CreateApi({ whenReady, senders, chats, directory, database, contacts, parcels, permissions, OnContactAdded });
 
 // ========================
 // Requests
@@ -783,7 +796,7 @@ if (isImmersive)
 	// Prints the immersivemode_posts entry for where the admin stands, to paste into the configuration.
 	commands.register(`${config.command}_posthere`, { description: Lang.Translate("", "command.postHereDescription"), usage: postHereUsage }, async ({ player, args, reply }) =>
 	{
-		if (!await HasPermission(player, config.immersivemode_postadmin, "owl post"))
+		if (!await HasPermission(player, Permission.PostAdmin, config.immersivemode_postadmin, "owl post"))
 		{
 			return reply(T(player, "command.adminDenied"));
 		}
@@ -852,7 +865,7 @@ if (isImmersive)
 	// Reads immersivemode_posts from the file again and puts the posts up in the world, without restarting the resource.
 	commands.register(`${config.command}_reloadposts`, { description: Lang.Translate("", "command.reloadPostsDescription"), usage: `/${config.command}_reloadposts` }, async ({ player, reply }) =>
 	{
-		if (!await HasPermission(player, config.immersivemode_postadmin, "owl post"))
+		if (!await HasPermission(player, Permission.PostAdmin, config.immersivemode_postadmin, "owl post"))
 		{
 			return reply(T(player, "command.adminDenied"));
 		}
@@ -1157,6 +1170,7 @@ Events.on("resourceStop", (name) =>
 		// Senders and parcel rules belong to the resource that registered them.
 		senders.UnregisterResource(name);
 		parcels.UnregisterRules(name);
+		permissions.Unregister(name);
 
 		if (name === "hmp-blips")
 		{
